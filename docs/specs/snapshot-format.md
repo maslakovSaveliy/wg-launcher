@@ -40,7 +40,7 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H10).
 - Writers MUST set the content checksum flag and MUST NOT need a window larger than 2^27 bytes. Readers MUST reject a
   frame without the checksum flag (bit 2 of the frame header descriptor) or with a dictionary id, skippable frames, a
-  second frame and any byte after the frame, and MUST decode with `windowLogMax` 27. `Assumed`
+  second frame and any other byte after the frame, and MUST decode with `windowLogMax` 27 (codes in section 8). `Assumed`
 - Tar: ustar headers (magic `ustar\0`, version `00`), sizes in octal only. Writers emit only regular files with mode
   0644, uid and gid 0, empty user and group names, mtime 0, the whole path in the `name` field and an empty `prefix`,
   then two zero blocks. Readers join `prefix` and `name` with `/` when `prefix` is set, accept zero padding after the
@@ -97,15 +97,16 @@ and store names never appear in paths, because the page chooses them freely. `As
 
 `manifest.json` is UTF-8 without a byte-order mark and MUST be the RFC 8785 (JCS) canonical serialization of the
 manifest object. Readers parse it, re-serialize it with JCS and compare the bytes; a difference (including duplicate
-keys or whitespace) is `SNAP_MANIFEST_INVALID`. It is at most 1 MiB. `Assumed`
+keys or whitespace) is `SNAP_MANIFEST_INVALID`. A manifest above `maxManifestBytes` is `SNAP_MANIFEST_TOO_LARGE`,
+checked on its tar header. `Assumed`
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `format` | `"wgsnap"` | Anything else: `SNAP_UNKNOWN_FORMAT` |
 | `formatVersion` | integer | `1`; anything else: `SNAP_UNSUPPORTED_VERSION` |
 | `gameId` | UUIDv7 | The library entry the data was exported from |
-| `revisionId` | UUIDv7 | This snapshot; unique, never reused |
-| `parentRevisionId` | UUIDv7 or `null` | The revision this state was restored from, if any (sync DAG, [architecture.md](architecture.md#15-future-cloud-sync)) |
+| `revisionId` | UUIDv7 | This snapshot; unique, never reused. Importing a file whose `revisionId` is already stored reuses the stored file if `contentHash` matches and is refused with `IMP_REVISION_CONFLICT` otherwise |
+| `parentRevisionId` | UUIDv7 or `null` | The revision this state descends from: the game's last export or restore (`base_revision_id`, [architecture.md](architecture.md#15-future-cloud-sync)), `null` for a first export or after "Delete local saves" |
 | `createdAt` | string | UTC, `YYYY-MM-DDTHH:mm:ss.sssZ`; display only, never used for ordering |
 | `deviceId` | UUIDv7 | Random id of the exporting installation (no hardware data) |
 | `exporter` | `{id, version}` | `id` matches `^[a-z0-9-]{1,64}$`, `version` is SemVer 2.0 |
@@ -125,8 +126,9 @@ keys or whitespace) is `SNAP_MANIFEST_INVALID`. It is at most 1 MiB. `Assumed`
   and the role.
 - Unknown top-level fields are ignored. They are not covered by `contentHash` and can never change what is restored.
   An unknown value in a known enum field (for example `flushState`) is `SNAP_MANIFEST_INVALID`. `Assumed`
-- Check order: JCS canonical form, then `format`, then `formatVersion` (so a future version yields
-  `SNAP_UNSUPPORTED_VERSION`, not a schema error), then the schema (zod in TypeScript), then `contentHash`. `Assumed`
+- Check order: size, JSON parse (`SNAP_MANIFEST_INVALID`), `format`, `formatVersion`, JCS canonical form, schema (zod
+  in TypeScript), `contentHash`. So a future version yields `SNAP_UNSUPPORTED_VERSION` even if its manifest is not
+  canonical by v1 rules or has other fields. `Assumed`
 
 ## 5. Content hash
 
@@ -206,8 +208,8 @@ and Blob came back through that path).
 | string (well-formed) | Text string |
 | string with a lone surrogate | Tag 33102, byte string of UTF-16LE code units |
 | BigInt | Tag 33105, text: decimal, `-` for negatives, no leading zeros |
-| Array without holes or extra properties | Array of encoded items |
-| Array with holes or extra own properties | Tag 33103, array `[length, key1, value1, …]` in enumeration order |
+| Array whose own enumerable properties are exactly the indexes 0 to length − 1 | Array of encoded items |
+| Any other Array (holes or extra own properties) | Tag 33103, array `[length, key1, value1, …]`: `length` an integer, then every own enumerable string-keyed property except `length` in enumeration order (indexes ascending first), keys as text strings, indexes in canonical decimal (`"3"`); a hole is an absent key |
 | Plain object | Tag 33101, array `[key1, value1, key2, value2, …]` in enumeration order |
 | Date | Tag 33104, number: time value in ms (`NaN` for an invalid Date) |
 | Map | Tag 33106, array `[key1, value1, …]` in insertion order |
@@ -309,10 +311,15 @@ them; production uses these values, and a unit test pins them.
 | `maxStorageKeys`, databases per key, stores per database, indexes per store | 32, 256, 256, 64 |
 | `maxDepth` (value nesting) | 256 |
 
-Container-level codes, checked continuously while streaming: `SNAP_FILE_TOO_LARGE`, `SNAP_ZSTD_INVALID`,
-`SNAP_ZSTD_NO_CHECKSUM`, `SNAP_TRUNCATED` (input ends early), `SNAP_RATIO_EXCEEDED` (uncompressed bytes so far divided
-by compressed bytes so far), `SNAP_TOTAL_TOO_LARGE` and `SNAP_TRAILING_DATA`. Entry codes are in section 3.1, manifest
-and hash codes in sections 4 and 5, `SNAP_UNEXPECTED_ENTRY` in section 3.2 and `SNAP_RECORD_INVALID` in sections 6 and 7.
+Container-level codes, checked continuously while streaming: `SNAP_FILE_TOO_LARGE`; `SNAP_ZSTD_INVALID` (not a zstd
+frame, a skippable frame first, corrupt data, a content checksum mismatch, a window above 2^27, a dictionary id);
+`SNAP_ZSTD_NO_CHECKSUM`; `SNAP_TRUNCATED` (input ends early); `SNAP_RATIO_EXCEEDED` (uncompressed bytes so far divided
+by compressed bytes so far); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
+frame included, or non-zero bytes after the tar end blocks). Entry codes are in section 3.1, manifest and
+hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FORMAT`, `SNAP_UNSUPPORTED_VERSION`,
+`SNAP_CONTENT_HASH_MISMATCH`, `SNAP_SIZE_MISMATCH`, `SNAP_ENTRY_HASH_MISMATCH`, `SNAP_MISSING_ENTRY`) in sections 4 and
+5, `SNAP_UNEXPECTED_ENTRY` in sections 3.2 and 5, and `SNAP_RECORD_INVALID` in sections 6 and 7. `IMP_REVISION_CONFLICT`
+(section 4) is raised by the import, not by the reader.
 
 - Validation is complete before anything is written to any game storage: all entries hashed, all records decoded and
   checked (AC-9). The restore streams the file a second time and re-checks every entry hash, so a file that changes
@@ -366,7 +373,7 @@ and hash codes in sections 4 and 5, `SNAP_UNEXPECTED_ENTRY` in section 3.2 and `
   "records": [[key, value]]}]}]}]}`. A value is a JSON string (well-formed only), `true`, `false`, `null`, a safe
   integer, a JSON array (a dense Array) or an object with a `"$"` member naming the type: `undefined`, `f64` (`hex`: the
   16 hex digits of the IEEE 754 bits), `str16` (`hex` of UTF-16LE), `bigint` (`v` decimal), `object`, `map` and
-  `sparse` (`entries` as pairs, `sparse` also `length`), `set` (`items`), `date` (`v` a value), `boxed` (`v`),
+  `sparse` (`entries` as pairs, `sparse` also `length`; `sparse` keys are JSON strings, indexes in decimal), `set` (`items`), `date` (`v` a value), `boxed` (`v`),
   `regexp` (`source`, `flags`), `bytes` (`hex`), `view` (`type`, `hex`, optional `bufferHex`, `byteOffset`, `length`),
   `blob` (`type`, `hex`) and `file` (`name`, `lastModified`, `type`, `hex`). `Assumed`
 

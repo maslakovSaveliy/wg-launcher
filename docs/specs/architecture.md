@@ -2,9 +2,10 @@
 
 Status: draft for Phase 1, 2026-10-25. Normative for `apps/desktop` and the shared packages. Product requirements are in
 the [PRD](../product/prd.md) (features `F-n`, acceptance criteria `AC-n`, open questions `OQ-n`); this spec does not
-repeat them, it says how they are built. Runtime: Electron 45, provisional until ADR-0002 (desktop runtime) is
-accepted; the evidence so far is the Electron spike, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md). Related:
-[snapshot-format.md](snapshot-format.md), [save-transfer.md](save-transfer.md), [security.md](security.md).
+repeat them, it says how they are built. Runtime: Electron 45 ([ADR-0002](../adr/0002-desktop-runtime.md), desktop
+runtime), accepted by the owner with one condition: H7 frame time is re-measured in Phase 1 on the launcher against
+Chrome. `Owner` (decision of 2026-10-25). The evidence is the spike,
+[RESULTS.md](../../spikes/runtime-compat/RESULTS.md). Related: [snapshot-format.md](snapshot-format.md), [save-transfer.md](save-transfer.md), [security.md](security.md).
 Conventions (MUST, claim tags, `Assumed` for calls made here) are those of
 [snapshot-format.md](snapshot-format.md#conventions).
 
@@ -206,7 +207,7 @@ CREATE TABLE games (
   id TEXT PRIMARY KEY,                -- UUIDv7, independent of the URL
   url TEXT NOT NULL, title TEXT NOT NULL, cover_path TEXT,
   support_mode TEXT NOT NULL DEFAULT 'by-link' CHECK (support_mode = 'by-link'),
-  base_revision_id TEXT,              -- last restored snapshot, parent of the next export
+  base_revision_id TEXT,              -- revision the partition's data descends from (rule in save-transfer.md)
   needs_recovery INTEGER NOT NULL DEFAULT 0,
   last_launched_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE window_state (
@@ -317,9 +318,11 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 | Export verified | A snapshot of the game has `verified_at` set and `verified_exporter_version` equal to the running exporter's version |
 | Compatibility not verified | Always in the MVP: no verification records exist, and the UI never calls a game, runtime or OS verified unless a record in `docs/compat/` backs it (AC-21) |
 
-- A storage check is the quiescent inventory (counts only) over the game's known keys; it runs after a game window
-  exits, after an import or a delete, and never while any game window is focused. `has_data` means at least one
-  localStorage item or IndexedDB database; this is how "storage usage above zero" is measured. `Assumed`
+- A storage check is the quiescent inventory (counts and usage numbers only) over the game's known keys; it runs after
+  a game window exits, after an import or a delete, and never while any game window is focused. `has_data` means at
+  least one localStorage item or IndexedDB database, or `usageDetails.fileSystem` above zero (OPFS is data too, though
+  not exported); this is how "storage usage above zero" is measured. Where `usageDetails` is unavailable, OPFS-only data
+  is missed and the badge can be absent although data exists. `Assumed`
 - No install, sync, FPS, download, completion or achievement indicator exists (AGENTS.md honesty rules).
 
 ## 12. Library entries and delete semantics
@@ -345,7 +348,8 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
     the call without `origin` reaches partitioned keys is Assumed; AC-16 checks it.
   - *Delete local saves:* the backup, wipe and verify procedure of
     [save-transfer.md](save-transfer.md#6-restore-protocol).
-  - Backups are never deleted automatically or as a side effect of another action. `Owner`
+  - Backups are never deleted automatically or as a side effect of another action. `Assumed` (PRD section 9, from
+    AGENTS.md data-safety invariants 3 and 8)
 
 ## 13. Performance rules
 
@@ -377,10 +381,12 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 
 Not MVP; it starts only after local export and import are proven (PRD section 14). `Owner`
 
-- **Revisions form a DAG.** Every snapshot names its `parentRevisionId`. A conflict is two revisions with the same
-  parent; both are kept, the user picks which to restore, and the next export's parent is the picked one. The other
-  branch stays until the user dismisses it. Device clocks are for display only and never decide (PRD anti-goal 8,
-  AC-23). `Owner`
+- **Revisions form a DAG.** Every snapshot names its `parentRevisionId`, the game's `base_revision_id`, which every
+  export and every committed restore moves ([save-transfer.md](save-transfer.md#6-restore-protocol)); so consecutive
+  exports form a chain, and a fork appears only when another device, or a restore of an older revision, continues from
+  the same parent. A conflict is such a fork: both branches are kept, the user picks which to restore, and the next
+  export's parent is the picked one. The other branch stays until the user dismisses it. Device clocks are for display
+  only and never decide (PRD anti-goal 8, AC-23). `Owner` for the rule, `Assumed` for the base bookkeeping.
 - Interface sketch, the only backend contract (no provider chosen, nothing deployed):
 
 ```ts

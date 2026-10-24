@@ -45,15 +45,24 @@ data-safety invariant 3).
   `EXP_UNSUPPORTED_STORAGE_KEY` or `EXP_STORAGE_KEY_MISMATCH`. The Chromium string is used only at run time and never
   stored. Assumed (only these two forms were observed; others, such as nonce or ancestor-bit keys, are Unverified).
 - **Changed keys (AC-24).** Each snapshot key has a `role`: `top` for the storage of a top-level document of the game,
-  `frame` for an iframe's ([snapshot-format.md](snapshot-format.md#4-manifest)). A restore is compatible when every `top`
-  key's origin equals a top-level origin of the target game (its URL's origin or one observed in `storage_targets`) and
-  every partitioned key's `topLevelSite` is the site of such an origin. Frame origins themselves are not compared: the
-  game's page decides which frames it embeds. Otherwise the restore fails with `IMP_STORAGE_KEY_MISMATCH`, naming each
-  snapshot key and the target key it was compared with, before anything is written. The only way past it is a mapping that the user confirms in the
-  launcher UI, origin by origin (`http://localhost:4317` to `http://127.0.0.1:4317`, for example); a mapped key's
-  `topLevelSite` becomes the site of the mapped top-level origin. Every record then lands under the mapped key, which
-  the restore check proves (expected hash per [snapshot-format.md](snapshot-format.md#5-content-hash)). No case ends in
-  a silent no-op or a partial restore. `Owner` for the rule (PRD section 10), `Assumed` for the details.
+  `frame` for an iframe's ([snapshot-format.md](snapshot-format.md#4-manifest)). Every key is checked against the target
+  game, after any confirmed mapping:
+  - a `top` key's origin MUST equal a top-level origin of the target (its URL's origin or one observed in
+    `storage_targets`);
+  - a partitioned key's `topLevelSite` MUST be the site of such an origin;
+  - a `frame` key's origin MUST equal a frame origin observed in the target's `storage_targets` under a top-level origin
+    of the same site. If the target has observations there but not this origin (the iframe moved to another host or
+    port), it is a mismatch. If the target has no frame observations there yet (never played), the key is unchecked.
+
+  A mismatch fails the restore with `IMP_STORAGE_KEY_MISMATCH`, naming each snapshot key and the target keys it was
+  compared with, before anything is written. Unchecked keys are listed in a native confirmation ("these iframe storage
+  keys could not be checked against this game"); without consent nothing is written. The only way past a mismatch is a
+  mapping that the user confirms, origin by origin (`http://localhost:4317` to `http://127.0.0.1:4317`, for example); a
+  mapped key's `topLevelSite` becomes the site of the mapped top-level origin, and mapping a frame origin to itself keeps
+  an unmatched frame key deliberately. Every record then lands under the mapped
+  key, which the restore check proves (expected hash per [snapshot-format.md](snapshot-format.md#5-content-hash)). No
+  case ends in a silent no-op or a silent partial restore. `Owner` for the rule (PRD section 10), `Assumed` for the
+  details.
 
 ## 3. Exporter interface and versioning
 
@@ -135,40 +144,44 @@ the spike code. All steps run in the main process unless stated.
 1. **Lock.** Take the per-game exclusive lock ([architecture.md](architecture.md#4-game-session-lifecycle)). The game
    window MUST be closed, otherwise `GAME_RUNNING` (AC-11); another task or a pending recovery gives `GAME_BUSY` or
    `NEEDS_RECOVERY` ([architecture.md](architecture.md#6-ipc-contract) codes).
-2. **Service workers.** Stop the session's service workers and wait until `ses.serviceWorkers.getAllRunning()` is empty
-   (at most 10 s, then `EXP_QUIESCENCE_VIOLATION`). In the spike, a worker still running from the closed game window
-   showed up in the export window's canary until the runner waited for it. Verified (2026-10-24, RESULTS.md, deviation
-   2). The stop mechanism is the one of AC-13 ([architecture.md](architecture.md#4-game-session-lifecycle)).
-3. **Interceptor.** Register `ses.protocol.handle` for `https` (and `http` for development origins, PRD OQ-3) on the
+2. **Interceptor.** Register `ses.protocol.handle` for `https` (and `http` for development origins, PRD OQ-3) on the
    game's session, and `ses.webRequest.onBeforeRequest` as a second layer.
-4. **Window.** A hidden `BrowserWindow` on the game's partition with `sandbox: true`, `contextIsolation: true`,
+3. **Window.** A hidden `BrowserWindow` on the game's partition with `sandbox: true`, `contextIsolation: true`,
    `nodeIntegration: false`, `webSecurity: true`, `backgroundThrottling: false`, the quiescent preload, and
-   `nodeIntegrationInSubFrames: true` only when the job has partitioned keys. Electron's main-process `WebFrameMain` has
-   no isolated-world execution, so subframes need the preload. Verified (2026-10-24, RESULTS.md H14c).
-5. **Service worker bypass, in this order:** load `about:blank` (debugger commands wait forever on a window that never
-   navigated: Verified (2026-10-24, RESULTS.md findings)); attach `webContents.debugger`; send `Network.enable` and
-   `Network.setBypassServiceWorker {bypass: true}`; set `Target.setAutoAttach {autoAttach: true,
-   waitForDebuggerOnStart: true, flatten: true}` and, for each attached child target, send the same two commands
-   before `Runtime.runIfWaitingForDebugger`; enable `Debugger` and `Runtime` everywhere for the canary. Only then
-   navigate. Without the bypass the registered worker controlled the stub; with it, it did not. Verified (2026-10-24,
-   RESULTS.md H14b). That the bypass also covers iframes is Assumed (no no-bypass iframe control ran), so Phase 1 MUST
-   add that control.
-6. **Stub.** Navigate to `<top origin>/__wg_quiescent__?job=<nonce>`; for partitioned keys the stub contains one
-   `<iframe>` per frame origin pointing to the same path there. The top origin of a partitioned key is its
-   `topLevelSite`; a first-party key uses its exact origin.
-7. **Keys.** Resolve and check every frame's storage key (section 2).
-8. **Handshake.** Each preload instance sends one `ipcRenderer` message with the job nonce. The main process accepts it
+   `nodeIntegrationInSubFrames: true` only when some key of the job is resolved in an iframe. Electron's main-process
+   `WebFrameMain` has no isolated-world execution, so subframes need the preload. Verified (2026-10-24, RESULTS.md H14c).
+4. **Debugger.** Load `about:blank` (debugger commands wait forever on a window that never navigated: Verified
+   (2026-10-24, RESULTS.md findings)), then attach this window's `webContents.debugger`.
+5. **Service workers.** Through that debugger send `ServiceWorker.enable` and `ServiceWorker.stopAllWorkers` (the
+   mechanism of the AC-13 close procedure, [architecture.md](architecture.md#4-game-session-lifecycle)) and wait until
+   `ses.serviceWorkers.getAllRunning()` is empty, at most 10 s; otherwise `EXP_QUIESCENCE_VIOLATION` (export) or
+   `IMP_QUIESCENCE_VIOLATION` (import). In the spike, a worker still running from the closed game window showed up in
+   the export window's canary until the runner waited for it. Verified (2026-10-24, RESULTS.md, deviation 2).
+6. **Service worker bypass, in this order:** `Network.enable` and `Network.setBypassServiceWorker {bypass: true}`;
+   `Target.setAutoAttach {autoAttach: true, waitForDebuggerOnStart: true, flatten: true}` and, for each attached child
+   target, the same two commands before `Runtime.runIfWaitingForDebugger`; `Debugger` and `Runtime` enabled everywhere
+   for the canary. Only then navigate. Without the bypass the registered worker controlled the stub; with it, it did
+   not. Verified (2026-10-24, RESULTS.md H14b). That the bypass also covers iframes is Assumed (no no-bypass iframe
+   control ran), so Phase 1 MUST add that control.
+7. **Stub navigations.** Keys are grouped by top-level stub origin `T`, taken from the job's `top` keys first. One
+   navigation to `<T>/__wg_quiescent__?job=<nonce>` resolves `T`'s own key in the top frame (only if it is part of the
+   job) and, as iframes pointing to the same path, every partitioned key whose `topLevelSite` is the site of `T` and
+   every first-party `frame` key of that site. A key left over gets its own navigation: its exact origin when first-party,
+   its `topLevelSite` when partitioned. The window visits the groups one after another; the bypass and the canary cover
+   all of them, and steps 8 to 10 repeat per navigation with fresh request nonces. `Assumed`
+8. **Keys.** Resolve and check every frame's storage key (section 2).
+9. **Handshake.** Each preload instance sends one `ipcRenderer` message with the job nonce. The main process accepts it
    only from the job's `webContents`, from a frame whose URL is an expected stub URL, with the right nonce; it then
    gives that frame one end of a `MessageChannelMain` whose other end goes to the snapshot worker.
-9. **Commands.** The worker sends typed commands (`inventory`, `export`, `import`, `wipe-selected`) with request ids;
-   both ends validate every message with zod and abort on anything unexpected.
-10. **Canary, during the whole job.** Every `Debugger.scriptParsed` on every target must come from our preload's
+10. **Commands.** The worker sends typed commands (`inventory`, `export`, `import`, `wipe-selected`) with request ids;
+    both ends validate every message with zod and abort on anything unexpected.
+11. **Canary, during the whole job.** Every `Debugger.scriptParsed` on every target must come from our preload's
     isolated context (its execution context and source URL, an allowlist fixed by a Phase 1 calibration test); any
     other parsed script, any service worker target, or any `running-status-changed` of the session to `starting` or
     `running` aborts the job with `EXP_QUIESCENCE_VIOLATION` or `IMP_QUIESCENCE_VIOLATION`. The canary is the real
     evidence that no game code ran; the fixture's request log could not tell bypass from no bypass. Verified
     (2026-10-24, RESULTS.md H14).
-11. **Finally.** In `try`/`finally`, whatever happened: destroy the window, detach the debugger, `ses.protocol.unhandle`
+12. **Finally.** In `try`/`finally`, whatever happened: destroy the window, detach the debugger, `ses.protocol.unhandle`
     both schemes, remove the `webRequest` listener, release the lock. A watchdog ends a job that exceeds its deadline
     (Assumed: 60 s plus 1 s per MiB).
 
@@ -178,8 +191,9 @@ the spike code. All steps run in the main process unless stated.
   `/__wg_quiescent__`, the job nonce). Every other request gets `403` with an empty body. There is no passthrough to the
   network (`ses.fetch` or `net.fetch`); the spike's passthrough was fail-open.
 - **QW-2 Exclusive partition.** While the interceptor is registered, the quiescent window is the only `webContents` on
-  that session; the job checks this before step 6 and the lock prevents a game launch until step 11.
-- **QW-3 No leak on throw.** Registration and removal are paired in `try`/`finally` (step 11); a unit test makes each
+  that session; the job checks this before the first stub navigation, and the lock prevents a game launch until the
+  final step.
+- **QW-3 No leak on throw.** Registration and removal are paired in `try`/`finally` (step 12); a unit test makes each
   step throw and checks that nothing stays registered.
 - **QW-4 Authenticated IPC.** Every message from the quiescent window is checked against `event.senderFrame` (job
   `webContents`, expected stub URL) and carries a request nonce of at least 128 random bits (`crypto.randomBytes`), not a
@@ -187,15 +201,16 @@ the spike code. All steps run in the main process unless stated.
 - **QW-5 Typed commands only.** The preload exposes nothing to the main world (no `contextBridge`) and never evaluates
   code it receives: no `eval`, no `new Function`, no `executeJavaScriptInIsolatedWorld` with a received string. If an
   extra isolated world is ever needed, its code is a build-time constant.
-- **QW-6 Subframes only when needed.** The preload runs in subframes only for jobs with partitioned keys and stays inert
-  in any frame whose URL is not an expected stub URL.
+- **QW-6 Subframes only when needed.** The preload runs in subframes only for jobs with a key resolved in an iframe
+  and stays inert in any frame whose URL is not an expected stub URL.
 - **QW-7 Data is data.** Snapshot bytes pass through the message port or files, never spliced into a code string.
 - **QW-8 No credentials.** The exporter never reads cookies or other credentials (section 4, step 6).
 - **QW-9 Quiet logs.** Logs carry job id, game id, step, counts, byte sizes and error codes; never values, localStorage
   key names, database contents or URLs with query strings (origins only).
 - **QW-10 Inert stub.** The stub is `text/html` with `Cache-Control: no-store` and
   `Content-Security-Policy: default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; frame-src <the
-  job's iframe stub origins>`; its body holds only those iframes. The preload is not affected by the page CSP.
+  job's iframe stub origins>`; its body holds only those iframes. The spike's subframe preload worked under a stub with
+  `script-src 'none'`. Verified (2026-10-24, RESULTS.md H14c). That no page CSP can restrict a preload is Assumed.
 
 ## 6. Restore protocol
 
@@ -203,14 +218,14 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
 
 | Step | What happens | On failure |
 | --- | --- | --- |
-| R1 Validate | Full validation in the snapshot worker ([snapshot-format.md](snapshot-format.md#8-limits-and-error-codes)) of a private copy in `tmp/` (an external file is copied first, [security.md](security.md#8-archive-safety-and-resource-limits)) | The `SNAP_*` code; nothing written |
+| R1 Validate | Full validation in the snapshot worker ([snapshot-format.md](snapshot-format.md#8-limits-and-error-codes)) of a private copy in `tmp/` (an external file is copied first, [security.md](security.md#8-archive-safety-and-resource-limits)); a `revisionId` already stored is reused when its `contentHash` matches | The `SNAP_*` code or `IMP_REVISION_CONFLICT`; nothing written |
 | R2 Plan | From the validated manifest, check the keys and the confirmed mapping (section 2) and compute the wipe set: the snapshot's keys (mapped) plus all known keys of the game | `IMP_STORAGE_KEY_MISMATCH`; nothing written |
-| R3 Lock | Per-game exclusive lock; game window closed | `GAME_RUNNING` (AC-11), `GAME_BUSY` or `NEEDS_RECOVERY`; nothing written |
+| R3 Lock | Per-game exclusive lock; game window closed. Then R2 runs again under the lock (the game may have run in between and recorded new frames); if the result differs from what the user confirmed, the job stops | `GAME_RUNNING` (AC-11), `GAME_BUSY`, `NEEDS_RECOVERY` or `IMP_PLAN_CHANGED`; nothing written |
 | R4 Backup | Export every known key with the generic exporter and no adapter filter to `backups/<gameId>/<revisionId>.wgsnap` (written as `.partial`, read back and validated, then renamed); recorded with kind `backup` | `IMP_BACKUP_FAILED`; nothing wiped, the partial file removed |
-| R5 Wipe | In one quiescent window holding all keys of the wipe set: CDP `Storage.clearDataForStorageKey` with each frame's key and `local_storage,indexeddb`; for a selective (adapter) restore, the importer removes only the selected localStorage keys and databases instead; then an inventory confirms emptiness | `IMP_WIPE_FAILED`, rollback |
+| R5 Wipe | In one quiescent window that visits every key of the wipe set (section 5, step 7): CDP `Storage.clearDataForStorageKey` with each frame's key and `local_storage,indexeddb`; for a selective (adapter) restore, the importer removes only the selected localStorage keys and databases instead; then an inventory confirms emptiness | `IMP_WIPE_FAILED`, rollback |
 | R6 Import | Section 4, from a second streaming pass over the file that re-checks every entry hash | `IMP_*` code, rollback |
 | R7 Verify | Re-export the same scope and compare `contentHash` with the expected hash (mapped if a mapping was confirmed) | `IMP_VERIFY_MISMATCH`, rollback |
-| R8 Commit | Journal `done`; the game's `base_revision_id` becomes the snapshot's `revisionId`; lock released; "Local data" rechecked | (none) |
+| R8 Commit | Journal `done`; `base_revision_id` becomes the restored snapshot's `revisionId`; lock released; "Local data" rechecked | (none) |
 
 - **Rollback** (any failure in R5 to R7): wipe the wipe set again, import the R4 backup, re-export and compare with the
   backup's `contentHash`. The state then equals the pre-import state and the backup still exists and verifies (AC-8).
@@ -224,17 +239,26 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
 - **Fault injection (AC-8):** the job runner takes an injectable fault hook per step (validate, lock, backup, wipe,
   import, verify); the integration test runs each fault on progress-lab and checks that the progress hash and the
   storage inventory equal the pre-import state and that the backup validates.
-- **Delete local saves** (PRD section 9, AC-16) is R3, R4 and R5 over all known keys, then R8 without a revision; a
-  failure after R5 restores the backup in the same way. **Verify** (`snapshot:verify`) is R1, then R6 and R7 into a
-  fresh in-memory partition (`wg-verify-<nonce>`, no `persist:` prefix) whose data is cleared afterwards; it never
-  touches the game's partition. A non-`persist:` partition lives in memory. Verified (2026-10-24,
+- **Delete local saves** (PRD section 9, AC-16) is R3 (the wipe set is all known keys, computed under the lock), R4
+  and R5, then R8 with `base_revision_id` set to `null` (the partition no longer descends from any revision); a failure
+  after R5 restores the backup in the same way. **Verify** (`snapshot:verify`) is R1, then R6 and R7 into a fresh
+  in-memory partition (`wg-verify-<nonce>`, no `persist:` prefix) whose data is cleared afterwards; it never touches the
+  game's partition. A non-`persist:` partition lives in memory. Verified (2026-10-24,
   <https://www.electronjs.org/docs/latest/api/session>). Passing it sets "Export verified" for that exporter version
   ([architecture.md](architecture.md#11-badges)).
 
 **Export** (`snapshot:export`): lock; stop service workers; quiescent export of the game keys with the adapter's scope;
 the worker writes `tmp/<revisionId>.wgsnap.partial`, reads it back through the full validator, fsyncs and renames it to
-`snapshots/<gameId>/<revisionId>.wgsnap`; the database row records the manifest fields. `parentRevisionId` is the game's
-`base_revision_id`. Export never changes the game's storage apart from the aborted probe of section 4. `Assumed`
+`snapshots/<gameId>/<revisionId>.wgsnap`; the database row records the manifest fields and `base_revision_id` moves to
+the new revision (below). Export never changes the game's storage apart from the aborted probe of section 4. `Assumed`
+
+**Revision parents.** `games.base_revision_id` names the revision the partition's data descends from, and every new
+snapshot's `parentRevisionId` is its current value. It moves in exactly three places: an export commit sets it to the
+new `revisionId`; a restore commit (R8) sets it to the restored `revisionId`; "Delete local saves" sets it to `null`.
+Pre-import and pre-delete backups, verifications, failed jobs and rollbacks never move it. So consecutive exports form a
+chain (E1, then E2 with parent E1), and two revisions share a parent only when the user restored an older revision and
+exported again, or, later, when another device continued from the same revision
+([architecture.md](architecture.md#15-future-cloud-sync)). `parentRevisionId` is immutable once written. `Assumed`
 
 ## 7. Flush state
 
@@ -257,9 +281,11 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
   success, error, timeout, a value other than `true`, input after the hook started, and a late close; only the success
   case without input and with a prompt close gives `confirmed`. A UI test checks that every place showing an
   `unconfirmed` snapshot shows "flush unconfirmed" and never "save point", "guaranteed" or "complete".
-- The hook runs in the game page's main world through `webContents.executeJavaScript` from a fixed template whose only
-  parameter is a validated identifier. The page could fake the result, which only affects its own snapshot. That is
-  accepted. `Assumed`
+- The hook runs in the game page's main world through `webContents.executeJavaScript` from a fixed template. Its only
+  parameter, the adapter's `module`, MUST match `^[A-Za-z_$][A-Za-z0-9_$]{0,63}$` and is inserted only as a JSON string
+  literal for a property lookup on `globalThis` (`globalThis["Module"]`), never as code. Adapters are bundled with the
+  app (section 8), so the value is ours, and the check runs again at load. The page could fake the result, which only
+  affects its own snapshot; that is accepted. `Assumed`
 
 ## 8. Declarative adapters
 
@@ -289,7 +315,8 @@ loaded. `Assumed`
 - localStorage selectors are key prefixes; IndexedDB selectors are whole database names, matched exactly. No regular
   expressions or globs (no ReDoS, predictable scope). Store-level filtering is not offered, because a database restored
   at its version without some of its stores would break the game's upgrade logic. `Assumed`
-- `flush.hook` is `none` or `emscripten-idbfs` with `module` (a JavaScript identifier, default `Module`) and `timeoutMs`
+- `flush.hook` is `none` or `emscripten-idbfs` with `module` (matching the identifier pattern of section 7, default
+  `Module`) and `timeoutMs`
   (at most 30 000). The `emscripten-idbfs` hook calls `FS.syncfs(false, callback)` on that module object. `Assumed`
 - Filtering is a declared choice: the manifest names the adapter and its version, so a snapshot's scope can always be
   explained. A selective restore never wipes data outside the selection (section 6, R5).
@@ -322,7 +349,7 @@ loaded. `Assumed`
 | AC-12 | unit: `decideFlushState` with a fake hook (section 7) |
 | AC-16 | integration: "Delete local saves" makes and verifies a backup first, then wipes; "Clear cache" leaves data |
 | AC-20 | integration: a snapshot of a session with cookies, Cache Storage and a service worker contains none of them |
-| AC-24 | integration: progress-lab exported on `localhost` with a nested `127.0.0.1` iframe, restored where the keys differ: refused naming both keys and nothing written; with a confirmed mapping every record lands under the mapped key |
+| AC-24 | integration: progress-lab exported on `localhost` with a nested `127.0.0.1` iframe, restored where the keys differ: refused naming both keys and nothing written; with a confirmed mapping every record lands under the mapped key. Also: the iframe moved to another host or port under the same top origin is refused (or mapped) the same way, and a target without frame observations asks for confirmation listing the unchecked frame keys and writes nothing without it |
 | AC-25 | later: a small Emscripten program, export after and before `syncfs` |
 
 Additional MUST tests: key generator probe stability (section 4); interceptor fail-closed and removal on throw (QW-1,

@@ -66,7 +66,9 @@ privilege. `Assumed` for the analysis; the mitigations cite where they are speci
 
 ## 4. Fuses
 
-Set with `@electron/fuses` on every packaged build. Names and defaults Verified (2026-10-25,
+Set on every packaged build through electron-builder's `electronFuses` setting (ADR-0004), which uses `@electron/fuses`:
+`app-builder-lib` 26.18.0 depends on `@electron/fuses` ^1.8.0 and its schema has `electronFuses`. Verified (2026-10-25,
+`package.json` and `scheme.json` of `app-builder-lib` in the spike's dependencies). Names and defaults Verified (2026-10-25,
 <https://www.electronjs.org/docs/latest/tutorial/fuses>); the off and on choices for the first seven come from the
 research. Verified (2026-10-24, [runtime-and-storage.md](../research/runtime-and-storage.md) section 2.4).
 
