@@ -1,0 +1,27 @@
+# Git hooks. Install: `pnpm install` runs `lefthook install` through the `prepare` script.
+# Tools are called through `pnpm exec` so the project versions run, never a global copy
+# (a global Biome and a Homebrew lefthook can exist on a developer machine and drift).
+# min_version makes an older lefthook on PATH fail loudly instead of ignoring newer options.
+min_version: 2.1.15
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      run: pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+    - name: secretlint
+      run: pnpm exec secretlint {staged_files}
+    - name: markdownlint
+      glob: "*.md"
+      run: pnpm exec markdownlint-cli2 {staged_files}
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
+
+pre-push:
+  jobs:
+    - name: typecheck-and-test
+      run: pnpm typecheck && pnpm test

@@ -30,10 +30,13 @@ Exists now:
 | `LICENSE`, `LICENSING.md`, `CLA.md`, `TRADEMARKS.md` | Licensing model, contributor agreement, trademark policy |
 | `SECURITY.md`, `CODE_OF_CONDUCT.md` | Vulnerability reporting, community rules |
 | `AGENTS.md`, `CLAUDE.md`, `MEMORY.md`, `.cursor/rules/` | Agent rules and shared memory |
-| `.github/` | Pull request template, issue forms |
+| `.github/` | Pull request template, issue forms, CI workflow (`workflows/ci.yml`) |
 | `docs/plans/` | Implementation plans |
 | `docs/product/sources/` | Original concept document (Russian, kept verbatim) |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
+| `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
+| `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
+| `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy (with its tests) |
 
 Reserved, **not created yet**. Do not create a directory until the work that needs it exists:
 
@@ -43,14 +46,24 @@ Reserved, **not created yet**. Do not create a directory until the work that nee
 
 ## Commands
 
-Working now:
+`nvm use` (reads `.nvmrc`, Node 24) then `pnpm install`. The `packageManager` field pins pnpm; pnpm switches to that
+version by itself inside the repo. `pnpm install` also installs the git hooks (the `prepare` script).
 
-- `nvm use` (reads `.nvmrc`, Node 24) then `pnpm install`. The `packageManager` field pins pnpm; pnpm switches to that
-  version by itself inside the repo.
+| Command | What it does |
+| --- | --- |
+| `pnpm lint` | Biome lint, format check and import order for JS, TS, JSON and CSS (not Markdown) |
+| `pnpm format` | Biome formatter, writing changes |
+| `pnpm typecheck` | `tsc -b` with the strict base config |
+| `pnpm test` | Vitest unit tests (fast; also run by the pre-push hook) |
+| `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
+| `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
+| `pnpm check` | Runs all of the above |
 
-Available after the toolchain task of Phase 0 lands (not working yet):
-`pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm licenses:check`, `pnpm docs:lint`,
-`pnpm check` (runs everything). Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed copy.
+Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed copy.
+
+Git hooks (lefthook) run for you: pre-commit formats staged files with Biome (and re-stages them), scans them with
+secretlint and lints staged Markdown; commit-msg enforces Conventional Commits; pre-push runs `pnpm typecheck` and
+`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks on every pull request.
 
 ## Hard rules
 
@@ -170,7 +183,7 @@ paths, game isolation).
 
 A change is done only when all of these hold:
 
-- Verification was run and its real output is recorded (tests, `pnpm check` once it exists, manual steps for UI).
+- Verification was run and its real output is recorded (tests, `pnpm check`, manual steps for UI).
 - Behavior changes have tests that were written first.
 - Docs are updated, claims are tagged, and `MEMORY.md` reflects new verified facts, decisions and gotchas.
 - No secrets, personal data or machine paths are in the diff.

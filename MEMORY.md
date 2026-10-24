@@ -21,6 +21,11 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Package manager pinned to `pnpm@12.15.0` (`packageManager` field). Why: in the repo `pnpm -v` switches to 12.15.0 by
   itself, `pnpm install` and `pnpm install --frozen-lockfile` succeed, and the default `minimumReleaseAge` does not
   block Electron 45.0.0. Fallback if it misbehaves later: `pnpm@11.7.0`. [V, 2026-10-24, run locally]
+- Quality toolchain (Task 2): Biome for JS, TS, JSON and CSS only; markdownlint-cli2 for Markdown with no line-length
+  rule; secretlint on staged files; commitlint with Conventional Commits plus `spike`; lefthook hooks (pre-commit,
+  commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, and the Playwright suite will be a
+  separate `test:e2e` script added with the test game. License gate: production dependencies strict against the
+  AGENTS.md allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
 - Execution style: subagent-driven development; test-first where code exists.
 - Public GitHub repo: <https://github.com/maslakovSaveliy/wg-launcher>. Work happens on branches; merge to `main` only
   on the owner's approval.
@@ -139,14 +144,25 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 
 - [V] electron 45.0.0, electron-vite 6.0.0, vite 8.3.5, react 19.3.1, typescript 7.0.2 (latest; 6.0.3 is the last 6.x),
   @biomejs/biome 2.6.2, vitest 5.0.5, @playwright/test 1.64.1, zod 4.6.7, lefthook 2.2.2, @commitlint/cli 21.2.4,
-  secretlint 13.0.7, markdownlint-cli2 0.24.0, pnpm 12.15.0 (latest).
-- [V] Biome 2.6 covers JS/TS/JSX/TSX/JSON/CSS; it has no Markdown support.
-  <https://biomejs.dev/internals/language-support/>
+  secretlint 13.0.7, markdownlint-cli2 0.24.0, @types/node 24.19.2 (24.x line), pnpm 12.15.0 (latest). All installed
+  at exactly these versions in Task 2.
+- [V] Biome 2.6.2 also formats Markdown and YAML by default: `biome check .` rewrote the tables in `AGENTS.md`, and
+  its config schema has `markdown`, `yaml`, `html` and `graphql` sections (checked 2026-10-24 by running it). An earlier
+  note that Biome has no Markdown support was wrong. `biome.json` therefore whitelists JS, TS, JSON and CSS file
+  extensions in `files.includes`, and markdownlint-cli2 owns Markdown.
 - [V] `node:sqlite` is release candidate since Node 25.7 and needs no flag since 22.13. [U] Its stability label in
   Node 24.22. <https://nodejs.org/api/sqlite.html>
-- [V] `pnpm licenses list --json` exists in pnpm 12.15.0 (prints `{}` with no dependencies). [U] Its JSON shape with
-  real dependencies.
-- [U] Compatibility of the toolchain with TypeScript 7.
+- [V] `pnpm licenses list --json` (pnpm 12.15.0) prints `{"<license string>": [{name, versions[], paths[], license,
+  author, homepage, description}]}`; `--prod` and `--dev` select the scope. License strings can be SPDX expressions
+  such as `(MIT OR CC0-1.0)` or `MIT OR Apache-2.0`. `paths` are absolute machine paths: never print them. Without
+  `--recursive` it reports only the root importer: in a scratch workspace the root gave `{}` while `--recursive` listed
+  the member's dependencies. `scripts/check-licenses.mjs` therefore passes `--recursive`. [U] What pnpm prints for a
+  package with no license field (the script treats missing, empty and `Unknown` alike). (2026-10-24, run locally)
+- [V] TypeScript 7.0.2 works with the whole toolchain, so there is no fallback to 6.0.3: `tsc -b` type-checks `.ts` and
+  checked `.mjs` (`allowJs`, `checkJs`) with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and
+  `verbatimModuleSyntax` on, and fails on a deliberate type error; vitest 5.0.5, Biome 2.6.2, commitlint 21.2.4
+  (`.mjs` config), secretlint 13.0.7 and markdownlint-cli2 0.24.0 run on Node 24.13. TS 7 ships as a native binary (an
+  optional `@typescript/typescript-<platform>` package). (2026-10-24, run locally)
 
 ### Licensing precedent
 
@@ -188,8 +204,21 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Contributor Covenant 3.0 is CC BY-SA 4.0, not CC BY 4.0; `CODE_OF_CONDUCT.md` keeps that attribution.
 - The `packages` glob `fixtures/*` matches only one directory level; a package at `fixtures/test-games/<name>` needs
   `fixtures/*/*`. [V, 2026-10-24, tested with pnpm 12.15.0; change the glob when the first fixture package is added]
-- `spike` is not a Conventional Commits type in `@commitlint/config-conventional`; the commitlint config must add it.
-  [A]
+- `spike` is not a Conventional Commits type in `@commitlint/config-conventional`; `commitlint.config.mjs` adds it to
+  the preset's list. [V, 2026-10-24: `spike: ...` accepted, `wip: ...` and `Spike: ...` rejected]
+- `allowBuilds: {lefthook: true}` in `pnpm-workspace.yaml` is the working build-allowlist key in pnpm 12.15.0. Without
+  it `pnpm add` fails with `ERR_PNPM_IGNORED_BUILDS` and no placeholder entry is written. Vitest 5 uses rolldown, so
+  esbuild is not installed and needs no entry. [V, 2026-10-24]
+- lefthook's postinstall creates a commented-out default `lefthook.yml` when none exists, and installs the hooks. The
+  generated hook script prefers a `lefthook` on `PATH` over `node_modules`, so on this machine git runs the Homebrew
+  2.1.15, not the project's 2.2.2. `min_version` is therefore `2.1.15` (config tested with both). [V, 2026-10-24]
+- markdownlint-cli2 appends the config `globs` to command-line globs, so `.markdownlint-cli2.jsonc` has none: the
+  `docs:lint` script passes `"**/*.md"` and the pre-commit hook passes the staged files. `gitignore: true` skips
+  ignored paths such as `.superpowers/`. MD013 (line length) is off, MD041 is off only for the pull request template,
+  and MD004, MD022 and MD032 are off only under `docs/plans/` (compact plan layout). [V, 2026-10-24]
+- Biome 2.6 deprecates `linter.rules.recommended`; use `linter.rules.preset: "recommended"`. [V, 2026-10-24]
+- lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the
+  Biome fix. [U] not tested here
 
 ## Open questions
 
@@ -200,6 +229,5 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Does WebGPU work by default in Electron 45 on macOS arm64? The spike verifies it.
 - Which Electron versions carry the COOP/COEP regression fix, and does cross-origin isolation work on 44 and 45?
 - Snapshot record encoding: deterministic CBOR or tagged JSONL (decided in the snapshot spec).
-- Does the toolchain work with TypeScript 7, or must it fall back to 6.0.3?
 - Branch protection on `main` (suggested only, owner decision).
 - Which packaging tool wins after the spike packages once (electron-builder is the current lean)?

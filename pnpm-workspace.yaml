@@ -3,3 +3,6 @@ packages:
   - "fixtures/*"
 engineStrict: true
 saveExact: true
+# Dependency build scripts are blocked by default; allow only what is needed, deliberately.
+allowBuilds:
+  lefthook: true
