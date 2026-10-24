@@ -47,13 +47,15 @@ Other code (the spike, Phase 1 end-to-end tests) depends on these names. Change 
 | `#play-step` | Advances the game by one step and saves it |
 | `#reset` | Deletes all fixture storage and returns to the initial state |
 | `#progress-hash` | SHA-256 (64 hex digits) of the canonical persisted state, read back from storage, never from memory |
-| `#progress-hash[data-ready]` | `true` once the hash matches what is shown, `false` while a step or reset is running or before load, `error` after a failure |
-| `#level`, `#coins`, `#inventory` | The state, updated together with the hash |
-| `#error` | Hidden unless something failed |
+| `#progress-hash[data-ready]` | `false` from before the first load completes, and from the moment a click is accepted until the last queued step or reset has been saved and read back; then `true`, or `error` if the latest failure is unresolved |
+| `#level`, `#coins`, `#inventory` | The state shown. While `data-ready` is `false` they may be intermediate; when it is `true` or `error` they and the hash are final |
+| `#error` | Visible, with the message, from a failure (a save, a reset or a damaged saved state on load) until a later step or reset succeeds; hidden otherwise |
 
-- Both buttons are disabled until the first hash is computed. Level, coins and hash change in the same task as
-  `data-ready` becoming `true`, so a test can wait for either.
-- Loading never writes. A restored or damaged storage is shown as it is, and the hash is recomputed from it.
+- Both buttons are disabled until the first hash is computed. Clicks are queued and run one at a time, so a loop of
+  quick `#play-step` clicks is safe: `data-ready` stays `false` until all of them are done, and a reader that waits for
+  `true` never sees an intermediate hash. `error` is sticky: while idle it stays until a step or reset succeeds.
+- Loading never writes. A restored or damaged storage is shown as it is and the hash is recomputed from it. A saved state that is
+  not valid shows `#error` and `data-ready="error"` (the game starts from the initial state, the hash still covers what is stored).
 - `?ephemeral=1` deletes all fixture storage (the `progress-lab:` localStorage keys and both IndexedDB databases)
   before anything is rendered. It wipes on load only: progress made in that session is saved and a later normal load
   sees it.

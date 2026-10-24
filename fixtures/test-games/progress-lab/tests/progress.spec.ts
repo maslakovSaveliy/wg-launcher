@@ -21,7 +21,9 @@ interface Origins {
   port: number;
 }
 
-const test = base.extend<{ origins: Origins }>({
+const test = base.extend<{ origins: Origins; expectedErrors: RegExp[] }>({
+  // Console errors a test provokes on purpose (`test.use({ expectedErrors: [...] })`).
+  expectedErrors: [[], { option: true }],
   origins: async ({ baseURL }, use) => {
     if (!baseURL) throw new Error("baseURL is not configured");
     const url = new URL(baseURL);
@@ -32,14 +34,16 @@ const test = base.extend<{ origins: Origins }>({
     });
   },
   // Every test fails on uncaught page errors and console errors, so a broken game cannot pass.
-  page: async ({ page }, use) => {
+  page: async ({ page, expectedErrors }, use) => {
     const problems: string[] = [];
     page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
     page.on("console", (message) => {
       if (message.type() === "error") problems.push(`console.error: ${message.text()}`);
     });
     await use(page);
-    expect(problems).toEqual([]);
+    expect(problems.filter((problem) => !expectedErrors.some((re) => re.test(problem)))).toEqual(
+      [],
+    );
   },
 });
 
@@ -59,6 +63,7 @@ function game(scope: Scope) {
   };
 
   return {
+    hash,
     coins,
     level: scope.locator("#level"),
     inventory: scope.locator("#inventory"),
@@ -395,6 +400,129 @@ test("the hash is read back from storage", async ({ page }) => {
   await flipSaveByte(page.mainFrame());
   await page.reload();
   expect(await g.ready()).toBe(hash);
+});
+
+interface Observed {
+  ready: string | null;
+  coins: string | null;
+  hash: string;
+}
+
+/**
+ * Clicks the buttons back to back in one task, then records every state of `#progress-hash` and
+ * `#coins` until `data-ready` is "true" with `finalCoins` shown. A MutationObserver sees states a
+ * polling assertion could miss.
+ */
+async function clickAndObserve(
+  frame: Frame,
+  buttons: string[],
+  finalCoins: string,
+): Promise<Observed[]> {
+  return await frame.evaluate(
+    ({ buttons, finalCoins }) =>
+      new Promise<Observed[]>((resolve, reject) => {
+        const hash = document.querySelector<HTMLElement>("#progress-hash");
+        const coins = document.querySelector("#coins");
+        if (!hash || !coins) return reject(new Error("the game elements are missing"));
+        const observed: Observed[] = [];
+        const observer = new MutationObserver(() => {
+          const entry = {
+            ready: hash.dataset.ready ?? null,
+            coins: coins.textContent,
+            hash: hash.textContent ?? "",
+          };
+          observed.push(entry);
+          if (entry.ready === "true" && entry.coins === finalCoins) {
+            observer.disconnect();
+            resolve(observed);
+          }
+        });
+        observer.observe(hash, { attributes: true, childList: true, characterData: true });
+        observer.observe(coins, { childList: true, characterData: true });
+        for (const selector of buttons) document.querySelector<HTMLElement>(selector)?.click();
+      }),
+    { buttons, finalCoins },
+  );
+}
+
+test("data-ready stays false until every queued step is saved", async ({
+  page,
+  browser,
+  origins,
+}) => {
+  await page.goto("/");
+  const g = game(page);
+  await g.ready();
+
+  const observed = await clickAndObserve(page.mainFrame(), ["#play-step", "#play-step"], "20");
+  expect(observed.some((entry) => entry.ready === "false")).toBe(true);
+
+  // Whenever the game says it is ready, it already shows the result of both steps.
+  const ready = observed.filter((entry) => entry.ready === "true");
+  expect(ready.length).toBeGreaterThan(0);
+  expect(ready.map((entry) => entry.coins)).toEqual(ready.map(() => "20"));
+  const finalHash = await g.ready();
+  expect(ready.map((entry) => entry.hash)).toEqual(ready.map(() => finalHash));
+
+  // And that result is what two separate steps give in an independent session.
+  const other = await browser.newContext({ baseURL: origins.local });
+  try {
+    const otherPage = await other.newPage();
+    await otherPage.goto("/");
+    const otherGame = game(otherPage);
+    await otherGame.play(2);
+    expect(await otherGame.ready()).toBe(finalHash);
+  } finally {
+    await other.close();
+  }
+});
+
+test("data-ready stays false until a step followed by a reset is done", async ({ page }) => {
+  await page.goto("/");
+  const g = game(page);
+  const emptyHash = await g.ready();
+  await g.play(2);
+
+  const observed = await clickAndObserve(page.mainFrame(), ["#play-step", "#reset"], "0");
+  expect(observed.some((entry) => entry.ready === "false")).toBe(true);
+
+  const ready = observed.filter((entry) => entry.ready === "true");
+  expect(ready.length).toBeGreaterThan(0);
+  expect(ready.map((entry) => entry.coins)).toEqual(ready.map(() => "0"));
+  expect(ready.map((entry) => entry.hash)).toEqual(ready.map(() => emptyHash));
+  expect(await dumpStorage(page.mainFrame())).toEqual({ localStorage: {}, databases: {} });
+});
+
+test.describe("damaged saved state", () => {
+  test.use({ expectedErrors: [/progress-lab:state does not hold a valid state/] });
+
+  test("is reported until a step or reset succeeds", async ({ page }) => {
+    await page.goto("/");
+    const g = game(page);
+    const emptyHash = await g.ready();
+
+    for (const recovery of ["#play-step", "#reset"]) {
+      await page.evaluate(() => localStorage.setItem("progress-lab:state", '{"level":"one"}'));
+      await page.reload();
+
+      // The load failure stays reported, and the damage still shows in the hash.
+      await expect(g.hash).toHaveAttribute("data-ready", "error");
+      await expect(g.error).toBeVisible();
+      await expect(g.error).toContainText("does not hold a valid state");
+      await expect(g.hash).toHaveText(/^[0-9a-f]{64}$/);
+      expect(await g.hash.textContent()).not.toBe(emptyHash);
+
+      await page.locator(recovery).click();
+      await expect(g.hash).toHaveAttribute("data-ready", "true");
+      await expect(g.error).toBeHidden();
+      if (recovery === "#play-step") {
+        await expect(g.coins).toHaveText("10");
+      } else {
+        await expect(g.coins).toHaveText("0");
+        expect(await g.ready()).toBe(emptyHash);
+      }
+    }
+  });
 });
 
 test("coi path is cross-origin isolated", async ({ page }) => {

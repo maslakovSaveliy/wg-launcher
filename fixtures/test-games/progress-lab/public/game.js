@@ -317,6 +317,8 @@ async function computeProgressHash() {
 
 let state = initialState();
 let queue = Promise.resolve();
+let pending = 0; // tasks queued or running, the start-up task included
+let failure = null; // message of the latest failure, until a step or reset succeeds
 
 function render() {
   document.querySelector("#level").textContent = String(state.level);
@@ -325,25 +327,45 @@ function render() {
     state.inventory.length > 0 ? state.inventory.join(", ") : "(empty)";
 }
 
-function showError(error) {
+function fail(error) {
   console.error(error);
-  errorElement.textContent = error instanceof Error ? error.message : String(error);
-  errorElement.hidden = false;
-  hashElement.dataset.ready = "error";
+  failure = error instanceof Error ? error.message : String(error);
 }
 
-/** Re-reads storage and shows the state with its hash. data-ready flips last, in the same task. */
+/**
+ * data-ready: "false" while any task is queued or running, so a reader never sees an intermediate
+ * state as final; otherwise "error" if the latest failure is still unresolved, else "true".
+ */
+function syncStatus() {
+  errorElement.textContent = failure ?? "";
+  errorElement.hidden = failure === null;
+  hashElement.dataset.ready = pending > 0 ? "false" : failure === null ? "true" : "error";
+}
+
+/** Re-reads storage and shows the state with its hash. */
 async function refresh() {
   const hash = await computeProgressHash();
   render();
   hashElement.textContent = hash;
-  hashElement.dataset.ready = "true";
 }
 
-/** Runs tasks one at a time, so quick clicks cannot interleave their storage writes. */
-function enqueue(task) {
-  hashElement.dataset.ready = "false";
-  queue = queue.then(task).catch(showError);
+/**
+ * Runs tasks one at a time, so quick clicks cannot interleave their storage writes. A task that
+ * succeeds clears an earlier failure (`recovers`): a step or reset rewrites what was damaged.
+ */
+function enqueue(task, { recovers = true } = {}) {
+  pending += 1;
+  syncStatus();
+  queue = queue
+    .then(async () => {
+      await task();
+      if (recovers) failure = null;
+    })
+    .catch(fail)
+    .finally(() => {
+      pending -= 1;
+      syncStatus();
+    });
 }
 
 playButton.addEventListener("click", () =>
@@ -363,20 +385,21 @@ resetButton.addEventListener("click", () =>
   }),
 );
 
-async function start() {
-  if (new URLSearchParams(location.search).get("ephemeral") === "1") await wipeFixtureStorage();
-  try {
-    state = loadState();
-  } catch (error) {
-    // Show it, but still hash what is stored: a damaged restore should be visible in the hash too.
-    showError(error);
-  }
-  await refresh();
-  playButton.disabled = false;
-  resetButton.disabled = false;
-}
-
-queue = start().catch(showError);
+enqueue(
+  async () => {
+    if (new URLSearchParams(location.search).get("ephemeral") === "1") await wipeFixtureStorage();
+    try {
+      state = loadState();
+    } catch (error) {
+      // Report it, but still hash what is stored: a damaged restore should be visible in the hash.
+      fail(error);
+    }
+    await refresh();
+    playButton.disabled = false;
+    resetButton.disabled = false;
+  },
+  { recovers: false },
+);
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker
