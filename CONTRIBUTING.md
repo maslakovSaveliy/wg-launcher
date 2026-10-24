@@ -91,8 +91,7 @@ The [pull request template](.github/pull_request_template.md) repeats this list.
 
 ## Documentation
 
-- Everything is in English: docs, rules, code, comments, commits and issues. The only exception is the original concept
-  document `docs/product/sources/concept-v1.0.ru.md`, which stays verbatim.
+- Everything is in English: docs, rules, code, comments, commits and issues.
 - Tag every factual claim: `Verified (YYYY-MM-DD, source)` with a URL, command or commit as the source, `Assumed`
   (reasoned, not checked) or `Unverified` (reported, not checked). In `MEMORY.md` the short forms `[V]`, `[A]` and `[U]`
   are allowed. Keep facts and assumptions visibly separate. An untested operating system is never called verified.

@@ -16,7 +16,7 @@ snapshot codec in TS inside `utilityProcess`. Rust deferred to the local-package
 (`.nvmrc`) · TypeScript 7.0 behind a gate (fallback 6.0.3) · Electron 45 · electron-vite 6 · Vite 8 · React 19.3 · zod 4 ·
 Vitest 5 · Playwright 1.64 · Biome 2.6 · lefthook 2 (devDependency) · commitlint 21 · secretlint 13 · markdownlint-cli2.
 
-**Spec:** concept `docs/product/sources/concept-v1.0.ru.md` (verbatim) + owner brief (not committed — public repo; distilled into PRD/AGENTS), decisions below.
+**Spec:** concept `docs/product/sources/concept-v1.0.ru.md` (verbatim; replaced on 2026-10-25 by its English translation `concept-v1.0.md`, owner decision) + owner brief (not committed — public repo; distilled into PRD/AGENTS), decisions below.
 
 ## Context
 The repository root has only `browser_games_concept.md` (concept v1.0, RU), an empty

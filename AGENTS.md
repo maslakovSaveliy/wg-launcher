@@ -37,7 +37,7 @@ Exists now:
 | `.github/` | Pull request template, issue forms, CI workflow (`workflows/ci.yml`) |
 | `README.md`, `CONTRIBUTING.md` | Project overview and contributor guide |
 | `docs/README.md` | Index of all documentation |
-| `docs/product/` | PRD (`prd.md`); `sources/` holds the original concept document (Russian, kept verbatim) |
+| `docs/product/` | PRD (`prd.md`); `sources/` holds the owner's concept document (English translation) |
 | `docs/specs/` | Technical specifications: architecture, snapshot format, save transfer, security |
 | `docs/adr/` | Architecture decision records `0001` to `0006`, and the template `0000` |
 | `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
@@ -148,8 +148,7 @@ Details live in [docs/specs/security.md](docs/specs/security.md).
   source, `Assumed` (reasoned, not checked) or `Unverified` (reported, not checked). In `MEMORY.md` the short forms
   `[V]`, `[A]` and `[U]` are allowed, with a date and a source.
 - Keep facts and assumptions visibly separate.
-- Everything is in English: docs, rules, code, comments, commits, issues. The only exception is the original concept
-  document `docs/product/sources/concept-v1.0.ru.md`.
+- Everything is in English: docs, rules, code, comments, commits, issues. There are no exceptions.
 - This repository is public. Never commit secrets, tokens, personal data, local usernames, absolute home paths or other
   machine-specific paths. Private owner notes and local tool state are never committed or quoted.
 

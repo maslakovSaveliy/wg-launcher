@@ -2,8 +2,6 @@
   // Gitignored paths (node_modules, .superpowers, ...) are skipped through the `gitignore` option.
   "gitignore": true,
   "ignores": [
-    // Original concept document, Russian, kept verbatim (AGENTS.md).
-    "docs/product/sources/**",
     // Upstream Contributor Covenant 3.0 text, kept verbatim.
     "CODE_OF_CONDUCT.md"
   ],

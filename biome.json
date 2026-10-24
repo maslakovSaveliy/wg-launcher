@@ -10,7 +10,6 @@
     "includes": [
       "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,jsonc,css}",
       "!spikes",
-      "!docs/product/sources",
       "!pnpm-lock.yaml",
       "!**/dist",
       "!**/out",
