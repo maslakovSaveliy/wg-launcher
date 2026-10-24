@@ -204,14 +204,23 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   on ANGLE Metal (H6); `node:sqlite` (SQLite 3.53.4) and zstd in main and `utilityProcess` with no warning (H10);
   Playwright `_electron.launch` (H11); quiescent export and restore of progress-lab in four variants (H14); packaged
   ad-hoc-signed deep link with one instance (H15). H7 needs the Chrome baseline (Task 6).
-- [V] Failures and invalid runs: H12 FAIL (microphone `getUserMedia` never reaches `setPermissionRequestHandler` while
-  macOS access is not determined; the request stalls), H13 INVALID (`navigator.keyboard.lock()` needs no gesture;
-  `requestFullscreen()` consumes the activation, so a later `requestPointerLock()` in the same handler fails), H16 FAIL
-  (a closed window's renderer lives until its service worker stops, about 28 s), H9 not yet valid (window interrupted).
+- [V] H12 is environment-dependent. Full run: microphone `getUserMedia` stalled 8 s and never reached
+  `setPermissionRequestHandler` (FAIL). Rerun after the owner allowed the macOS microphone prompt
+  (`getMediaAccessStatus` `granted`): it reached the handler and was denied (PASS). [A] Cause: Chromium touches the
+  audio device, and so macOS TCC, before asking the embedder; the TCC log does not prove it. [V] TCC names the app that
+  launched the runner (`com.anthropic.claude-code`) as responsible for the dev Electron process.
+- [V] H13 INVALID: `navigator.keyboard.lock()` resolves without a gesture; injected mouse and key input grant gestures;
+  `requestPointerLock()` right after `requestFullscreen()` in one handler fails ("A user gesture is required") but works
+  alone or first. [A] Cause: `requestFullscreen()` consumes the transient activation.
+- [V] H16 FAIL: a closed window's renderer lives until its service worker stops (about 28 s). H9 not yet valid (window
+  interrupted by use of the machine in three attempts).
 - [V] After SIGKILL 5 s after writes, a persistent cookie was lost; localStorage, IndexedDB, Cache Storage and OPFS kept.
 - [V] Quiescent export: `ses.protocol.handle("http")` stub at the game origin plus CDP `Network.setBypassServiceWorker`
-  keeps a registered service worker out of the stub navigation, the cross-site iframe included; without the bypass the
-  worker controls the stub. Electron's `WebFrameMain` has no isolated-world execution; for a subframe use a preload
+  keeps a registered service worker out of a top-level stub navigation; without the bypass the worker controls the
+  stub (control run). In the cross-site iframe variant the partitioned worker was registered yet the iframe stub had no
+  controller and no worker start; [A] that the page-level bypass covers subframes (no no-bypass iframe control was run).
+  The fixture request log cannot tell bypass from no bypass (0 requests both ways); the CDP canary can.
+- [V] Electron's `WebFrameMain` has no isolated-world execution; for a subframe use a preload
   (`nodeIntegrationInSubFrames`) calling `webFrame.executeJavaScriptInIsolatedWorld`.
 - [V] Restoring `autoIncrement` records with explicit keys 1 to 7 advances the key generator: the next `add` gets 8.
 - [V] Partitioned iframe storage key `http://127.0.0.1:4417/^0http://localhost`; `ses.clearStorageData({origin})` does
@@ -285,8 +294,10 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Frame timing on the dev Mac: a locked screen puts `loginwindow` in front and no window can be focused; uncapped
   Chromium (`--disable-gpu-vsync --disable-frame-rate-limit`) queues seconds of GPU work, and interleaving uncapped runs
   with capped ones slowed the capped runs; keep cooldowns. [V, 2026-10-24, Electron 45 spike]
-- `app.setAsDefaultProtocolClient` leaves a LaunchServices handler preference that outlives `lsregister -u` and the
-  deleted app. [V, 2026-10-24, Electron 45 spike]
+- `app.setAsDefaultProtocolClient` leaves a LaunchServices handler preference (an `LSHandlers` entry in
+  `~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist`) that outlives `lsregister -u`
+  and the deleted app. [V, 2026-10-24, Electron 45 spike]
+- In zsh, `log` is a shell builtin: call the macOS unified log as `/usr/bin/log`. [V, 2026-10-24]
 - lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the
   Biome fix. [U] not tested here
 

@@ -1,6 +1,6 @@
 // THROWAWAY spike server (runtime-compat). Not product code. No dependencies, loopback only.
 //
-//   node server.mjs --port <n> [--results-dir <dir>]
+//   node server.mjs --port <n> [--token <secret>] [--allow-origin <origin> ...] [--results-dir <dir>]
 //
 // - Serves probe/ on 127.0.0.1 and [::1] (so http://localhost:<n>/ and http://127.0.0.1:<n>/ both work).
 // - Paths under /coi/ serve the same files with COOP/COEP/CORP headers (same convention as the
@@ -8,8 +8,13 @@
 // - /vendor/wasm-feature-detect.js serves the wasm-feature-detect ESM build from electron/node_modules.
 // - POST /results/<runtime> with a JSON body writes results/<runtime>-<version>-<UTC timestamp>.json
 //   (home directory and user name replaced) and prints "RESULT <relative path> <kind>" on stdout.
+//   The POST must carry the per-run secret in an X-WG-Token header (run.mjs passes --token and gives
+//   the probe the same value as ?token=; without --token the server makes one and prints "TOKEN ...").
+//   Its Origin must be this server's own origin or one given with --allow-origin (Tauri assets in
+//   Task 6); only those get CORS headers. So another page open in a browser cannot write results.
 // - Every request is logged to stdout as: <ISO time> <method> <host> <url> <status>.
 
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -43,17 +48,13 @@ const COI_HEADERS = {
   "Cross-Origin-Resource-Policy": "same-origin",
 };
 
-// Results may be POSTed from a page on another origin (Tauri packaged assets in Task 6).
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  // Readable from a COEP: require-corp page on another origin.
-  "Cross-Origin-Resource-Policy": "cross-origin",
-};
-
 const { values: args } = parseArgs({
-  options: { port: { type: "string" }, "results-dir": { type: "string" } },
+  options: {
+    port: { type: "string" },
+    token: { type: "string" },
+    "allow-origin": { type: "string", multiple: true },
+    "results-dir": { type: "string" },
+  },
   strict: true,
 });
 const port = Number(args.port);
@@ -62,6 +63,33 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   process.exit(2);
 }
 const resultsDir = resolve(args["results-dir"] ?? resolve(ROOT, "results"));
+const TOKEN = args.token ?? randomBytes(16).toString("hex");
+if (!/^[A-Za-z0-9_-]{16,128}$/.test(TOKEN)) {
+  console.error("--token must be 16 to 128 characters of [A-Za-z0-9_-]");
+  process.exit(2);
+}
+const OWN_ORIGINS = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, `http://[::1]:${port}`]);
+const EXTRA_ORIGINS = new Set(args["allow-origin"] ?? []);
+
+/** CORS headers only for an explicitly allowed foreign origin (never "*"). */
+function corsHeaders(origin) {
+  if (!origin || !EXTRA_ORIGINS.has(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-WG-Token",
+    // Readable from a COEP: require-corp page on that origin.
+    "Cross-Origin-Resource-Policy": "cross-origin",
+    Vary: "Origin",
+  };
+}
+
+function tokenMatches(value) {
+  if (typeof value !== "string") return false;
+  const a = Buffer.from(value);
+  const b = Buffer.from(TOKEN);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 const HOME = homedir();
 const USER = userInfo().username;
@@ -69,7 +97,7 @@ const REPO = resolve(ROOT, "../..");
 
 /** Replaces machine-specific paths and the user name, so committed JSON holds no personal data. */
 function sanitize(text) {
-  let out = text.split(REPO).join("<repo>").split(HOME).join("~");
+  let out = text.split(TOKEN).join("<token>").split(REPO).join("<repo>").split(HOME).join("~");
   if (USER.length >= 3) out = out.split(USER).join("<user>");
   return out;
 }
@@ -124,16 +152,27 @@ function readBody(req) {
 }
 
 async function handlePost(req, res) {
+  const origin = req.headers.origin;
+  const cors = corsHeaders(origin);
   const match = /^\/results\/([A-Za-z0-9._-]{1,32})$/.exec((req.url ?? "").split("?")[0]);
   if (!match) {
-    send(res, 404, { "Content-Type": "text/plain", ...CORS_HEADERS }, "Not Found\n");
+    send(res, 404, { "Content-Type": "text/plain", ...cors }, "Not Found\n");
+    return;
+  }
+  // Non-browser clients send no Origin; browsers always do on POST.
+  if (origin && !OWN_ORIGINS.has(origin) && !EXTRA_ORIGINS.has(origin)) {
+    send(res, 403, { "Content-Type": "text/plain" }, "Origin not allowed\n");
+    return;
+  }
+  if (!tokenMatches(req.headers["x-wg-token"])) {
+    send(res, 403, { "Content-Type": "text/plain", ...cors }, "Missing or wrong X-WG-Token\n");
     return;
   }
   let payload;
   try {
     payload = JSON.parse(await readBody(req));
   } catch (error) {
-    send(res, 400, { "Content-Type": "text/plain", ...CORS_HEADERS }, `Bad JSON: ${error.message}\n`);
+    send(res, 400, { "Content-Type": "text/plain", ...cors }, `Bad JSON: ${error.message}\n`);
     return;
   }
   const runtime = match[1];
@@ -147,14 +186,15 @@ async function handlePost(req, res) {
   send(
     res,
     201,
-    { "Content-Type": "application/json", ...CORS_HEADERS },
+    { "Content-Type": "application/json", ...cors },
     JSON.stringify({ file: rel }),
   );
 }
 
 async function handle(req, res) {
   if (req.method === "OPTIONS") {
-    send(res, 204, CORS_HEADERS, "");
+    const cors = corsHeaders(req.headers.origin);
+    send(res, Object.keys(cors).length ? 204 : 403, cors, "");
     return;
   }
   if (req.method === "POST") {
@@ -229,4 +269,5 @@ try {
   }
   console.warn("IPv6 loopback is unavailable; serving 127.0.0.1 only");
 }
+if (!args.token) console.log(`TOKEN ${TOKEN}`);
 console.log(`spike server listening on http://localhost:${port}/ (results -> ${sanitize(resultsDir)})`);

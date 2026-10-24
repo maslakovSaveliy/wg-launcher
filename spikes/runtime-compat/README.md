@@ -11,7 +11,7 @@ Nothing here is reused by the launcher.
 | --- | --- |
 | `HYPOTHESES.md` | Frozen hypotheses, thresholds and decision rules (never edited; amendments only in its last section) |
 | `RESULTS.md` | One row per hypothesis: status, evidence file, deviations from the method |
-| `server.mjs` | Spike server, no dependencies: serves `probe/`, `/coi/` prefix with COOP/COEP, `POST /results/<runtime>` |
+| `server.mjs` | Spike server, no dependencies: serves `probe/`, `/coi/` prefix with COOP/COEP, token-protected `POST /results/<runtime>` |
 | `probe/` | Shared probe pages (Electron now, Chrome and Tauri in Task 6): capabilities, frame-time scene, cold start, storage markers, permissions |
 | `results.schema.json`, `validate.mjs` | JSON Schema for every result file and its validator (`ajv` from `electron/node_modules`) |
 | `run.mjs` | Orchestrator: fixture server + spike server + one Electron launch per check, verdicts, schema validation |
@@ -45,8 +45,18 @@ partitioning under Playwright), `h14`, `h16`, `package` (H15), `permissions` (H1
 - `package` builds `electron/dist/mac-arm64/wgspike.app` with electron-builder (`identity: null`), signs it ad hoc with
   `codesign --force --deep --sign -`, runs the deep-link cases, then unregisters the `wgspike://` scheme
   (`lsregister -u <app>`), deletes `electron/dist/` and the app's user data in `~/Library/Application Support/wgspike`.
-  If a run is interrupted, do the same by hand.
+  If a run is interrupted, do the same by hand. `setAsDefaultProtocolClient` also leaves a LaunchServices handler
+  preference for `wgspike` that these steps do not remove; it is harmless, and RESULTS.md (H15) has an untested
+  removal recipe.
 - Ports 4417 (fixture) and 4418 (spike server) must be free; `--fixture-port` and `--spike-port` change them.
+- Results are written only with the per-run token. `run.mjs` makes a random token, starts the server with
+  `--token <token>` and hands it to every Electron launch, which adds `token=<token>` to the probe URL. The probe sends
+  it back in an `X-WG-Token` header, and it is removed from the recorded URL (`page.url`) and replaced by `<token>`
+  anywhere else before a file is written. The server also refuses a POST whose `Origin` is not its own
+  (`http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`) and sends no CORS headers, so other pages
+  open in a browser cannot write into `results/`. Run by hand, `node server.mjs --port 4418` prints `TOKEN <token>`;
+  open the probe as `http://localhost:4418/?token=<token>`. A probe served from another origin (Tauri packaged assets,
+  Task 6) needs `--allow-origin <that origin>` plus `?server=http://localhost:4418&token=<token>`.
 - To retry H3 or H4 on Electron 44.9.x (only if they fail on 45.0.0): copy `electron/` to `electron-44/`, run
   `npm install --save-exact electron@44.9.3` there and pass `--electron-dir=electron-44`.
 

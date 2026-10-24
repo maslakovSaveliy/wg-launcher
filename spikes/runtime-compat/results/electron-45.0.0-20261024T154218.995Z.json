@@ -1,0 +1,1124 @@
+{
+  "schemaVersion": 1,
+  "kind": "run",
+  "createdAt": "2026-10-24T15:42:18.994Z",
+  "runtime": {
+    "name": "electron",
+    "version": "45.0.0",
+    "chromium": "156.0.8078.48",
+    "node": "24.22.0"
+  },
+  "label": "node run.mjs --runtime=electron --only=permissions",
+  "machine": {
+    "osVersion": "macOS 27.0.1 (26A434)",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "gpu": "Apple M3 (10 cores, spdisplays_metal4)",
+    "display": {
+      "name": "Color LCD",
+      "resolution": "1470 x 956 @ 60.00Hz"
+    },
+    "displayRefreshHz": 60.00239944458008,
+    "power": "Now drawing from 'Battery Power'",
+    "screenLockedAtStart": false,
+    "runnerNode": "v24.13.0"
+  },
+  "startedAt": "2026-10-24T15:41:49.382Z",
+  "finishedAt": "2026-10-24T15:42:18.994Z",
+  "groups": [
+    "permissions"
+  ],
+  "fatal": null,
+  "environment": {
+    "versions": {
+      "electron": "45.0.0",
+      "chrome": "156.0.8078.48",
+      "node": "24.22.0",
+      "v8": "15.6.75.19-electron.0"
+    },
+    "os": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "systemVersion": "27.0.1"
+    },
+    "display": {
+      "displayFrequency": 60.00239944458008,
+      "size": {
+        "width": 1470,
+        "height": 956
+      },
+      "scaleFactor": 2,
+      "colorDepth": 30,
+      "count": 1
+    },
+    "gpu": {
+      "devices": [
+        {
+          "active": true,
+          "deviceId": 0,
+          "gpuPreference": 0,
+          "vendorId": 4203
+        }
+      ],
+      "machineModelName": "Mac",
+      "machineModelVersion": "15.12"
+    },
+    "gpuFeatureStatus": {
+      "2d_canvas": "enabled",
+      "direct_rendering_display_compositor": "disabled_off_ok",
+      "gpu_compositing": "enabled",
+      "multiple_raster_threads": "enabled_on",
+      "opengl": "enabled_on",
+      "rasterization": "enabled",
+      "raw_draw": "disabled_off_ok",
+      "skia_graphite": "enabled_on",
+      "trees_in_viz": "disabled_off",
+      "video_decode": "enabled",
+      "video_encode": "enabled",
+      "webgl": "enabled",
+      "webgpu": "enabled",
+      "webnn": "disabled_off"
+    },
+    "switches": {
+      "disableFeaturesAtStart": null,
+      "disableFeatures": null,
+      "restorePartitioning": false,
+      "enableFeatures": null,
+      "uncapped": false,
+      "unsafeWebgpu": false
+    }
+  },
+  "hypotheses": {
+    "H1": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H2": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H3": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H4": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H5": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H6": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H7": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H8": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H9": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H10": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H11": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H12": {
+      "status": "PASS",
+      "reason": "five denied and logged, three allowed, control granted",
+      "metrics": {
+        "focusAtStart": true,
+        "deniedOk": {
+          "camera": true,
+          "microphone": true,
+          "geolocation": true,
+          "notifications": true,
+          "displayCapture": true
+        },
+        "allowedOk": {
+          "fullscreen": true,
+          "pointerLock": true,
+          "keyboardLock": true
+        },
+        "controlGranted": true,
+        "outcomes": {
+          "camera": {
+            "ok": false,
+            "error": "NotAllowedError: Permission denied",
+            "ms": 2502
+          },
+          "microphone": {
+            "ok": false,
+            "error": "NotAllowedError: Permission denied",
+            "ms": 182
+          },
+          "geolocation": {
+            "ok": false,
+            "error": "GeolocationPositionError(1): User denied Geolocation",
+            "ms": 2
+          },
+          "notifications": {
+            "ok": true,
+            "value": "denied",
+            "ms": 2
+          },
+          "notificationPermission": "denied",
+          "displayCapture": {
+            "ok": false,
+            "error": "NotAllowedError: Permission denied",
+            "ms": 1
+          }
+        }
+      }
+    },
+    "H13": {
+      "status": "INVALID",
+      "reason": "control not rejected without a gesture: keyboardLock succeeded",
+      "metrics": {
+        "focusAtStart": true,
+        "matrix": {
+          "noGesture.asSpecified": {
+            "fullscreen": "TypeError: Permissions check failed",
+            "pointerLock": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+            "keyboardLock": "ok"
+          },
+          "noGesture.fullscreenOnly": {
+            "fullscreen": "TypeError: Permissions check failed"
+          },
+          "noGesture.pointerLockOnly": {
+            "pointerLock": "NotAllowedError: A user gesture is required to request Pointer Lock."
+          },
+          "noGesture.keyboardLockOnly": {
+            "keyboardLock": "ok"
+          },
+          "mouse.asSpecified": {
+            "fullscreen": "ok",
+            "pointerLock": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+            "keyboardLock": "ok"
+          },
+          "mouse.fullscreenOnly": {
+            "fullscreen": "ok"
+          },
+          "mouse.pointerLockOnly": {
+            "pointerLock": "ok"
+          },
+          "mouse.keyboardLockOnly": {
+            "keyboardLock": "ok"
+          },
+          "mouse.pointerLockFirst": {
+            "pointerLock": "ok",
+            "fullscreen": "ok",
+            "keyboardLock": "ok"
+          },
+          "key.asSpecified": {
+            "fullscreen": "ok",
+            "pointerLock": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+            "keyboardLock": "ok"
+          },
+          "key.pointerLockOnly": {
+            "pointerLock": "ok"
+          }
+        },
+        "manualRealClick": "not performed (needs the owner at the machine)"
+      }
+    },
+    "H14": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H15": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H16": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    }
+  },
+  "launches": [
+    {
+      "seq": 1,
+      "mode": "env",
+      "extra": [],
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "durationMs": 265,
+      "error": null
+    },
+    {
+      "seq": 2,
+      "mode": "permissions",
+      "extra": [],
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "durationMs": 26406,
+      "error": null
+    }
+  ],
+  "checks": {
+    "env": {
+      "mode": "env",
+      "extra": [],
+      "spawnMs": 1792856509749,
+      "durationMs": 265,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "bundleProcessesBefore": 0,
+      "events": [
+        {
+          "type": "done",
+          "mode": "env",
+          "t": 1792856509995,
+          "error": null
+        }
+      ],
+      "stderrTail": null,
+      "output": {
+        "mode": "env",
+        "startedAt": "2026-10-24T15:41:49.953Z",
+        "finishedAt": "2026-10-24T15:41:49.994Z",
+        "pid": 84071,
+        "environment": {
+          "versions": {
+            "electron": "45.0.0",
+            "chrome": "156.0.8078.48",
+            "node": "24.22.0",
+            "v8": "15.6.75.19-electron.0"
+          },
+          "os": {
+            "platform": "darwin",
+            "arch": "arm64",
+            "systemVersion": "27.0.1"
+          },
+          "display": {
+            "displayFrequency": 60.00239944458008,
+            "size": {
+              "width": 1470,
+              "height": 956
+            },
+            "scaleFactor": 2,
+            "colorDepth": 30,
+            "count": 1
+          },
+          "gpu": {
+            "devices": [
+              {
+                "active": true,
+                "deviceId": 0,
+                "gpuPreference": 0,
+                "vendorId": 4203
+              }
+            ],
+            "machineModelName": "Mac",
+            "machineModelVersion": "15.12"
+          },
+          "gpuFeatureStatus": {
+            "2d_canvas": "enabled",
+            "direct_rendering_display_compositor": "disabled_off_ok",
+            "gpu_compositing": "enabled",
+            "multiple_raster_threads": "enabled_on",
+            "opengl": "enabled_on",
+            "rasterization": "enabled",
+            "raw_draw": "disabled_off_ok",
+            "skia_graphite": "enabled_on",
+            "trees_in_viz": "disabled_off",
+            "video_decode": "enabled",
+            "video_encode": "enabled",
+            "webgl": "enabled",
+            "webgpu": "enabled",
+            "webnn": "disabled_off"
+          },
+          "switches": {
+            "disableFeaturesAtStart": null,
+            "disableFeatures": null,
+            "restorePartitioning": false,
+            "enableFeatures": null,
+            "uncapped": false,
+            "unsafeWebgpu": false
+          }
+        },
+        "processWarnings": [],
+        "error": null,
+        "result": {
+          "gpuFeatureStatusBeforeGpuInfo": {
+            "2d_canvas": "disabled_software",
+            "direct_rendering_display_compositor": "disabled_off_ok",
+            "gpu_compositing": "disabled_software",
+            "multiple_raster_threads": "enabled_on",
+            "opengl": "disabled_off",
+            "rasterization": "disabled_software",
+            "raw_draw": "disabled_off_ok",
+            "skia_graphite": "disabled_off",
+            "trees_in_viz": "disabled_off",
+            "video_decode": "disabled_software",
+            "video_encode": "disabled_software",
+            "webgl": "disabled_off",
+            "webgpu": "disabled_off",
+            "webnn": "disabled_off"
+          }
+        }
+      }
+    },
+    "permissions": {
+      "mode": "permissions",
+      "extra": [],
+      "spawnMs": 1792856510061,
+      "durationMs": 26406,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "bundleProcessesBefore": 0,
+      "events": [
+        {
+          "type": "done",
+          "mode": "permissions",
+          "t": 1792856536423,
+          "error": null
+        }
+      ],
+      "stderrTail": null,
+      "output": {
+        "mode": "permissions",
+        "startedAt": "2026-10-24T15:41:50.192Z",
+        "finishedAt": "2026-10-24T15:42:16.422Z",
+        "pid": 84097,
+        "environment": {
+          "versions": {
+            "electron": "45.0.0",
+            "chrome": "156.0.8078.48",
+            "node": "24.22.0",
+            "v8": "15.6.75.19-electron.0"
+          },
+          "switches": {
+            "disableFeaturesAtStart": null,
+            "disableFeatures": null,
+            "restorePartitioning": false,
+            "enableFeatures": null,
+            "uncapped": false,
+            "unsafeWebgpu": false
+          },
+          "displayFrequency": 60.00239944458008,
+          "gpuFeatureStatus": {
+            "webgl": "enabled",
+            "webgpu": "enabled",
+            "gpu_compositing": "enabled"
+          }
+        },
+        "processWarnings": [],
+        "error": null,
+        "result": {
+          "mainPid": 84097,
+          "pidsDuringRequests": [
+            {
+              "pid": 84097,
+              "type": "Browser",
+              "name": null
+            },
+            {
+              "pid": 84098,
+              "type": "GPU",
+              "name": null
+            },
+            {
+              "pid": 84099,
+              "type": "Utility",
+              "name": "Network Service"
+            },
+            {
+              "pid": 84101,
+              "type": "Tab",
+              "name": null
+            }
+          ],
+          "mediaAccessLog": [
+            {
+              "t": "2026-10-24T15:41:50.192Z",
+              "microphone": "granted",
+              "camera": "not-determined",
+              "screen": "granted"
+            },
+            {
+              "t": "2026-10-24T15:41:55.789Z",
+              "microphone": "granted",
+              "camera": "not-determined",
+              "screen": "granted"
+            },
+            {
+              "t": "2026-10-24T15:41:58.529Z",
+              "microphone": "granted",
+              "camera": "not-determined",
+              "screen": "granted"
+            },
+            {
+              "t": "2026-10-24T15:42:16.384Z",
+              "microphone": "granted",
+              "camera": "not-determined",
+              "screen": "granted"
+            }
+          ],
+          "focusAtStart": true,
+          "noGesture": {
+            "asSpecified": {
+              "source": "script-no-gesture",
+              "order": [
+                "fullscreen",
+                "pointerLock",
+                "keyboardLock"
+              ],
+              "activation": {
+                "isActive": false,
+                "hasBeenActive": false,
+                "hasFocus": true,
+                "visibilityState": "visible"
+              },
+              "fullscreen": {
+                "ok": false,
+                "error": "TypeError: Permissions check failed",
+                "ms": 1
+              },
+              "pointerLock": {
+                "ok": false,
+                "error": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+                "ms": 1
+              },
+              "keyboardLock": {
+                "ok": true,
+                "value": "locked",
+                "ms": 1
+              }
+            },
+            "fullscreenOnly": {
+              "source": "script-no-gesture",
+              "order": [
+                "fullscreen"
+              ],
+              "activation": {
+                "isActive": false,
+                "hasBeenActive": false,
+                "hasFocus": true,
+                "visibilityState": "visible"
+              },
+              "fullscreen": {
+                "ok": false,
+                "error": "TypeError: Permissions check failed",
+                "ms": 0
+              }
+            },
+            "pointerLockOnly": {
+              "source": "script-no-gesture",
+              "order": [
+                "pointerLock"
+              ],
+              "activation": {
+                "isActive": false,
+                "hasBeenActive": false,
+                "hasFocus": true,
+                "visibilityState": "visible"
+              },
+              "pointerLock": {
+                "ok": false,
+                "error": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+                "ms": 1
+              }
+            },
+            "keyboardLockOnly": {
+              "source": "script-no-gesture",
+              "order": [
+                "keyboardLock"
+              ],
+              "activation": {
+                "isActive": false,
+                "hasBeenActive": false,
+                "hasFocus": true,
+                "visibilityState": "visible"
+              },
+              "keyboardLock": {
+                "ok": true,
+                "value": "locked",
+                "ms": 0
+              }
+            }
+          },
+          "denied": {
+            "camera": {
+              "ok": false,
+              "error": "NotAllowedError: Permission denied",
+              "ms": 2502
+            },
+            "microphone": {
+              "ok": false,
+              "error": "NotAllowedError: Permission denied",
+              "ms": 182
+            },
+            "geolocation": {
+              "ok": false,
+              "error": "GeolocationPositionError(1): User denied Geolocation",
+              "ms": 2
+            },
+            "notifications": {
+              "ok": true,
+              "value": "denied",
+              "ms": 2
+            },
+            "notificationPermission": "denied",
+            "displayCapture": {
+              "ok": false,
+              "error": "NotAllowedError: Permission denied",
+              "ms": 1
+            }
+          },
+          "trusted": {
+            "mouse": {
+              "asSpecified": {
+                "source": "trusted-pointer-click:gesture",
+                "order": [
+                  "fullscreen",
+                  "pointerLock",
+                  "keyboardLock"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "fullscreen": {
+                  "ok": true,
+                  "value": "fullscreen",
+                  "ms": 3
+                },
+                "pointerLock": {
+                  "ok": false,
+                  "error": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+                  "ms": 2
+                },
+                "keyboardLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 2
+                }
+              },
+              "fullscreenOnly": {
+                "source": "trusted-pointer-click:only-fullscreen",
+                "order": [
+                  "fullscreen"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "fullscreen": {
+                  "ok": true,
+                  "value": "fullscreen",
+                  "ms": 1
+                }
+              },
+              "pointerLockOnly": {
+                "source": "trusted-pointer-click:only-pointerLock",
+                "order": [
+                  "pointerLock"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "pointerLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 2
+                }
+              },
+              "keyboardLockOnly": {
+                "source": "trusted-pointer-click:only-keyboardLock",
+                "order": [
+                  "keyboardLock"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "keyboardLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 1
+                }
+              },
+              "pointerLockFirst": {
+                "source": "trusted-pointer-click:pointer-first",
+                "order": [
+                  "pointerLock",
+                  "fullscreen",
+                  "keyboardLock"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "pointerLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 1
+                },
+                "fullscreen": {
+                  "ok": true,
+                  "value": "fullscreen",
+                  "ms": 1
+                },
+                "keyboardLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 1
+                }
+              }
+            },
+            "key": {
+              "asSpecified": {
+                "source": "trusted-keyboard-click:gesture",
+                "order": [
+                  "fullscreen",
+                  "pointerLock",
+                  "keyboardLock"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "fullscreen": {
+                  "ok": true,
+                  "value": "fullscreen",
+                  "ms": 1
+                },
+                "pointerLock": {
+                  "ok": false,
+                  "error": "NotAllowedError: A user gesture is required to request Pointer Lock.",
+                  "ms": 0
+                },
+                "keyboardLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 15
+                }
+              },
+              "pointerLockOnly": {
+                "source": "trusted-keyboard-click:only-pointerLock",
+                "order": [
+                  "pointerLock"
+                ],
+                "activation": {
+                  "isActive": true,
+                  "hasBeenActive": true,
+                  "hasFocus": true,
+                  "visibilityState": "visible"
+                },
+                "pointerLock": {
+                  "ok": true,
+                  "value": "locked",
+                  "ms": 2
+                }
+              }
+            }
+          },
+          "fullscreenWhileLocked": true,
+          "fullscreenEvents": [
+            {
+              "t": "2026-10-24T15:41:59.269Z",
+              "event": "enter-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:41:59.369Z",
+              "event": "leave-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:42:02.307Z",
+              "event": "enter-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:42:02.410Z",
+              "event": "leave-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:42:08.903Z",
+              "event": "enter-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:42:08.959Z",
+              "event": "leave-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:42:11.890Z",
+              "event": "enter-html-full-screen"
+            },
+            {
+              "t": "2026-10-24T15:42:11.978Z",
+              "event": "leave-html-full-screen"
+            }
+          ],
+          "clicks": [
+            {
+              "id": "display",
+              "isTrusted": true
+            },
+            {
+              "id": "gesture",
+              "isTrusted": true,
+              "detail": 1
+            },
+            {
+              "id": "only-fullscreen",
+              "isTrusted": true,
+              "detail": 1
+            },
+            {
+              "id": "only-pointerLock",
+              "isTrusted": true,
+              "detail": 1
+            },
+            {
+              "id": "only-keyboardLock",
+              "isTrusted": true,
+              "detail": 1
+            },
+            {
+              "id": "pointer-first",
+              "isTrusted": true,
+              "detail": 1
+            },
+            {
+              "id": "gesture",
+              "isTrusted": true,
+              "detail": 0
+            },
+            {
+              "id": "only-pointerLock",
+              "isTrusted": true,
+              "detail": 0
+            }
+          ],
+          "handlerLog": [
+            {
+              "t": "2026-10-24T15:41:50.978Z",
+              "handler": "check",
+              "permission": "automatic-fullscreen",
+              "allowed": false,
+              "requestingOrigin": "http://localhost:4418/",
+              "mediaType": null
+            },
+            {
+              "t": "2026-10-24T15:41:50.978Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:50.979Z",
+              "handler": "request",
+              "permission": "keyboardLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:52.181Z",
+              "handler": "check",
+              "permission": "automatic-fullscreen",
+              "allowed": false,
+              "requestingOrigin": "http://localhost:4418/",
+              "mediaType": null
+            },
+            {
+              "t": "2026-10-24T15:41:53.385Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:54.587Z",
+              "handler": "request",
+              "permission": "keyboardLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:58.342Z",
+              "handler": "request",
+              "permission": "media",
+              "allowed": false,
+              "mediaTypes": [
+                "video"
+              ],
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:58.525Z",
+              "handler": "request",
+              "permission": "media",
+              "allowed": false,
+              "mediaTypes": [
+                "audio"
+              ],
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:58.527Z",
+              "handler": "request",
+              "permission": "geolocation",
+              "allowed": false,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:58.528Z",
+              "handler": "request",
+              "permission": "notifications",
+              "allowed": false,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:58.529Z",
+              "handler": "check",
+              "permission": "notifications",
+              "allowed": false,
+              "requestingOrigin": "http://localhost:4418/",
+              "mediaType": null
+            },
+            {
+              "t": "2026-10-24T15:41:58.568Z",
+              "handler": "request",
+              "permission": "display-capture",
+              "allowed": false,
+              "mediaTypes": [
+                "video"
+              ],
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:59.268Z",
+              "handler": "check",
+              "permission": "automatic-fullscreen",
+              "allowed": false,
+              "requestingOrigin": "http://localhost:4418/",
+              "mediaType": null
+            },
+            {
+              "t": "2026-10-24T15:41:59.269Z",
+              "handler": "request",
+              "permission": "fullscreen",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:59.269Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:41:59.269Z",
+              "handler": "request",
+              "permission": "keyboardLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:02.307Z",
+              "handler": "request",
+              "permission": "fullscreen",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:05.290Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:07.097Z",
+              "handler": "request",
+              "permission": "keyboardLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:08.902Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:08.903Z",
+              "handler": "check",
+              "permission": "automatic-fullscreen",
+              "allowed": false,
+              "requestingOrigin": "http://localhost:4418/",
+              "mediaType": null
+            },
+            {
+              "t": "2026-10-24T15:42:08.903Z",
+              "handler": "request",
+              "permission": "fullscreen",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:08.903Z",
+              "handler": "request",
+              "permission": "keyboardLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:11.890Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:11.890Z",
+              "handler": "request",
+              "permission": "fullscreen",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:11.890Z",
+              "handler": "request",
+              "permission": "keyboardLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            },
+            {
+              "t": "2026-10-24T15:42:14.907Z",
+              "handler": "request",
+              "permission": "pointerLock",
+              "allowed": true,
+              "mediaTypes": null,
+              "requestingUrl": "http://localhost:4418/perm.html"
+            }
+          ],
+          "control": {
+            "result": "granted",
+            "permission": "granted"
+          }
+        }
+      },
+      "tccLog": {
+        "window": [
+          "2026-10-24T15:41:50.028Z",
+          "2026-10-24T15:42:16.468Z"
+        ],
+        "tccEntries": 530,
+        "relevantCount": 8,
+        "relevant": [
+          {
+            "t": "2026-10-24 22:41:50.211206+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:41:50.220261+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:41:55.811956+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:41:55.822378+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:41:58.537619+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:41:58.545397+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:42:16.396767+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          },
+          {
+            "t": "2026-10-24 22:42:16.405194+0700",
+            "process": "tccd",
+            "type": "Error",
+            "message": "Prompting policy for hardened runtime; service: kTCCServiceCamera requires entitlement com.apple.security.device.camera but it is missing for responsible={TCCDProcess: identifier=com.anthropic.claude-code, pid=2170, auid=N, euid=N, responsible_path=<path>, binary_path=<path>}, requesting={TCCDProcess: identifier=Electron, pid=84097, auid=N, euid=N, binary_path=<repo>/spikes/runtime-compat/electron/node_mo"
+          }
+        ]
+      }
+    }
+  },
+  "probeFiles": [],
+  "leftoverProcesses": {
+    "bundle": [],
+    "pgrepElectronSpike": [],
+    "pgrepElectronOtherAppsCount": 1,
+    "pgrepWgspike": []
+  },
+  "redactions": [
+    "checks.permissions.tccLog.relevant[].message: paths outside the repository replaced by <path> after the run (the rule run.mjs now applies when it writes)"
+  ]
+}

@@ -7,7 +7,8 @@
 ## Run
 
 - **Date:** 2026-10-24. **Command:** `node run.mjs --runtime=electron` (all groups), then twice `node run.mjs
-  --runtime=electron --only=memory --load=512` for H9.
+  --runtime=electron --only=memory --load=512` for H9, then once `node run.mjs --runtime=electron --only=permissions`
+  for H12 (review fix round, file `electron-45.0.0-20261024T154218.995Z.json`, "H12 rerun").
 - **Machine:** MacBook Air with Apple M3 (model `Mac15,12`, fanless), 10-core GPU (Metal 4), built-in Retina display at
   1470 x 956 points, scale factor 2, 60 Hz (Electron `displayFrequency` 60.0024), one display, on AC power, screen
   unlocked. macOS 27.0.1 (26A434).
@@ -15,8 +16,8 @@
   playwright-core 1.64.1, electron-builder 26.18.0, ajv 8.20.0, wasm-feature-detect 1.9.0; runner on Node 24.13.0.
 - **Evidence:** every path below is under `results/`. The run aggregate is
   `electron-45.0.0-20261024T151511.707Z.json` ("aggregate"); probe payloads are the other files, each named by its
-  timestamp and carrying its label. All 22 files of the run and the two H9 reruns validate against `results.schema.json`
-  (`node validate.mjs results/*.json`), and the validator rejects deliberately corrupted copies.
+  timestamp and carrying its label. All 22 files of the run, the two H9 reruns and the H12 rerun validate against
+  `results.schema.json` (`node validate.mjs results/*.json`), and the validator rejects deliberately corrupted copies.
 - **Not extrapolated:** one machine, one OS. Nothing here says anything about Windows, Linux or other Macs.
 
 ## Summary
@@ -26,7 +27,7 @@
 | H1 | PASS | aggregate `hypotheses.H1`, `checks.storage.h1` | 0 of 5 kinds leaked in either direction; each window saw its own 5; same-partition control 5 of 5 |
 | H2 | PASS | aggregate `checks.storage.h2` | All 5 kinds and both 1 MiB values (SHA-256 equal) back after `app.quit()` and relaunch; no process left before relaunch |
 | H2b | reported | aggregate `checks.storage.h2b` | SIGKILL 5.0 s after the writes: the persistent cookie was lost; localStorage, IndexedDB (both 1 MiB values), Cache Storage and OPFS survived |
-| H3 | PASS | `…150308.376Z` (/coi/), `…150309.211Z` (control) | `crossOriginIsolated` true, SharedArrayBuffer + Atomics round trip with a Worker; control false |
+| H3 | PASS | `…150308.376Z` (/coi/), `…150309.211Z` (control) | `crossOriginIsolated` true; a SharedArrayBuffer is shared with a Worker (the worker's `Atomics.store` is seen by the page); control false |
 | H4 | PASS | `…150310.061Z` (injected), `…150310.887Z` (control) | Same with COOP/COEP added by `webRequest.onHeadersReceived` to the document and worker responses; control false |
 | H5 | PASS (Electron side) | `…150312.029Z` (`checks.webgpu`) | Adapter `apple` / `metal-3`, 24 features, device created, compute readback correct, no switch. Feature count vs Chrome: Task 6 |
 | H6 | PASS | `…150312.029Z`, every frame-time file | `ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)` in every run |
@@ -36,7 +37,7 @@
 | H9 | INVALID | aggregate `checks.memory`, `…151642.234Z`, `…152143.695Z` (reruns) | In all three attempts the window was hidden and lost focus 4 to 6 s into the 60 s because the machine was in use |
 | H10 | PASS | aggregate `checks.sqlite` | `node:sqlite` (SQLite 3.53.4) and zstd work in the main process and a `utilityProcess`; no warning emitted |
 | H11 | PASS | aggregate `checks.playwright` | `_electron.launch`, `firstWindow`, click, `evaluate` in main, close. Playwright turns iframe storage partitioning off |
-| H12 | FAIL | aggregate `checks.permissions` | Camera, geolocation, notifications, display capture denied and logged; the microphone request never reached the handler (8 s timeout) |
+| H12 | FAIL in the full run, PASS in the rerun: environment-dependent | aggregate `checks.permissions`; H12 rerun `checks.permissions` | Full run: the microphone request never reached the handler (8 s timeout) while macOS microphone access was undecided. Rerun after the owner allowed the macOS prompt (`getMediaAccessStatus` `granted`): it reached the handler and was denied; all eight as specified. Depends on macOS TCC state; rerun with the packaged app before relying on it |
 | H13 | INVALID | aggregate `checks.permissions` | Control not rejected: `navigator.keyboard.lock()` succeeds without a gesture. Injected input does grant gestures |
 | H14 | PASS | aggregate `checks.h14`, `hypotheses.H14` | Variants a, b, c, d: Hd equals Hs, negative control differs, no game code ran in any quiescent window |
 | H15 | PASS | aggregate `checks.package` | One main process in every case; id `x` via `open-url` (not running, running) and `second-instance` (second executable) |
@@ -67,12 +68,15 @@ ADR-0002 cannot be accepted from this file alone. H3 passed on 45.0.0, so no 44.
 ### H3 and H4: cross-origin isolation
 
 - H3: `http://localhost:4418/coi/` (server sends COOP `same-origin`, COEP `require-corp`, CORP `same-origin`) reported
-  `crossOriginIsolated: true`; a `SharedArrayBuffer` was posted to a Worker, the page stored and notified, the worker
-  woke from `Atomics.wait`, stored back and notified, and `Atomics.waitAsync` returned `ok`. The same page at `/`
-  reported `false` and no `SharedArrayBuffer`.
+  `crossOriginIsolated: true`; a `SharedArrayBuffer` was posted to a Worker, the page stored 1 and notified, and the
+  page then read the 2 the worker had stored at the other index (`roundTrip: true`). `Atomics.waitAsync` returned
+  `not-equal`, meaning the worker's store had already landed when the page started waiting, and the worker's final
+  message did not arrive before the worker was terminated. So the evidence proves memory shared across threads, not
+  that the worker woke from `Atomics.wait`. The same page at `/` reported `false` and no `SharedArrayBuffer`.
 - H4: the plain page in a session whose `onHeadersReceived` adds the three headers to every response (the injection log
   lists `mainFrame /`, `script /probe.js`, `script /scene.js`, `script /coi-worker.js` and the results POST) reported
-  `true` with a working round trip; the same page in a session without injection reported `false`.
+  `true` with the same shared-memory round trip (`Atomics.waitAsync` returned `ok` this time: the page's wait was woken
+  by the worker's notify); the same page in a session without injection reported `false`.
 - So the Electron 41 regression (#50242) is absent in 45.0.0 on this machine, for both server and injected headers.
 
 ### H5 and H6: WebGPU and WebGL2
@@ -147,21 +151,38 @@ value of a switch wins) restored partitioning under Playwright. Only the normal 
 
 ### H12: deny-by-default permissions
 
-- Handlers on the session allowed only `fullscreen`, `pointerLock` and `keyboardLock` and logged every call. Camera:
-  request `media` with `["video"]`, denied, `NotAllowedError` after 313 ms. Geolocation: request denied, error code 1.
-  Notifications: request and check denied, `requestPermission()` resolved `denied`. Display capture (after an injected
-  click): request `display-capture` with `["video"]`, denied, `NotAllowedError`. Fullscreen, pointer lock and keyboard
-  lock: requests logged and allowed, each call succeeded alone after an injected click. Control (handlers set to
+- Handlers on the session allowed only `fullscreen`, `pointerLock` and `keyboardLock` and logged every call. In both
+  runs: camera request `media` with `["video"]` denied, `NotAllowedError`; geolocation request denied, error code 1;
+  notifications request and check denied, `requestPermission()` resolved `denied`; display capture (after an injected
+  click) request `display-capture` with `["video"]` denied, `NotAllowedError`; fullscreen, pointer lock and keyboard
+  lock requests logged and allowed, each call succeeded alone after an injected click; control (handlers set to
   `null`): `Notification.requestPermission()` resolved `granted`.
-- Microphone: `getUserMedia({ audio: true })` neither resolved nor rejected within 8 s and the handler was **never
-  called** (no request or check with `audio`). Development observations, not in the committed files: a stuck audio
-  request also blocked a later video request in a separate script; `systemPreferences.getMediaAccessStatus` reports
-  `not-determined` for both microphone and camera for the development Electron binary (`com.github.Electron`); and a
-  macOS `UserNotificationCenter` process started at the moment of the first microphone request and was still running. Assumed explanation: Chromium opens the audio input device before asking for
-  permission, which makes macOS ask for microphone access first; not visually confirmed (no screen access). By the
-  frozen rule ("any of the eight has another outcome") H12 is FAIL. The security invariant still holds in the sense that
-  no audio was captured, but "deny by default, logged" cannot be shown for the microphone until this is understood,
-  ideally with a packaged app and a decided OS-level permission.
+- Full run (aggregate): `getUserMedia({ audio: true })` neither resolved nor rejected within 8 s and the handler was
+  **never called** (no request or check with `audio`). The frozen rule ("any of the eight has another outcome") makes
+  that run FAIL. Development observations, not in the committed files: a stuck audio request also blocked a later video
+  request in a separate script; `systemPreferences.getMediaAccessStatus` then reported `not-determined` for microphone
+  and camera; and a macOS `UserNotificationCenter` process started at the moment of the first microphone request.
+- Owner-reported (2026-10-24): the macOS microphone prompt that appeared during the first permissions run was answered
+  "Allow". A TCC log read during the review fix round (not in the committed files) shows a microphone record created for
+  `com.anthropic.claude-code`, the app that launched the runner, at 15:14:11 UTC, after the full run's permissions group
+  had finished.
+- H12 rerun (`…154218.995Z`, the runner now records `getMediaAccessStatus` before, between and after the requests, and a
+  filtered TCC log): microphone `granted` and camera `not-determined` at every point; the microphone request reached
+  the handler (`request media ["audio"]`, denied) and rejected with `NotAllowedError` after 182 ms; camera, geolocation,
+  notifications and display capture as before; the three allowed ones succeeded; control `granted`. So this run is PASS
+  by the same rule. Its 8 captured TCC entries are camera preflight lines at the moments of our own status queries,
+  naming `com.anthropic.claude-code` as the process TCC holds responsible. The filter (entries that name a process of
+  the run or that app) let no microphone entry through; read unfiltered afterwards, the same window holds 15
+  microphone preflight entries that name no such process, presumably from the audio process Chromium starts for the
+  request after the runner took its process list. They are not in the committed file; the runner now also lists the
+  processes after the requests.
+- Interpretation: H12 is **environment-dependent**. With macOS microphone access undecided, the request stalled before
+  Electron's permission handler; once access was granted, the handler got it and denied it. Assumed cause (the TCC log
+  does not prove it): Chromium opens the audio input device, which asks macOS first, before it asks the embedder for
+  permission, while camera access goes to the embedder first. Also observed: macOS attributes the development Electron
+  process to the launching app, so a packaged app launched by LaunchServices may behave differently (Unverified).
+  To be rerun with the packaged app and with an undecided and a denied OS-level microphone state before ADR or security
+  spec relies on it. No audio was captured in any run.
 
 ### H13: trusted input
 
@@ -192,19 +213,26 @@ value of a switch wins) restored partitioning under Playwright. Only the normal 
   Blob). The importer ran the same way in a fresh partition (`persist:spike:dst-<variant>-<run>`), recreated both
   databases at the same versions with the same stores and indexes and put every record with its own key.
 - Every variant: Hd equals Hs (`b52d575f…`); the negative control (first byte of `stepLog` key 1 `roll` flipped)
-  restored into another fresh partition gave `0ed7f4db…`. Every quiescent window: only stub requests, the fixture
-  server logged 0 requests during the export window, no script parsed in a main world other than our tagged read-only
-  canary, no service-worker start or target, no controller, `window.progressLab` undefined.
+  restored into another fresh partition gave `0ed7f4db…`. Every quiescent window (export, restore and negative restore)
+  showed only stub requests in its protocol-handler and `webRequest` logs, no script parsed in a main world other than
+  our tagged read-only canary, no service-worker start or target, no controller, and `window.progressLab` undefined.
+  The fixture server's log was checked for the export windows of all four variants and for the variant-b control: 0
+  requests every time, **including the no-bypass control**, because the protocol handler answers the stub before
+  anything reaches the network. So the fixture-log criterion of variant b cannot tell the cases apart; the CDP canary
+  (parsed scripts with their contexts, service-worker events and targets, the controller) is the real evidence.
 - (a) The service worker was unregistered in the game window first. Afterwards one more step in the restored partition
   got key 8 (`stepLog` keys 1 to 8) and the hash `4747e918…`, the 8-step reference: explicit-key puts advance the key
   generator, and the restored game continues normally.
 - (b) The service worker stayed registered (`http://localhost:4417/`, active). Export saw the registration in its
   inventory but no controller and no worker start. Canary-sensitivity control: the same stub navigation without
-  `setBypassServiceWorker` was controlled by the service worker, which started (twice) and whose `sw.js` was parsed;
-  the canary flagged all of that. So the bypass is what keeps the worker out.
+  `setBypassServiceWorker` was controlled by the service worker: one start (`starting` then `running`), two
+  `service_worker` target sessions attached, `sw.js` parsed once in each; the canary flagged all of that. So the bypass
+  is what keeps the worker out of a top-level stub.
 - (c) Top level `http://localhost:4417/iframe-host.html?src=http://127.0.0.1:4417/`. The quiescent window recreated the
-  pair (a localhost stub embedding a 127.0.0.1 stub, both from the protocol handler); the service-worker bypass also
-  covered the cross-site iframe. CDP `Storage.getStorageKey` gave `http://localhost:4417/` for the top level and
+  pair (a localhost stub embedding a 127.0.0.1 stub, both from the protocol handler). The iframe's partitioned storage
+  had a registered service worker (`http://127.0.0.1:4417/`), yet the iframe stub had no controller and no worker
+  started; that the page-level bypass is what kept it out is Assumed, because no no-bypass control was run for the
+  iframe. CDP `Storage.getStorageKey` gave `http://localhost:4417/` for the top level and
   `http://127.0.0.1:4417/^0http://localhost` for the iframe, the same at export and restore. Electron's main-process
   `WebFrameMain` has no `executeJavaScriptInIsolatedWorld`, so the exporter ran in isolated world 1001 of the iframe
   through the window's preload (`nodeIntegrationInSubFrames`) calling `webFrame.executeJavaScriptInIsolatedWorld`. The
@@ -224,10 +252,18 @@ gave `flags=0x2(adhoc)`, sealed resources, "valid on disk", and `CFBundleURLType
 delivered id `x` before `ready`. (2) Running: the same command delivered `open-url` id `x` to the same process, still
 one main process. A second launch of the executable with `--launch-game=x` briefly made two main processes; the second
 did not get the single-instance lock and exited with code 0, the first logged `second-instance` with id `x`, one main
-process remained. `setAsDefaultProtocolClient("wgspike")` returned true. Cleanup: `lsregister -u`, then the app,
-`electron/dist/` and `~/Library/Application Support/wgspike` were deleted. One LaunchServices handler-preference record
-(`wgspike` to the app's bundle id, written by `setAsDefaultProtocolClient`) stays in the database; it points to an app
-that no longer exists. It was left alone because removing it means editing the LaunchServices secure preferences.
+process remained. "One main process" is judged from the count after the cases settled (`mainsAfter`); during case 2b
+the count was 2 for a moment (`maxMainsObserved`), which is how the single-instance lock works (see deviations).
+`setAsDefaultProtocolClient("wgspike")` returned true. Cleanup: `lsregister -u`, then the app, `electron/dist/` and
+`~/Library/Application Support/wgspike` were deleted.
+
+One LaunchServices handler preference stays: an entry `LSHandlerURLScheme: wgspike`, `LSHandlerRoleAll:
+dev.wglauncher.spike.throwaway` in the `LSHandlers` array of
+`~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist` (written by
+`setAsDefaultProtocolClient`; checked read-only). `lsregister -u` and deleting the app did not remove it. It points to
+an app that no longer exists and is harmless. Removal, not run and Unverified: find the entry's index with `plutil -p`
+on that file, delete it with `/usr/libexec/PlistBuddy -c "Delete :LSHandlers:<index>" <file>`, then log out and in.
+`lsregister -gc` (garbage-collects old data) may also drop it; that is not known.
 
 ### H16: no leftover processes
 
@@ -262,6 +298,21 @@ itself; this is a Chromium lifetime rule, not a crash.
    `http://localhost:<n>/`); the origin is what matters, and it is the same for both windows.
 8. **H2b** kills only the main process (helpers exit with it).
 9. **H15** also calls `setAsDefaultProtocolClient`, which the method does not require.
+10. **H3 and H4 server.** The probe was served by the spike server's `/coi/` prefix on port 4418 (the same three headers
+    as the fixture's `/coi/`: COOP, COEP, CORP) rather than by the fixture server, as the dispatch notes direct; the
+    fixture's `/coi/` serves the game, not the probe. No effect on validity: the control is the same page without the
+    prefix.
+11. **H15 "one main process"** is read as the steady state after each case (`mainsAfter` 1). In case 2b a second main
+    process existed for a moment (`maxMainsObserved` 2) until it lost the single-instance lock and exited with code 0;
+    that transient process is the mechanism the method tests, not a second instance that stays.
+12. **H12 rerun.** The method has no OS-permission precondition. The full run's FAIL stands as measured; the rerun after
+    the owner answered the macOS prompt is reported next to it, and H12 is marked environment-dependent.
+13. **Changes after the measurements.** In the review fix round the result transport was hardened (the spike server
+    now requires a per-run token and checks the Origin, see `README.md`) and the permissions mode gained the
+    media-access status and TCC log. The measuring code is unchanged; only the H12 rerun used the new transport. In the
+    H12 rerun file, paths outside the repository in the captured TCC lines (another app's install location) were
+    replaced by `<path>` after the run with `node run.mjs --redact-tcc <file>`, the same rule the runner now applies
+    when it writes; the file records this under `redactions`.
 
 ## Findings and gotchas
 
@@ -278,10 +329,13 @@ itself; this is a Chromium lifetime rule, not a crash.
   for calibration.
 - Timing checks need an unlocked screen: while it was locked, `loginwindow` was frontmost and no window could get focus.
   The runner skips the timing groups then.
+- macOS TCC treats the development Electron process as belonging to the app that launched the runner
+  (`com.anthropic.claude-code` here), so OS-level media permissions in development runs are that app's, not Electron's.
+- In zsh, `log` is a shell builtin; the macOS unified log is `/usr/bin/log`.
 
 ## Open items for the owner
 
 - H9 and the H13 manual real-click run need a run with nobody else using the machine.
-- H12 microphone: decide the macOS microphone permission for the test binary (System Settings, Privacy and Security,
-  Microphone) and rerun `--only=permissions`; a system prompt from the first request may still be open.
-- Optional: remove the LaunchServices `wgspike` handler preference (harmless).
+- H12: rerun with the packaged app (its own bundle id) and with an undecided and a denied macOS microphone state.
+- H13: the frozen control cannot pass for keyboard lock; an Amendment would be the owner's call.
+- Optional: remove the LaunchServices `wgspike` handler preference (recipe under H15; harmless if left).

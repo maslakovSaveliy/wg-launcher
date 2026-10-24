@@ -12,7 +12,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain, screen, session, utilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, screen, session, systemPreferences, utilityProcess } from "electron";
 
 const HERE = import.meta.dirname;
 
@@ -614,6 +614,7 @@ async function modePageProbe() {
   bringToFront(win);
   const query = new URLSearchParams({ mode: "probe", runtime: "electron", label: args.label ?? MODE });
   if (args.checks) query.set("checks", args.checks);
+  if (args.token) query.set("token", args.token);
   const url = `http://localhost:${SPIKE}${args.path ?? "/"}?${query}`;
   await win.loadURL(url);
   const probe = await waitProbe(win.webContents, 90000);
@@ -634,6 +635,7 @@ async function modeFrameTime() {
     vsyncHz: String(hz),
     label: args.label ?? "frametime",
   });
+  if (args.token) query.set("token", args.token);
   await win.loadURL(`http://localhost:${SPIKE}/?${query}`);
   const duration = Number(args.duration ?? 20000) + Number(args.warmup ?? 2000);
   const probe = await waitProbe(win.webContents, duration + 60000);
@@ -685,6 +687,7 @@ async function modeColdStart() {
     spawn: String(args["spawn-ms"] ?? ""),
     label: args.label ?? "coldstart",
   });
+  if (args.token) query.set("token", args.token);
   await win.loadURL(`http://localhost:${SPIKE}/?${query}`);
   const probe = await waitProbe(win.webContents, 30000);
   await closeWindow(win);
@@ -873,7 +876,19 @@ const GESTURE_BUTTONS = {
   pointerLockFirst: "pointer-first",
 };
 
+/** macOS media access (TCC) as this process sees it; read-only, never requests access. */
+function mediaAccess() {
+  if (process.platform !== "darwin") return null;
+  return {
+    t: iso(),
+    microphone: systemPreferences.getMediaAccessStatus("microphone"),
+    camera: systemPreferences.getMediaAccessStatus("camera"),
+    screen: systemPreferences.getMediaAccessStatus("screen"),
+  };
+}
+
 async function modePermissions() {
+  const mediaAccessLog = [mediaAccess()];
   const ALLOW = new Set(["fullscreen", "pointerLock", "keyboardLock"]);
   const log = [];
   const partition = `spike:perm-${nonce()}`;
@@ -915,7 +930,12 @@ async function modePermissions() {
   }
 
   // H12: the five sensitive permissions (camera, mic, geolocation, notifications need no gesture).
+  mediaAccessLog.push(mediaAccess());
+  const pidsDuringRequests = app.getAppMetrics().map((m) => ({ pid: m.pid, type: m.type, name: m.name ?? null }));
   const denied = await wc.executeJavaScript("wgPerm.denyBatch()");
+  mediaAccessLog.push(mediaAccess());
+  // Processes started for the requests (for example an audio process) for the runner's TCC log filter.
+  const pidsAfterRequests = app.getAppMetrics().map((m) => ({ pid: m.pid, type: m.type, name: m.name ?? null }));
   // display-capture needs transient activation: trusted click on #display.
   await trustedClick(wc, "display");
   const display = await waitFor(() => wc.executeJavaScript("wgPerm.state.display"), {
@@ -964,7 +984,12 @@ async function modePermissions() {
   );
   await closeWindow(control);
 
+  mediaAccessLog.push(mediaAccess());
   return {
+    mainPid: process.pid,
+    pidsDuringRequests,
+    pidsAfterRequests,
+    mediaAccessLog,
     focusAtStart,
     noGesture,
     denied: { ...denied, displayCapture: display },

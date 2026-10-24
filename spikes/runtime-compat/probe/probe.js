@@ -15,6 +15,7 @@
 //   spawn     coldstart: wall-clock ms at which the host spawned the process
 //   label     free text copied into the result
 //   server    origin of the spike server when the page is served elsewhere (Tauri assets)
+//   token     per-run secret the spike server requires on POST (sent as X-WG-Token; never recorded)
 //   post      0 to skip the POST (debugging)
 
 import { createScene } from "./scene.js";
@@ -448,7 +449,7 @@ async function post(payload) {
   const base = params.get("server") ?? location.origin;
   const response = await fetch(`${base}/results/${encodeURIComponent(payload.runtime.name)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-WG-Token": params.get("token") ?? "" },
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error(`POST failed: ${response.status}`);
@@ -464,6 +465,8 @@ async function main() {
   if (data === null) return;
   recordVisibility("done");
   const kinds = { probe: "probe", frametime: "frame-time", coldstart: "cold-start" };
+  const recordedUrl = new URL(location.href);
+  recordedUrl.searchParams.delete("token");
   const payload = {
     schemaVersion: 1,
     kind: kinds[mode],
@@ -471,7 +474,7 @@ async function main() {
     runtime: runtimeIdentity(),
     label: params.get("label"),
     page: {
-      url: location.href,
+      url: recordedUrl.href,
       devicePixelRatio: window.devicePixelRatio,
       hardwareConcurrency: navigator.hardwareConcurrency ?? null,
       visibility,

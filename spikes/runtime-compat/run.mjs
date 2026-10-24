@@ -13,6 +13,7 @@
 // screen is locked, unless --allow-locked; a skipped or unfocused run is never a PASS.
 
 import { execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir, userInfo } from "node:os";
@@ -20,6 +21,18 @@ import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import { makeValidator } from "./validate.mjs";
+
+// `node run.mjs --redact-tcc <results file>`: apply redactTccMessage to an existing aggregate.
+if (process.argv[2] === "--redact-tcc") {
+  const file = process.argv[3];
+  const data = JSON.parse(readFileSync(file, "utf8"));
+  const log = data.checks?.permissions?.tccLog;
+  for (const entry of log?.relevant ?? []) entry.message = redactTccMessage(entry.message);
+  data.redactions = [...(data.redactions ?? []), "checks.permissions.tccLog.relevant[].message: paths outside the repository replaced by <path> after the run (the rule run.mjs now applies when it writes)"];
+  writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
+  console.log(`redacted ${log?.relevant?.length ?? 0} TCC entries in ${file}`);
+  process.exit(0);
+}
 
 const ROOT = import.meta.dirname;
 const REPO = resolve(ROOT, "../..");
@@ -77,11 +90,13 @@ for (const g of groups) {
 }
 
 const TMP = mkdtempSync(join(tmpdir(), "wgspike-run-"));
+// Per-run secret: the spike server accepts result POSTs only with it, and the probe gets it in its URL.
+const TOKEN = randomBytes(16).toString("hex");
 const HOME = homedir();
 const USER = userInfo().username;
 
 function sanitize(text) {
-  let out = text.split(TMP).join("<tmp>").split(REPO).join("<repo>").split(HOME).join("~");
+  let out = text.split(TOKEN).join("<token>").split(TMP).join("<tmp>").split(REPO).join("<repo>").split(HOME).join("~");
   if (USER.length >= 3) out = out.split(USER).join("<user>");
   return out;
 }
@@ -212,6 +227,7 @@ async function runElectron(mode, extra = [], { userData, timeoutMs = 240000, onE
     `--wg-user-data=${ud}`,
     `--fixture-port=${FIXTURE}`,
     `--spike-port=${SPIKE}`,
+    `--token=${TOKEN}`,
     ...extra,
   ];
   const before = bundleProcesses().length;
@@ -342,7 +358,7 @@ async function groupSqlite() {
 async function playwrightRun(restorePartitioning) {
   const { _electron, chromium } = requireElectron("playwright-core");
   const ud = mkdtempSync(join(TMP, "ud-h11-"));
-  const extra = ["--mode=h11", `--wg-user-data=${ud}`, `--fixture-port=${FIXTURE}`, `--spike-port=${SPIKE}`];
+  const extra = ["--mode=h11", `--wg-user-data=${ud}`, `--fixture-port=${FIXTURE}`, `--spike-port=${SPIKE}`, `--token=${TOKEN}`];
   if (restorePartitioning) extra.push("--restore-partitioning");
   const started = Date.now();
   const out = { method: "_electron.launch", restorePartitioning };
@@ -535,9 +551,74 @@ function focusGuard(group) {
   return true;
 }
 
+/** User ids and paths outside the repository (other apps' install locations) are not ours to publish. */
+function redactTccMessage(text) {
+  return text
+    .replace(/\b(auid|euid|ruid|uid)([=:])\s*\d+/g, "$1$2N")
+    .replace(/\b(responsible_path|binary_path|path)=(?!<repo>)[^,}\n]*/g, "$1=<path>");
+}
+
+/**
+ * macOS TCC log entries for camera and microphone during [fromMs, toMs], kept only when they name a
+ * process of this run, the Electron binary or the app TCC holds responsible for it; ids and paths sanitized.
+ */
+function tccLog(fromMs, toMs, pids) {
+  if (process.platform !== "darwin") return null;
+  const local = (ms) => {
+    const d = new Date(ms);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  };
+  const raw = sh("/usr/bin/log", [
+    "show",
+    "--start",
+    local(fromMs - 1000),
+    "--end",
+    local(toMs + 2000),
+    "--style",
+    "ndjson",
+    "--predicate",
+    'subsystem == "com.apple.TCC"',
+  ]);
+  if (raw.startsWith("ERROR")) return { error: raw.slice(0, 200) };
+  const entries = raw
+    .split("\n")
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter((e) => e?.eventMessage);
+  const pidPattern = new RegExp(`pid[:=]\\s*(${pids.join("|") || "0"})\\b`);
+  const relevant = entries.filter(
+    (e) =>
+      /kTCCService(Microphone|Camera)/.test(e.eventMessage) &&
+      (pidPattern.test(e.eventMessage) || /claude-code|com\.github\.Electron|Electron/.test(e.eventMessage)),
+  );
+  return {
+    window: [new Date(fromMs).toISOString(), new Date(toMs).toISOString()],
+    tccEntries: entries.length,
+    relevantCount: relevant.length,
+    relevant: relevant.slice(0, 80).map((e) => ({
+      t: e.timestamp,
+      process: (e.processImagePath ?? "").split("/").pop(),
+      type: e.messageType,
+      message: redactTccMessage(sanitize(e.eventMessage)).slice(0, 600),
+    })),
+  };
+}
+
 async function groupPermissions() {
   if (!focusGuard("permissions")) return;
+  const from = Date.now();
   checks.permissions = await runElectron("permissions", [], { timeoutMs: 300000 });
+  const r = checks.permissions.output?.result;
+  const pids = [
+    ...new Set([r?.mainPid, ...[...(r?.pidsDuringRequests ?? []), ...(r?.pidsAfterRequests ?? [])].map((p) => p.pid)]),
+  ].filter(Boolean);
+  checks.permissions.tccLog = tccLog(from, Date.now(), pids);
 }
 
 async function groupColdStart() {
@@ -1005,7 +1086,7 @@ const machine = machineInfo();
 log(`runtime-compat spike: electron at ${sanitize(BUNDLE)}; groups: ${groups.join(" ")}`);
 log(`machine: ${machine.osVersion}, ${machine.cpu}, ${machine.gpu}, ${machine.power}, screen locked: ${machine.screenLockedAtStart}`);
 fixture = startServer("fixture", join(REPO, "fixtures/test-games/progress-lab/server.mjs"));
-const spikeServer = startServer("spike", join(ROOT, "server.mjs"));
+const spikeServer = startServer("spike", join(ROOT, "server.mjs"), ["--token", TOKEN]);
 let fatal = null;
 try {
   await Promise.all([fixture.listening, spikeServer.listening]);
