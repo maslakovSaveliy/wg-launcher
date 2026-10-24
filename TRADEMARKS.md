@@ -9,8 +9,7 @@ a licensor to decline to grant trademark rights, and the project does so.
 ## What is covered
 
 - The codename **wg-launcher**.
-- The final product name, once chosen. The product name is not decided yet; this policy applies to it from the day
-  it is announced.
+- The product name **WGLauncher** (chosen by the owner on 2026-10-25).
 - Any logo, icon set or visual branding that the project publishes as its identity.
 
 ## What you may do without asking

@@ -1,11 +1,12 @@
-# wg-launcher
+# WGLauncher
 
-wg-launcher is an open-source desktop library and launcher for web games (JavaScript, WebAssembly, WebGL, WebGPU). You
+WGLauncher is an open-source desktop library and launcher for web games (JavaScript, WebAssembly, WebGL, WebGPU). You
 paste an HTTPS link and get a library card. The game runs locally in its own window with its own persistent browser
 session, and for compatible games the launcher can export a snapshot of the saves and restore it somewhere else.
 
 It is not cloud streaming, not a reverse-engineering tool and not an automatic converter of games to native code.
-`wg-launcher` is a codename; the product name is not decided.
+The product name is **WGLauncher** (owner decision, 2026-10-25); `wg-launcher` stays the repository and package
+codename, and `wglauncher://` the deep-link scheme.
 
 ## Status
 

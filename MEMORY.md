@@ -38,7 +38,8 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   Routine decision, Assumed.
 - Rust is deferred to the local-packages stage. The MVP snapshot codec is TypeScript; a language-neutral spec with
   golden vectors lets a later Rust version pass the same vectors. Go is not adopted in the MVP.
-- English everywhere in the repo. Codename `wg-launcher`, deep-link scheme `wglauncher`; display name is open.
+- English everywhere in the repo. Product name **WGLauncher** (owner decision,
+  2026-10-25); codename and repo `wg-launcher`, deep-link scheme `wglauncher`.
 - License model: `AGPL-3.0-or-later` by default, commercial use by separate agreement, CLA for outside contributors,
   future paid features only in one named source-available directory (none exists), trademark policy, core features
   always free. See `LICENSING.md`. Not legal advice; a lawyer should review before outside contributions.
@@ -384,7 +385,6 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 
 ## Open questions
 
-- Final product display name (codename is `wg-launcher`).
 - Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (the CLA party and governing law are filled in; whether
   the Harmony template wording, such as the UN Convention exclusion in section 6.1, and the waiver of moral rights fit
   Russian law is for the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal

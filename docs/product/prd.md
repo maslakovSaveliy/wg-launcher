@@ -1,7 +1,7 @@
-# Product requirements: wg-launcher MVP
+# Product requirements: WGLauncher MVP
 
-Status: draft for Phase 0, 2026-10-24; updated 2026-10-25 after the specifications and ADRs were written. Codename
-`wg-launcher`; the display name is open. Sources: the owner's concept
+Status: draft for Phase 0, 2026-10-24; updated 2026-10-25 after the specifications and ADRs were written. Product name
+**WGLauncher** (owner decision, 2026-10-25); codename `wg-launcher`. Sources: the owner's concept
 document [concept-v1.0.ru.md](sources/concept-v1.0.ru.md) (Russian, kept verbatim), the owner's decisions of 2026-10-24
 (recorded in [MEMORY.md](../../MEMORY.md) and the [Phase 0 plan](../plans/2026-10-24-phase-0-foundation.md)) and the
 research in [foundations.md](../research/foundations.md) and
@@ -309,7 +309,7 @@ Stage "Later" means it depends on work after the MVP.
 
 ## 18. Open questions
 
-- OQ-1: the product's display name (the codename is `wg-launcher`).
+- OQ-1: closed. The product name is **WGLauncher** (owner decision, 2026-10-25); `wg-launcher` stays the codename.
 - OQ-2: closed. "Remove from library" keeps the game's live session storage, listed as orphaned data until the user
   deletes it, so an accidental removal cannot destroy progress. Decided as proposed in
   [architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics). `Assumed`; the owner can override.
