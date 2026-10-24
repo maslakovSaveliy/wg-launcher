@@ -1,0 +1,141 @@
+# ADR-0004: Toolchain and repository layout
+
+**Status:** Accepted. The Electron version itself follows ADR-0002 (Proposed).
+
+**Date:** 2026-10-24
+
+**Deciders:** owner (maslakovSaveliy); drafted by AI agent
+
+Conventions: [ADR-0000](0000-template.md#conventions).
+
+## Context
+
+- Phase 0 set up the quality toolchain; Phase 1 adds the client. The process model and module map are in
+  [architecture.md](../specs/architecture.md) sections 1 and 2. `Owner` (Phase 0 plan)
+- The dependency policy allows only permissive shipped dependencies, exact versions and deliberate build scripts.
+  `Owner` ([AGENTS.md](../../AGENTS.md#dependency-and-license-policy))
+
+### What exists and works
+
+| Tool | Version and role | Tag |
+| --- | --- | --- |
+| Node | 24 (`.nvmrc`); 24.13.0 on the dev machine | Verified (2026-10-24, [MEMORY.md](../../MEMORY.md) Dev machine) |
+| pnpm | 12.15.0 pinned by `packageManager`; workspace `fixtures/test-games/*` | Verified (2026-10-24, MEMORY.md Decisions; `pnpm-workspace.yaml`) |
+| TypeScript | 7.0.2; the gate passed with the whole toolchain, no fallback to 6.0.3 | Verified (2026-10-24, MEMORY.md Tooling versions) |
+| Biome | 2.6.2 for JS, TS, JSON and CSS only; markdownlint-cli2 0.24.0 owns Markdown | Verified (2026-10-24, MEMORY.md Tooling versions) |
+| Tests | Vitest 5.0.5 (`pnpm test`); Playwright 1.64.1 (`pnpm test:e2e`, fixture suite) | Verified (2026-10-24, MEMORY.md Tooling versions) |
+| Hooks and checks | lefthook 2.2.2, commitlint 21.2.4, secretlint 13.0.7, `scripts/check-licenses.mjs` | Verified (2026-10-24, MEMORY.md Decisions) |
+| CI | Ubuntu: lint, typecheck, licenses, docs; macOS and Windows: install and unit tests; Ubuntu and macOS: fixture e2e | Verified (2026-10-25, [ci.yml](../../.github/workflows/ci.yml); `gh run list` shows passing runs on this branch) |
+
+## Decision
+
+Phase 1 adds these, each installed at an exact version and checked with `pnpm licenses:check`. All are MIT.
+Verified (2026-10-25, `npm view <package> version license`) for versions and licenses; the choices are `Assumed` unless
+marked.
+
+| Need | Choice | Reason |
+| --- | --- | --- |
+| Runtime | `electron` 45.0.0 (ADR-0002); needs an `allowBuilds` entry for its binary download | MEMORY.md gotcha, Verified (2026-10-24) |
+| Dev server and bundling | `electron-vite` 6.0.0 with `vite` 8.3.5; entries for main, the snapshot worker, two preloads and the renderer | Peer range `vite` ^6, ^7 or ^8. Verified (2026-10-24, [runtime-and-storage.md](../research/runtime-and-storage.md) section 2.3) |
+| UI | `react` 19.3.1 | Planned stack. `Owner` (Phase 0 plan) |
+| Validation | `zod` 4.6.7 for IPC payloads, the snapshot manifest and adapters | architecture.md section 6 |
+| Database | `node:sqlite` in the main process (no dependency) | Option S1 below |
+| Packaging | `electron-builder` 26.18.0, fuses through its `electronFuses` setting | Option P1 below |
+| End-to-end tests | Playwright `_electron.launch`, with the partitioning switch re-appended | H11 PASS. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H11) |
+
+### Repository layout
+
+| Path | Content | When it is created |
+| --- | --- | --- |
+| `apps/desktop` | `main` (with the snapshot worker entry), `preload` (launcher bridge and quiescent preload), `renderer` | With the first Phase 1 code |
+| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | When their first code exists |
+| `fixtures/` | Controlled test games (`progress-lab` now) | Exists |
+| `spikes/` | Throwaway experiments with their own lockfiles, outside the workspace | Exists |
+| `crates/` | Rust, only when an ADR-0003 trigger fires | Later |
+| `docs/` | Product, specs, ADRs, research, compatibility records, plans | Exists |
+
+The workspace globs grow with the layout (`apps/*`, `packages/*`); no directory is created before its work exists.
+`Owner` (AGENTS.md repository map, no empty artifacts)
+
+## Options considered
+
+### Option P1: electron-builder (chosen)
+
+| Dimension | Assessment |
+| --- | --- |
+| Complexity | Low: one config file; `protocols` wrote `CFBundleURLTypes` and the ad-hoc-signed deep-link build passed H15. Verified (2026-10-24, RESULTS.md H15; `spikes/runtime-compat/electron/electron-builder.json`) |
+| Cost and size | Dev dependency only; the NSIS installer stub it ships on Windows has its own license, not checked yet. Unverified |
+| Compatibility | `electronFuses`, `extendInfo`, an `afterPack` hook (to strip media usage descriptions, [security.md](../specs/security.md) section 5), `notarize`, NSIS and DMG targets. Verified (2026-10-25, `scheme.json` of `app-builder-lib` 26.18.0 in the spike's `node_modules`; electron-builder docs via context7) |
+| Security | Fuses are flipped at package time, before signing. Verified (2026-10-25, electron-builder docs, "Package integrity") |
+| Team familiarity | Used in the spike. Verified (2026-10-24, RESULTS.md H15) |
+| Reversibility | High: packaging sits at the end of the build. Assumed |
+| Pros | The only packager exercised in this repository. Verified (2026-10-24, RESULTS.md H15) |
+| Cons | Not the tool Electron's own tutorial recommends. Verified (2026-10-24, runtime-and-storage.md section 2.3) |
+
+### Option P2: Electron Forge 8
+
+| Dimension | Assessment |
+| --- | --- |
+| Complexity | Medium: makers and plugins; `FusesPlugin`, `osxSign` and `osxNotarize` exist; Windows makers include WiX MSI and MSIX. Verified (2026-10-25, Electron Forge docs via context7) |
+| Cost and size | Dev dependency; `@electron-forge/cli` 8.0.1, MIT. Verified (2026-10-25, `npm view`) |
+| Compatibility | electron-vite documents both Forge and electron-builder, so pairing does not decide it. Verified (2026-10-25, electron-vite docs "Distribution" via context7) |
+| Security | Same fuses and signing capabilities. Verified (2026-10-25, Forge docs) |
+| Team familiarity | Not exercised here. Verified (2026-10-25, no Forge config in the repository) |
+| Reversibility | High. Assumed |
+| Pros | Electron's recommended path. Verified (2026-10-24, runtime-and-storage.md section 2.3) |
+| Cons | Would need its own spike run of H15 before relying on it. Assumed |
+
+### Option S1: `node:sqlite` (chosen)
+
+| Dimension | Assessment |
+| --- | --- |
+| Complexity, compatibility | Built in: WAL, `PRAGMA user_version`, close and reopen worked in the main process and a `utilityProcess` with no warning; SQLite 3.53.4. Verified (2026-10-24, RESULTS.md H10) |
+| Cost, security | No native addon, no build script, no rebuild per Electron ABI. Assumed |
+| Familiarity, reversibility | Synchronous `DatabaseSync` API; raw SQL keeps a switch cheap. Verified for the API (2026-10-25, architecture.md section 7); the rest is Assumed |
+| Cons | Its stability label in Node 24.22 is not checked. Unverified (RESULTS.md H10) |
+
+### Option S2: `better-sqlite3` 13.0.3
+
+| Dimension | Assessment |
+| --- | --- |
+| Complexity, compatibility | Native addon, Node 22 or later; must be rebuilt for Electron's ABI and allowed in `allowBuilds`. Verified for the addon and Node range (2026-10-24, runtime-and-storage.md section 7); the rebuild is Assumed |
+| Cost, security, familiarity, reversibility | MIT (Verified (2026-10-25, `npm view`)); a native build per target. Assumed |
+| Pros and cons | Mature, but adds the native matrix that ADR-0003 avoids. Assumed |
+
+## Trade-off analysis
+
+electron-builder wins on evidence: it already produced a signed deep-link build that passed H15, and it covers fuses,
+`Info.plist` edits and Windows installers. Forge is equally capable on paper but unexercised here. `node:sqlite` removes
+the only native dependency the MVP would have had. Assumed
+
+## Consequences
+
+- **Easier:** no native addon in the MVP; one build tool for dev and bundling; packaging config proven once. Assumed
+- **Harder:** electron-vite's example `electron-builder.yml` adds camera and microphone usage descriptions, which our
+  security spec forbids; the config must not be copied as is. Verified (2026-10-25, electron-vite docs "Distribution")
+
+### Revisit triggers
+
+- electron-builder blocks a signing, notarization, installer or fuse need, or lags an Electron major: run H15 with Forge
+  and switch. Assumed
+- `node:sqlite` emits an experimental warning or changes its API on an Electron upgrade: move to better-sqlite3. Assumed
+
+## Evidence
+
+- [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H10, H11, H15;
+  [runtime-and-storage.md](../research/runtime-and-storage.md) sections 2.3 and 7; [MEMORY.md](../../MEMORY.md) Tooling
+  versions and Gotchas; [architecture.md](../specs/architecture.md) sections 2, 6, 7 and 14.
+
+## Facts versus assumptions
+
+- **Facts** (tagged where they appear above): the existing toolchain works at the versions listed; `node:sqlite`, zstd
+  and Playwright work with Electron 45 here; electron-builder produced the H15 build; both packagers support fuses and
+  notarization.
+- **Assumptions** (Assumed): electron-builder keeps up with Electron; the NSIS stub fits the dependency policy;
+  electron-vite 6 builds the five entries without trouble (peer range checked, no build run).
+
+## Action items
+
+- [ ] Before the first Windows release, check the license of everything the installer ships (agent).
+- [ ] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
+  (security.md S-14; agent).
