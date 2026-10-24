@@ -47,7 +47,7 @@ Exists now:
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
-| `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy, and `prod-deps-guard.mjs` is the build-time guard (a Vite/Rollup plugin) that fails a build bundling a package outside `dependencies` (both with tests; the guard is wired into the desktop build when it exists) |
+| `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy, and `prod-deps-guard.mjs` is the build-time guard (a Vite/Rollup plugin) that fails a build bundling a package outside the production closure, i.e. `dependencies` and their transitives (both with tests; the guard is wired into the desktop build when it exists) |
 | `packages/shared/` | `@wg-launcher/shared`, consumed as TypeScript source: UUIDv7 ids, the `Result` type and every result error code named in the specs (no dependencies yet) |
 | `fixtures/test-games/progress-lab/` | Controlled test game with verifiable persisted progress and its Playwright suite; see its `README.md`. Not a real game |
 

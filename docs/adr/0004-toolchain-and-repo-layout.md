@@ -59,8 +59,11 @@ libraries outside the license gate. The rule is: everything bundled into or pack
 `dependencies` (prod); `devDependencies` hold build and test tooling only. The Phase 1 desktop package config must
 follow this, with the electron-vite externalization and bundling settings checked accordingly (the price is a larger
 package unless the packager leaves out the bundled copies). `Assumed` (the rule is in AGENTS.md). Enforcement: the
-build-time guard `scripts/prod-deps-guard.mjs` fails a build that bundles a `node_modules` package missing from
-`dependencies`; unit-tested with fake module ids, not yet run inside a real build. Verified (2026-10-25, `pnpm test`).
+build-time guard `scripts/prod-deps-guard.mjs` fails a build that bundles a `node_modules` package outside the
+production closure of the app (its `dependencies` and their transitive dependencies, read from `pnpm ls --prod
+--depth Infinity --json`, the same set `pnpm licenses list --prod` checks); a transitive such as `scheduler` under
+`react-dom` passes. Unit-tested with fake module ids and a path-free sample of the pnpm output, not yet run inside a
+real build. Verified (2026-10-25, `pnpm test`; JSON shape from pnpm 12.15.0 in a scratch workspace).
 
 ### Repository layout
 

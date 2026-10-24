@@ -402,14 +402,19 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   `dependencies`; `devDependencies` are build and test tooling only. [V, 2026-10-25, electron-vite docs "Dependency
   Handling" read through Context7 for the bundling statements; the script header for the gate] Phase 1 check still open:
   the electron-vite externalization and bundling settings follow the rule (ADR-0004). Enforced since 2026-10-25 by
-  `scripts/prod-deps-guard.mjs` (a plugin for the desktop build, wired in with `apps/desktop`; unit-tested with fake
-  ids only, [A] that the `load` hook sees every bundled module in a real electron-vite build until Task 5 runs it).
+  `scripts/prod-deps-guard.mjs` (a plugin for the desktop build, wired in with `apps/desktop`; it passes a bundled
+  package iff it is in the production closure, i.e. `dependencies` plus their transitives from `pnpm ls --prod --depth
+  Infinity --json`, so `scheduler` under `react-dom` is fine; unit-tested with fake ids only, [A] that the `load` hook sees every bundled module in a real electron-vite build until Task 5 runs it).
 - `pnpm ls -r --depth -1 --json` lists the root project too (name `wg-launcher`) and prints absolute `path`s: read only
   `name`. A workspace package without dependencies adds nothing to `pnpm-lock.yaml`, so `pnpm install` reports "Already up
   to date" when it is created. [V, 2026-10-25, pnpm 12.15.0]
 - `packages/shared` is consumed as TypeScript source (`exports` points at `src/index.ts`, no build). Under `NodeNext`
   relative imports need the `.js` extension (`./ids.js`); Vitest and Vite map it to the `.ts` file. [V, 2026-10-25,
   `pnpm typecheck` and `pnpm test`]
+- `pnpm ls --prod --depth Infinity --json` (pnpm 12.15.0) prints a list of projects, each with `dependencies` mapping a
+  name to `{from, version, resolved?, path, dependencies?}` (and `optionalDependencies` when present); a workspace
+  dependency has version `link:...`; dev-only packages are absent. Read only the names (keys); `path` is absolute. [V,
+  2026-10-25, scratch workspace]
 
 ## Open questions
 
