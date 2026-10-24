@@ -1,0 +1,32 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# Dependencies and build output
+node_modules/
+out/
+dist/
+target/
+*.tsbuildinfo
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# Spikes keep their own dependencies
+spikes/**/node_modules/
+spikes/**/target/
+spikes/**/dist/
+
+# Local tooling state (not project files)
+lancedb/
+.planning/
+.superpowers/
+
+# Environment
+.env
+.env.*
+!.env.example
