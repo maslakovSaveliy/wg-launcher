@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "kind": "run",
+  "createdAt": "2026-10-24T17:21:10.247Z",
+  "runtime": {
+    "name": "chrome-app",
+    "version": "155.0.8059.85"
+  },
+  "label": "Google Chrome 155.0.8059.85 launched directly with --app=URL and a separate --user-data-dir per game (H20)",
+  "machine": {
+    "osVersion": "macOS 27.0.1 (26A434)",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "gpu": "Apple M3 (10 cores, spdisplays_metal4)",
+    "display": {
+      "name": "Color LCD",
+      "resolution": "1470 x 956 @ 60.00Hz"
+    },
+    "displayLine": "1470 x 956 @ 60.00Hz",
+    "displayRefreshHz": 60.00239944458008,
+    "power": "Now drawing from 'Battery Power'",
+    "screenLockedAtStart": false,
+    "runnerNode": "v24.13.0"
+  },
+  "startedAt": "2026-10-24T17:20:53.191Z",
+  "finishedAt": "2026-10-24T17:21:10.247Z",
+  "groups": [
+    "app"
+  ],
+  "hypotheses": {
+    "H20-1": {
+      "status": "PASS",
+      "reason": "0 leaked kinds in both directions between two --user-data-dir profiles; each saw its own 5; same-profile control saw 5 of 5",
+      "metrics": {
+        "leaks": {
+          "AtoBBeforeBWrote": [],
+          "AtoB": [],
+          "BtoA": []
+        },
+        "own": {
+          "A": [
+            "localStorage",
+            "indexedDB",
+            "cookie",
+            "cacheStorage",
+            "opfs"
+          ],
+          "B": [
+            "localStorage",
+            "indexedDB",
+            "cookie",
+            "cacheStorage",
+            "opfs"
+          ]
+        },
+        "controlSameProfileSeesA": [
+          "localStorage",
+          "indexedDB",
+          "cookie",
+          "cacheStorage",
+          "opfs"
+        ],
+        "versions": {
+          "a": "Chrome/155.0.8059.85",
+          "b": "Chrome/155.0.8059.85"
+        }
+      }
+    },
+    "H20-2": {
+      "status": "PASS",
+      "reason": "all 5 kinds (persistent cookie included) and both 1 MiB values (SHA-256 equal) back in the right profiles after Browser.close and relaunch",
+      "metrics": {
+        "ownA": [
+          "localStorage",
+          "indexedDB",
+          "cookie",
+          "cacheStorage",
+          "opfs"
+        ],
+        "ownB": [
+          "localStorage",
+          "indexedDB",
+          "cookie",
+          "cacheStorage",
+          "opfs"
+        ],
+        "largeEqualA": true,
+        "largeEqualB": true,
+        "leaksAfterRestartInA": [],
+        "leaksAfterRestartInB": [],
+        "largeBlobBytes": 1048576
+      }
+    },
+    "H20-4": {
+      "status": "PASS",
+      "reason": "/json/version answered; DOMStorage read progress-lab:state; IndexedDB.requestData read the 3 stepLog records",
+      "metrics": {
+        "jsonVersion": {
+          "answered": true,
+          "browser": "Chrome/155.0.8059.85",
+          "protocol": "1.3"
+        },
+        "domStorage": {
+          "items": 2,
+          "hasState": true
+        },
+        "indexedDB": {
+          "databases": [
+            "/home/web_user",
+            "progress-lab"
+          ],
+          "stepLogEntries": 3,
+          "hasMore": false
+        },
+        "restoreNote": "CDP IndexedDB has no put/add; restore through CDP is impossible (Verified in MEMORY.md from the PDL)"
+      }
+    },
+    "H20-3": {
+      "status": "PASS",
+      "reason": "browser UI height outerHeight - innerHeight = 32 px (a normal Chrome window: 87 px in the Playwright run); display-mode standalone; window.locationbar/toolbar/menubar.visible are true/true/true even here, so they say nothing; screenshot captured; manual reading: pass: the window has a title bar with the page title and the traffic-light buttons only: no tab strip, no address bar, no toolbar (screenshot of the window region read by the agent; Chrome showed a Translate bubble at the top right of the page area)",
+      "metrics": {
+        "ui": {
+          "locationbar": true,
+          "menubar": true,
+          "toolbar": true,
+          "statusbar": true,
+          "personalbar": true,
+          "outerWidth": 1200,
+          "outerHeight": 817,
+          "innerWidth": 1200,
+          "innerHeight": 785,
+          "screenX": 22,
+          "screenY": 55,
+          "devicePixelRatio": 2,
+          "displayMode": "standalone",
+          "windowBounds": {
+            "left": 22,
+            "top": 55,
+            "width": 1200,
+            "height": 817,
+            "windowState": "normal"
+          },
+          "titleBarAndBorderHeight": 32
+        },
+        "screenshot": {
+          "captured": true,
+          "region": "22,55,1200,817"
+        },
+        "manualObservation": "pass: the window has a title bar with the page title and the traffic-light buttons only: no tab strip, no address bar, no toolbar (screenshot of the window region read by the agent; Chrome showed a Translate bubble at the top right of the page area)"
+      }
+    },
+    "H20-5": {
+      "status": "FAIL",
+      "reason": "a renderer of the closed window was alive 5 s after the close (exited after 5140 ms)",
+      "metrics": {
+        "rendererPidsAtOpen": 4,
+        "rendererAliveAfterClose5s": true,
+        "rendererExitAfterCloseMs": 5140,
+        "pagesAfterClose": 0,
+        "processesOfProfile": {
+          "beforeLaunch": 0,
+          "gameOpen": 8,
+          "gameClosed5s": 4,
+          "appQuit5s": 0
+        },
+        "browserSurvivedLastWindowClose": true,
+        "quitMs": 47
+      }
+    },
+    "H20-6": {
+      "status": "NOT_RUN",
+      "reason": "frame-time method: run-timing.mjs, hands-off phase"
+    },
+    "H20": {
+      "status": "REPORTED",
+      "reason": "Chrome 155.0.8059.85 --app with one --user-data-dir per game: isolation PASS, persistence PASS, window chrome reported, CDP PASS, cleanup FAIL, frame time not run; progress-lab hash survived restart: true; no restore path via CDP"
+    }
+  },
+  "checks": {
+    "chromeVersion": "155.0.8059.85",
+    "deviations": [],
+    "versionString": "Chrome/155.0.8059.85",
+    "storageQuit": {
+      "A": {
+        "quitMs": 552,
+        "remaining": 0
+      },
+      "B": {
+        "quitMs": 290,
+        "remaining": 0
+      }
+    },
+    "progressLab": {
+      "hash0": "e0bc6e485618ef9aa818be86d041a6d88b5d345846ba7aadcdd0cf291ca4a606",
+      "hash3": "893799c178c004e81b1dcc6f28743c3f7bccaa464710b8a53846676f4d8b54df",
+      "emptyHashMatchesElectronReference": true,
+      "ui": {
+        "locationbar": true,
+        "menubar": true,
+        "toolbar": true,
+        "statusbar": true,
+        "personalbar": true,
+        "outerWidth": 1200,
+        "outerHeight": 817,
+        "innerWidth": 1200,
+        "innerHeight": 785,
+        "screenX": 22,
+        "screenY": 55,
+        "devicePixelRatio": 2,
+        "displayMode": "standalone",
+        "windowBounds": {
+          "left": 22,
+          "top": 55,
+          "width": 1200,
+          "height": 817,
+          "windowState": "normal"
+        },
+        "titleBarAndBorderHeight": 32
+      },
+      "screenshot": {
+        "captured": true,
+        "region": "22,55,1200,817",
+        "reason": null,
+        "file": "<tmp>/app-window.png"
+      },
+      "cdp": {
+        "jsonVersion": {
+          "answered": true,
+          "browser": "Chrome/155.0.8059.85",
+          "protocol": "1.3"
+        },
+        "domStorage": {
+          "items": 2,
+          "hasState": true
+        },
+        "indexedDB": {
+          "databases": [
+            "/home/web_user",
+            "progress-lab"
+          ],
+          "stepLogEntries": 3,
+          "hasMore": false
+        },
+        "restoreNote": "CDP IndexedDB has no put/add; restore through CDP is impossible (Verified in MEMORY.md from the PDL)"
+      },
+      "hashAfterRestart": "893799c178c004e81b1dcc6f28743c3f7bccaa464710b8a53846676f4d8b54df",
+      "persistedAcrossRestart": true,
+      "afterRestartQuit": {
+        "quitMs": 106,
+        "remaining": 0
+      }
+    }
+  },
+  "probeFiles": [],
+  "leftoverProcesses": {
+    "processesWithTempDirInCommand": 0,
+    "profileProcessesAfterAll": 0
+  }
+}

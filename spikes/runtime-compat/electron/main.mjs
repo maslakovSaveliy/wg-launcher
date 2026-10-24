@@ -652,6 +652,10 @@ async function modeMemory() {
     label: "scene rendering",
   });
   await sleep(seconds * 1000);
+  // Task 6: let the runner measure the process tree from outside at this same moment (ps and footprint),
+  // with the scene still rendering, before the in-process metrics below are read.
+  emit("memory-ready", { pid: process.pid });
+  await sleep(Number(args["memory-hold-ms"] ?? 0));
   const page = await win.webContents.executeJavaScript(
     "({ frames: wgProbe.frames, visibility: wgProbe.visibility, scene: wgProbe.scene, hidden: document.visibilityState, focus: document.hasFocus() })",
   );
@@ -1278,11 +1282,94 @@ async function modeQuiescentDebug() {
   return { inventory, mainWorld, keys, quiescence: judgeQuiescence(logs, [inventory], mainWorld.error ? [] : [mainWorld]) };
 }
 
+// ---- Public demos (H21, Task 6) --------------------------------------------------------------
+
+const DEMO_HOOKS = readFileSync(join(HERE, "..", "probe", "demo-hooks.js"), "utf8");
+
+/**
+ * Loads one public demo URL in a visible sandboxed window (no preload, deny-by-default permissions),
+ * counts console errors through CDP, then optionally runs the rAF sampler of probe/demo-hooks.js.
+ * Hooks are injected before any page script with Page.addScriptToEvaluateOnNewDocument, the same CDP
+ * call the Chrome side uses.
+ */
+async function modeDemo() {
+  const url = args.url;
+  if (!url || !/^https:\/\//.test(url)) throw new Error("--url=https://... is required");
+  const settleMs = Number(args["settle-ms"] ?? 6000);
+  const warmupMs = Number(args["warmup-ms"] ?? 2000);
+  const durationMs = Number(args["duration"] ?? 0);
+  const partition = `spike:demo-${nonce()}`;
+  const ses = session.fromPartition(partition);
+  ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  ses.setPermissionCheckHandler(() => false);
+  const win = makeWindow({ partition, show: true });
+  bringToFront(win);
+  const wc = win.webContents;
+  await win.loadURL("about:blank"); // CDP commands hang on a webContents that never navigated
+  const collected = { consoleErrors: 0, consoleWarnings: 0, exceptions: 0, logErrors: 0, messages: [] };
+  wc.debugger.attach("1.3");
+  wc.debugger.on("message", (_event, method, params) => {
+    const keep = (kind, text) => {
+      if (collected.messages.length < 12) collected.messages.push({ kind, text: String(text).slice(0, 300) });
+    };
+    if (method === "Runtime.consoleAPICalled") {
+      const text = (params.args ?? []).map((a) => a.value ?? a.description ?? a.type).join(" ");
+      if (params.type === "error") {
+        collected.consoleErrors++;
+        keep("console.error", text);
+      } else if (params.type === "warning") collected.consoleWarnings++;
+    } else if (method === "Runtime.exceptionThrown") {
+      collected.exceptions++;
+      keep("exception", params.exceptionDetails?.exception?.description ?? params.exceptionDetails?.text);
+    } else if (method === "Log.entryAdded" && params.entry?.level === "error") {
+      collected.logErrors++;
+      keep(`log.${params.entry.source}`, `${params.entry.text} ${params.entry.url ?? ""}`);
+    }
+  });
+  const cdp = (method, params) => wc.debugger.sendCommand(method, params);
+  await cdp("Runtime.enable");
+  await cdp("Log.enable");
+  await cdp("Page.enable");
+  await cdp("Page.addScriptToEvaluateOnNewDocument", { source: DEMO_HOOKS });
+  const started = Date.now();
+  let loadOk = true;
+  let loadError = null;
+  try {
+    await withTimeout(win.loadURL(url), 60000, "demo load");
+  } catch (error) {
+    loadOk = false;
+    loadError = String(error.message ?? error).slice(0, 300);
+  }
+  const loadMs = Date.now() - started;
+  await sleep(settleMs);
+  const snapshot = loadOk ? await wc.executeJavaScript("window.__wgDemo ? window.__wgDemo.snapshot() : null").catch(() => null) : null;
+  let sampleResult = null;
+  if (loadOk && durationMs > 0) {
+    sampleResult = await withTimeout(wc.executeJavaScript(`window.__wgDemo.sample(${durationMs}, ${warmupMs})`), durationMs + warmupMs + 60000, "demo sample");
+  }
+  const snapshotEnd = loadOk && durationMs > 0 ? await wc.executeJavaScript("window.__wgDemo.snapshot()").catch(() => null) : null;
+  wc.debugger.detach();
+  await closeWindow(win);
+  return {
+    url,
+    loadOk,
+    loadMs,
+    loadError,
+    settleMs,
+    console: collected,
+    snapshot,
+    snapshotEnd,
+    sample: sampleResult,
+    displayFrequency: screen.getPrimaryDisplay().displayFrequency,
+  };
+}
+
 const MODES = {
   "quiescent-debug": modeQuiescentDebug,
   env: modeEnv,
   "page-probe": modePageProbe,
   frametime: modeFrameTime,
+  demo: modeDemo,
   memory: modeMemory,
   coldstart: modeColdStart,
   "h1-write": modeH1Write,

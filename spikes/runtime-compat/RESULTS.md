@@ -1,8 +1,9 @@
 # Runtime compatibility spike: results
 
 > **THROWAWAY.** Outcomes of the pre-registered hypotheses in [HYPOTHESES.md](HYPOTHESES.md), which stay frozen.
-> Nothing below changes a threshold; every interpretation or deviation from a method is listed in its own section. This
-> file covers Electron (Task 5); Task 6 adds the Chrome baseline (H19, H20), Tauri (H17, H18) and the public demos (H21).
+> Nothing below changes a threshold; every interpretation or deviation from a method is listed in its own section. The first
+> half of this file covers Electron (Task 5). Task 6 adds the Chrome baseline (H19), Chrome `--app` (H20), the Safari WebKit
+> proxy and the public demos (H21) in the section "Task 6" below; Tauri (H17, H18) was not built and is N/A.
 
 ## Run
 
@@ -42,6 +43,13 @@
 | H14 | PASS | aggregate `checks.h14`, `hypotheses.H14` | Variants a, b, c, d: Hd equals Hs, negative control differs, no game code ran in any quiescent window |
 | H15 | PASS | aggregate `checks.package` | One main process in every case; id `x` via `open-url` (not running, running) and `second-instance` (second executable) |
 | H16 | FAIL | aggregate `checks.h16` | The closed window's renderer lived 27.8 s, until the game's service worker stopped; windows and quit cleanup fine |
+| H17 | N/A | none | Tauri was not built. Not run, decision-irrelevant: per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView lacks (Verified notes) |
+| H18 | N/A | none | Same reason. Safari was run as a WebKit proxy instead (capabilities only, not WKWebView, no frame time); see "Task 6" |
+| H19 | valid baseline (reported) | `chrome-155.0.8059.85-…` (`…171517.695Z`) | Chrome 155.0.8059.85 (major 155, not 156: version mismatch). Hardware WebGL2, WebGPU adapter `apple`/`metal-3` with 23 features, `crossOriginIsolated` true on `/coi/`, control false |
+| H20-1 to H20-5 | PASS, PASS, PASS (window), PASS (CDP), mixed (cleanup) | five `chrome-app-155.0.8059.85-…` aggregates | Isolation and persistence PASS in 5 of 5 runs; no tab strip or address bar; CDP reads work; the closed window's renderer exited 2.8 to 5.2 s after the close, so H20-5 is PASS in 3 and FAIL in 2 of 5 runs against the Assumed 5 s |
+| H20-6 | pending | none | Frame time of Chrome `--app`: hands-off phase |
+| H21 | reported (load part) | `demos-electron-45.0.0_chrome-155.0.8059.85-…` | Six public demos load in both runtimes, WebGPU used wherever the page uses it, no failure that is only in Electron; frame-time samples pending |
+| H7, H8, H9 | pending | none | The hands-off measurements for Chrome, Chrome `--app` and Electron are not run yet |
 
 Decision-rule view (HYPOTHESES section 4), Electron side only: none of the Electron fatal criteria that can be judged
 without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). H7 has no verdict yet, so
@@ -273,6 +281,108 @@ service worker. Window count was 0 after the close and 0 after a quiescent expor
 the bundle remained. A launcher that wants the 5 s guarantee has to stop the game's service workers (or the process)
 itself; this is a Chromium lifetime rule, not a crash.
 
+## Task 6: Chrome, Chrome `--app`, Safari proxy, demos (non-timing part)
+
+Date 2026-10-24, same machine as above (macOS 27.0.1, Apple M3, 60 Hz, scale factor 2), run on **battery power** (the
+timing groups refuse to run that way; these checks do not depend on it). Commands: `node run-compare.mjs --only=chrome,chromium,safari,demos`
+and five times `node run-compare.mjs --only=app --h20-3-observation=...`. Runner code: `common.mjs`, `run-compare.mjs`,
+`groups/*.mjs`; probe, scene and server are the Task 5 files, unchanged.
+
+### H17 and H18: Tauri (N/A)
+
+Not run, decision-irrelevant (controller ruling R27, owner-approved): per decision rule 6 Tauri wins only by passing a
+criterion Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace; and the
+save-transfer mechanism (ADR-0005) needs CDP, which WKWebView lacks (Verified, `MEMORY.md`: Tauri has no CDP). No Tauri
+crate or app was written. Nothing here is a Tauri result, and no Tauri row appears in the matrix.
+
+### H19: Chrome baseline (capability part)
+
+- Chrome 155.0.8059.85 (installed; `Google Chrome --version`), Playwright 1.64.1 `channel: "chrome"`, headed, fresh profile,
+  window sized by CDP to `innerWidth` 1280 and `innerHeight` 720 at scale factor 2. **Version mismatch**: Electron 45's
+  Chromium is 156.0.8078.48 and the Chrome was not updated (it is the owner's browser).
+- H6: `ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)`, software flag false, so the baseline is valid for
+  H6. H3: `/coi/` gives `crossOriginIsolated` true and a SharedArrayBuffer round trip with a Worker (`Atomics.waitAsync` `ok`);
+  the same page without `/coi/` reports false (control).
+- H5: adapter `apple`/`metal-3`, `isFallbackAdapter` false, 23 features, device created, compute readback correct, no switch.
+  Electron 45.0.0 had 24: the only difference is `texture-compression-unaligned`, present in Electron only. Playwright's
+  bundled Chromium 156.0.8078.4 also has the same 23 (no `texture-compression-unaligned`), so the cause is not the Chromium
+  major; it may be the Electron build or its 156.0.8078.48 patch level (Unverified, not investigated). All 36 adapter
+  limits recorded are identical between Electron and Chrome. So H5 on the Electron side stays PASS (adapter, device,
+  readback, no switch, feature count not lower than Chrome's).
+- Other probe facts (reported): WebGL2 36 extensions including `EXT_disjoint_timer_query_webgl2` in both; wasm-feature-detect
+  has the same two missing features (`typeReflection`, `wideArithmetic`) in Chrome, Chromium and Electron; OPFS write and read,
+  IndexedDB Blob and Date round trip fine; a fresh Playwright Chrome profile reports quota 10 GiB and `persist()` false
+  (Electron: about 2.95 GB and true).
+
+### H20: Chrome `--app` with a per-game profile
+
+Installed Chrome 155.0.8059.85 started directly: `--app=<url> --user-data-dir=<dir> --no-first-run
+--no-default-browser-check --remote-debugging-port=0` (Chrome picks the port and writes `DevToolsActivePort`). Five runs.
+
+1. **Isolation (PASS in 5 of 5).** Two profiles, each running `storage.html` (the H1 markers): 0 leaked kinds A to B (before
+   and after B wrote) and B to A; each profile saw its own 5; a second window of profile A (opened with `Target.createTarget`)
+   saw 5 of 5 (control).
+2. **Persistence (PASS in 5 of 5).** After `Browser.close` and relaunch of both profiles: all 5 kinds, the persistent cookie
+   included, and both 1 MiB values (SHA-256 equal) were present in the right profile. progress-lab in a third profile showed
+   the same hash after a quit and relaunch (3 steps, hash `893799c1…` every time; the empty state matched the Electron
+   reference `e0bc6e48…`).
+3. **No tab strip or address bar (PASS in 5 of 5, a human reading).** `outerHeight - innerHeight` was 32 px (a normal Chrome
+   window is 87 px in the Playwright runs); `matchMedia('(display-mode: standalone)')` is true. `window.locationbar`,
+   `toolbar` and `menubar` `.visible` all say `true` even here, so they prove nothing. A screenshot of the window region
+   (`screencapture -R`, not stored) read by the agent showed only a title bar with the page title and the traffic-light
+   buttons. UX note: on a fresh profile Chrome showed a Google Translate bubble inside the app window (the profile's language
+   differs from the page's); an app launcher would have to suppress it (for example with a language or a policy; Unverified).
+4. **CDP (PASS in 5 of 5).** `/json/version` answered; `DOMStorage.getDOMStorageItems` read `progress-lab:state`;
+   `IndexedDB.requestData` read the three `stepLog` records. CDP IndexedDB has no write method (Verified in `MEMORY.md`), so
+   restore is not available in this mode. Gotcha found: `IndexedDB.requestData` fails with "Could not get index" when
+   `indexName` is an empty string; omit the parameter to read the object store itself (Chrome 155).
+5. **Process cleanup (mixed: PASS 3, FAIL 2 of 5).** After the window of the progress-lab game was closed
+   (`Target.closeTarget`), its renderer exited after 5.14, 2.83, 2.96, 5.20 and 4.93 s. The Assumed 5 s threshold falls inside
+   that spread, so the verdict flips between runs; no run was discarded. After `Browser.close` no process of the profile
+   remained 5 s later in any run. **Chrome keeps running after its last window closes** (the browser process was still there
+   5 s after the close in all runs): a launcher built on `--app` must quit the browser itself. In Electron the equivalent
+   renderer lived 27.8 s (H16), so Chrome is quicker, probably because its service worker stops earlier (Unverified).
+6. **Frame time:** pending (hands-off phase), listed as H20-6.
+
+### Safari as a WebKit proxy (not WKWebView)
+
+Safari 27.0.1 (WebKit; `AppleWebKit/605.1.15` is the frozen token) opened the probe page on the same machine; it is **Safari,
+not WKWebView and not Tauri**, and no frame time was taken. The tab was opened in the owner's running Safari and the two
+spike tabs were closed afterwards (AppleScript, only tabs of `http://localhost:4418/`).
+
+- WebGPU: adapter `apple`/`apple` (device, description `apple`), 21 features, device created, compute readback correct, no
+  switch. Compared with Chrome's 23 features it lacks `dual-source-blending`, `subgroup-size-control`, `subgroups` and
+  `texture-component-swizzle` and adds `float16-renderable` and `float32-renderable`; 25 of the 35 adapter limits differ from
+  Chrome's.
+- WebGL2: renderer string `Apple GPU` (the unmasked string is not exposed), software flag false, 36 extensions, no
+  `EXT_disjoint_timer_query_webgl2`.
+- `/coi/`: `crossOriginIsolated` true, SharedArrayBuffer defined, Worker round trip works; control false.
+- wasm: threads, SIMD, GC, JSPI, exceptions true; `memory64`, `multiMemory`, `relaxedSimd`, `typeReflection`,
+  `wideArithmetic` false. Storage: OPFS `createWritable` works, IndexedDB Blob and Date round trip fine, quota 82 GB,
+  `persist()` false, `AudioContext` stays `suspended` after `resume()` without a gesture.
+- What it says about Tauri: WKWebView on macOS 27 probably gives WebGPU and cross-origin isolation too (Assumed: Safari and
+  WKWebView share WebKit but not settings). What it cannot say: per-webview data stores, packaged-asset headers, CDP-less
+  export. Those were the point of H17 and H18 and stay N/A.
+
+### H21: public demos (load part)
+
+Fixed in `demos.json` before the run: webgpu-samples `helloTriangle`, `cubemap`, `computeBoids` (standalone sample pages) and
+three.js `webgl_animation_keyframes`, `webgl_shadowmap`, `webgpu_compute_birds`. Each loaded in Electron 45.0.0 and in Chrome
+155.0.8059.85 (same 1280 x 720 viewport, 6 s settle). All six loaded in both with at least one canvas; WebGPU was used by the
+three webgpu-samples pages and by `webgpu_compute_birds` in both runtimes (adapter and device acquired through the injected
+hook); the two WebGL three.js examples used no WebGPU. Console errors: Electron 0 everywhere; Chrome 1 on each webgpu-samples
+page, in every case the `/favicon.ico` 404 that Chrome requests and an Electron window does not. So no demo fails in Electron
+while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples are pending.
+
+### Windows CI job (N/A)
+
+Not added. (1) `run.mjs`'s process accounting (`ps`), machine facts (`sw_vers`, `system_profiler`, `ioreg`, `pmset`) and
+bundle detection are macOS-only; H2's "no process remained" and H14 would need a Windows process-listing adapter, which is more
+than the small adapter the dispatch allows. (2) GitHub documents that a `workflow_dispatch` workflow only runs if its file is on
+the default branch ("This event will only trigger a workflow run if the workflow file exists on the default branch", checked
+2026-10-25 in the GitHub Actions events reference), and this task may not touch `main`, so the job could not be run or
+verified from this branch. An unrun workflow was not committed. Windows stays "not tested".
+
 ## Deviations from the methods, and why
 
 1. **Partition names (H14).** One source and one destination partition per variant and run
@@ -313,6 +423,25 @@ itself; this is a Chromium lifetime rule, not a crash.
     H12 rerun file, paths outside the repository in the captured TCC lines (another app's install location) were
     replaced by `<path>` after the run with `node run.mjs --redact-tcc <file>`, the same rule the runner now applies
     when it writes; the file records this under `redactions`.
+14. **Chrome baseline flags and version (H19).** The baseline is driven by Playwright, which adds its own switches (see
+    `docs/compat/methodology.md`), and the installed Chrome is 155, not 156 (version mismatch, not updated). The bundled Chromium
+    156.0.8078.4 is a labelled same-engine reference, never the baseline.
+15. **Chrome window size.** Chrome's window is resized over CDP until `innerWidth` x `innerHeight` is exactly 1280 x 720 at the
+    native scale factor 2 (Electron sets the content size); each timing result records viewport and drawing buffer.
+16. **H20 method.** DevTools ports are chosen by Chrome (`--remote-debugging-port=0`, read from `DevToolsActivePort`) instead of
+    fixed distinct values; the same-profile control is a second window opened with `Target.createTarget`, not a second
+    command-line launch; the H1 markers (`storage.html`) cover checks 1 and 2, progress-lab covers checks 3 to 5 and the
+    gameplay-persistence cells of the matrix; check 3 is a person's reading of a screenshot, recorded through
+    `--h20-3-observation` (the programmatic `window.locationbar.visible` is `true` even in `--app` and proves nothing).
+17. **H21 pages.** The webgpu-samples pages are the standalone sample pages (`/sample/<name>/`) rather than the sample shell,
+    which embeds them in a frame. The same hooks are injected into both runtimes through CDP
+    `Page.addScriptToEvaluateOnNewDocument`; they wrap `requestAdapter` and `requestDevice` and `getContext` only to count calls.
+18. **Electron app changed after the Task 5 measurements.** `electron/main.mjs` gained a `demo` mode and a `memory-ready` event
+    with an optional `--memory-hold-ms` (default 0, so Task 5's memory mode behaves as before); `results.schema.json` accepts
+    hypothesis keys H1 to H21 (`H20-1` to `H20-6` for the per-check results of H20). No Task 5 measuring code changed.
+19. **H9 definition (planned for the hands-off phase).** Chrome's Task Manager "memory footprint", which the method sums by hand
+    from a screenshot, is replaced by the macOS `footprint` tool and `ps` over the process tree, applied to Electron as well.
+20. **Safari proxy.** Added by controller ruling R27 in place of the Tauri build; capability checks only.
 
 ## Findings and gotchas
 

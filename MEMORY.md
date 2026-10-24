@@ -226,6 +226,28 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - [V] Partitioned iframe storage key `http://127.0.0.1:4417/^0http://localhost`; `ses.clearStorageData({origin})` does
   not clear it, CDP `Storage.clearDataForStorageKey` does; `ses.clearStorageData()` without options clears everything.
 
+### Runtime spike, Chrome, Safari proxy, demos (Task 6, phase A: non-timing; run locally 2026-10-24, `spikes/runtime-compat/RESULTS.md`)
+
+- [V] Tauri was not built (controller ruling R27, owner-approved): decision-irrelevant because Tauri can only win by passing a
+  criterion Electron fails, H7 cannot be replaced by it, and ADR-0005's save transfer needs CDP, which WKWebView lacks. H17 and
+  H18 are N/A. A Windows CI job was not added: the runner's process accounting is macOS-only and a `workflow_dispatch` file must
+  be on the default branch to run (GitHub Actions events reference, checked 2026-10-25), which this branch is not.
+- [V] Installed Chrome is 155.0.8059.85, Electron 45's Chromium is 156.0.8078.48 (version mismatch, Chrome not updated);
+  Playwright's bundled Chromium is 156.0.8078.4. All three give hardware WebGL2 (`ANGLE Metal Renderer: Apple M3`), WebGPU
+  adapter `apple`/`metal-3`, `crossOriginIsolated` on `/coi/`. WebGPU features: Chrome and bundled Chromium 23, Electron 24 (the
+  extra one is `texture-compression-unaligned`; cause not investigated); the 36 adapter limits are identical.
+- [V] Safari 27.0.1 (WebKit proxy, not WKWebView): WebGPU adapter `apple`/`apple` with 21 features and a working compute pass,
+  WebGL2 `Apple GPU`, `crossOriginIsolated` true on `/coi/`, OPFS `createWritable` works, `AudioContext` stays suspended without a
+  gesture. Safari's AppleScript lets a script close its own tabs (`tabs of window` indexes shift: iterate backwards).
+- [V] Chrome `--app=<url> --user-data-dir=<dir>`: two profiles are isolated and persistent across `Browser.close` (5 of 5 runs),
+  the window has only a title bar (32 px of UI against 87 px for a normal window), CDP reads storage but cannot write it. The
+  closed window's renderer exits 2.8 to 5.2 s after the close (the Assumed 5 s threshold falls inside the spread), and the Chrome
+  process keeps running after its last window closes, so a launcher must quit it. A fresh profile showed a Google Translate bubble
+  in the app window.
+- [V] Public demos (webgpu-samples helloTriangle, cubemap, computeBoids; three.js webgl_animation_keyframes, webgl_shadowmap,
+  webgpu_compute_birds) load in Electron 45 and Chrome 155 with WebGPU used where the page uses it and no Electron-only failure;
+  the only console-error difference is Chrome's `/favicon.ico` 404.
+
 ### Licensing precedent
 
 - [V] bitwarden/server uses AGPL-3.0 as the default license and a separate source-available license only for the
@@ -300,6 +322,12 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - In zsh, `log` is a shell builtin: call the macOS unified log as `/usr/bin/log`. [V, 2026-10-24]
 - lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the
   Biome fix. [U] not tested here
+- CDP `IndexedDB.requestData` fails with "Could not get index" when `indexName` is an empty string; leave the parameter out to
+  read the object store (Chrome 155). A stale `DevToolsActivePort` file in a reused user-data directory names a dead port: delete
+  it before relaunching Chrome with `--remote-debugging-port=0`. [V, 2026-10-24, Task 6 spike]
+- Playwright launches Chrome headed but `viewport: null` plus `Browser.setWindowBounds` over CDP is needed to get an exact
+  1280 x 720 CSS-pixel viewport at the native scale factor; `Page.bringToFront` is enough to get focus. [V, 2026-10-24]
+- In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
 
 ## Open questions
 
@@ -308,7 +336,7 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   setting up the CLA Assistant app (owner action).
 - `node:sqlite` works in Electron 45 main and `utilityProcess` without a warning (spike H10); its stability label in
   Node 24.22 is still unchecked.
-- WebGPU works by default in Electron 45 on this Mac (spike H5); the feature-count comparison with Chrome is Task 6.
+- WebGPU works by default in Electron 45 on this Mac (spike H5); Chrome 155 reports 23 features, Electron 24 (one extra, `texture-compression-unaligned`): cause unknown.
 - Cross-origin isolation works on Electron 45.0.0 (spike H3, H4); 44.x was not tested (no retry was needed).
 - Snapshot record encoding: deterministic CBOR or tagged JSONL (decided in the snapshot spec).
 - Branch protection on `main` (suggested only, owner decision).

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "kind": "probe",
+  "createdAt": "2026-10-24T17:15:17.449Z",
+  "runtime": {
+    "name": "chrome",
+    "version": "155.0.8059.85",
+    "chromium": "155.0.0.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
+  },
+  "label": "chrome-h3-control",
+  "page": {
+    "url": "http://localhost:4418/?mode=probe&runtime=chrome&version=155.0.8059.85&label=chrome-h3-control&checks=coi",
+    "devicePixelRatio": 2,
+    "hardwareConcurrency": 8,
+    "visibility": {
+      "log": [
+        {
+          "t": 22,
+          "event": "load",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 22,
+          "event": "done",
+          "visibilityState": "visible",
+          "hasFocus": true
+        }
+      ],
+      "everHidden": false,
+      "everUnfocused": false
+    }
+  },
+  "data": {
+    "checks": {
+      "coi": {
+        "crossOriginIsolated": false,
+        "sharedArrayBufferDefined": false,
+        "roundTrip": false,
+        "error": "SharedArrayBuffer is not defined"
+      }
+    }
+  }
+}

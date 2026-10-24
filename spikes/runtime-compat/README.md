@@ -12,10 +12,14 @@ Nothing here is reused by the launcher.
 | `HYPOTHESES.md` | Frozen hypotheses, thresholds and decision rules (never edited; amendments only in its last section) |
 | `RESULTS.md` | One row per hypothesis: status, evidence file, deviations from the method |
 | `server.mjs` | Spike server, no dependencies: serves `probe/`, `/coi/` prefix with COOP/COEP, token-protected `POST /results/<runtime>` |
-| `probe/` | Shared probe pages (Electron now, Chrome and Tauri in Task 6): capabilities, frame-time scene, cold start, storage markers, permissions |
+| `probe/` | Shared probe pages (Electron, Chrome, Safari): capabilities, frame-time scene, cold start, storage markers, permissions, and `demo-hooks.js` for the public demos |
 | `results.schema.json`, `validate.mjs` | JSON Schema for every result file and its validator (`ajv` from `electron/node_modules`) |
-| `run.mjs` | Orchestrator: fixture server + spike server + one Electron launch per check, verdicts, schema validation |
+| `run.mjs` | Orchestrator for Electron: fixture server + spike server + one Electron launch per check, verdicts, schema validation |
 | `electron/` | Electron 45.0.0 spike app with its own `package-lock.json` (npm, outside the pnpm workspace) |
+| `common.mjs`, `run-compare.mjs`, `groups/` | Task 6: shared helpers; the non-timing checks of Chrome (Playwright), Chrome `--app`, the Safari WebKit proxy and the public demos |
+| `run-timing.mjs` | Task 6: the hands-off measurements (frame time calibration and H7, cold and warm start, memory, demo frame samples) |
+| `demos.json` | The six public demos of H21, fixed before any demo run |
+| `matrix.mjs` | Generates `docs/compat/matrix.md` from `results/*.json` (see `docs/compat/methodology.md`) |
 | `results/` | Committed result JSON: `<runtime>-<version>-<UTC timestamp>.json` (probe payloads and run aggregates) |
 
 `electron/main.mjs` runs one check per launch (`--mode=...`). Game and probe windows always have sandbox and context
@@ -59,6 +63,28 @@ partitioning under Playwright), `h14`, `h16`, `package` (H15), `permissions` (H1
   Task 6) needs `--allow-origin <that origin>` plus `?server=http://localhost:4418&token=<token>`.
 - To retry H3 or H4 on Electron 44.9.x (only if they fail on 45.0.0): copy `electron/` to `electron-44/`, run
   `npm install --save-exact electron@44.9.3` there and pass `--electron-dir=electron-44`.
+
+### Chrome, Safari proxy, demos and timing (Task 6)
+
+Tauri was not built (RESULTS.md, H17 and H18: N/A). Google Chrome must be installed in `/Applications`; Safari is only used for
+the capability proxy. Both runners reuse `electron/node_modules` (Playwright, ajv).
+
+```sh
+node run-compare.mjs                              # chrome, chromium, app, safari, demos: about 6 minutes, windows appear
+node run-compare.mjs --only=app --h20-3-observation="pass: ..."   # Chrome --app; the observation is a person's reading of the screenshot
+node run-timing.mjs                               # hands-off: calibrate, h7, h8, h9, demos, h7b (about 45 minutes)
+node run-timing.mjs --smoke --runs=1              # wiring check with tiny durations; results go to a scratch directory
+node matrix.mjs > ../../docs/compat/matrix.md     # regenerate the matrix (run twice and diff: identical)
+```
+
+- `run-compare.mjs` opens the probe in the owner's Safari (a new tab in the running window) and closes only the tabs it opened
+  (AppleScript, needs the Automation permission once). The `app` group starts and quits several Chrome instances with
+  temporary profiles under the system temp directory and removes them; a screenshot of the app window is taken with
+  `screencapture` and not stored (use `--keep-temp` to look at it, then delete the temp directory).
+- `run-timing.mjs` is **hands-off**: nobody may touch keyboard or trackpad, switch apps or let the display sleep; the machine must
+  be on AC power (it refuses to start otherwise unless `--allow-battery`, and refuses while the screen is locked). It holds the
+  display awake with `caffeinate -d -i`. Runs that lose focus or visibility, see input or run on battery are INVALID and retried
+  at most twice. Smoke results are not evidence: delete the scratch directory it prints.
 
 Every run records the OS version, CPU, GPU, display refresh rate (Electron `screen.getPrimaryDisplay().displayFrequency`),
 power source and screen-lock state in the aggregate file. Home directory, repository path, temp paths and the user name

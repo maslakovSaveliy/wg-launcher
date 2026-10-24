@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "kind": "probe",
+  "createdAt": "2026-10-24T17:15:19.591Z",
+  "runtime": {
+    "name": "chromium",
+    "version": "156.0.8078.4",
+    "chromium": "156.0.0.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+  },
+  "label": "chromium-probe-full-1",
+  "page": {
+    "url": "http://localhost:4418/coi/?mode=probe&runtime=chromium&version=156.0.8078.4&label=chromium-probe-full-1",
+    "devicePixelRatio": 2,
+    "hardwareConcurrency": 8,
+    "visibility": {
+      "log": [
+        {
+          "t": 31,
+          "event": "load",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 281,
+          "event": "done",
+          "visibilityState": "visible",
+          "hasFocus": true
+        }
+      ],
+      "everHidden": false,
+      "everUnfocused": false
+    }
+  },
+  "data": {
+    "checks": {
+      "webgl2": {
+        "available": true,
+        "vendor": "Google Inc. (Apple)",
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+        "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "shadingLanguageVersion": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+        "maxTextureSize": 16384,
+        "extensionCount": 36,
+        "timerQuery": true,
+        "softwareRenderer": false
+      },
+      "webgpu": {
+        "available": true,
+        "adapter": {
+          "vendor": "apple",
+          "architecture": "metal-3",
+          "device": "",
+          "description": "",
+          "isFallbackAdapter": false
+        },
+        "features": [
+          "bgra8unorm-storage",
+          "clip-distances",
+          "core-features-and-limits",
+          "depth-clip-control",
+          "depth32float-stencil8",
+          "dual-source-blending",
+          "float32-blendable",
+          "float32-filterable",
+          "indirect-first-instance",
+          "primitive-index",
+          "rg11b10ufloat-renderable",
+          "shader-f16",
+          "subgroup-size-control",
+          "subgroups",
+          "texture-component-swizzle",
+          "texture-compression-astc",
+          "texture-compression-astc-sliced-3d",
+          "texture-compression-bc",
+          "texture-compression-bc-sliced-3d",
+          "texture-compression-etc2",
+          "texture-formats-tier1",
+          "texture-formats-tier2",
+          "timestamp-query"
+        ],
+        "featureCount": 23,
+        "limits": {
+          "maxTextureDimension1D": 16384,
+          "maxTextureDimension2D": 16384,
+          "maxTextureDimension3D": 2048,
+          "maxTextureArrayLayers": 2048,
+          "maxBindGroups": 4,
+          "maxBindGroupsPlusVertexBuffers": 24,
+          "maxBindingsPerBindGroup": 1000,
+          "maxDynamicUniformBuffersPerPipelineLayout": 10,
+          "maxDynamicStorageBuffersPerPipelineLayout": 8,
+          "maxSampledTexturesPerShaderStage": 48,
+          "maxSamplersPerShaderStage": 16,
+          "maxStorageBuffersPerShaderStage": 10,
+          "maxStorageTexturesPerShaderStage": 8,
+          "maxUniformBuffersPerShaderStage": 12,
+          "maxUniformBufferBindingSize": 65536,
+          "maxStorageBufferBindingSize": 4294967292,
+          "minUniformBufferOffsetAlignment": 256,
+          "minStorageBufferOffsetAlignment": 256,
+          "maxVertexBuffers": 8,
+          "maxBufferSize": 4294967292,
+          "maxVertexAttributes": 30,
+          "maxVertexBufferArrayStride": 2048,
+          "maxInterStageShaderVariables": 28,
+          "maxColorAttachments": 8,
+          "maxColorAttachmentBytesPerSample": 128,
+          "maxComputeWorkgroupStorageSize": 32768,
+          "maxComputeInvocationsPerWorkgroup": 1024,
+          "maxComputeWorkgroupSizeX": 1024,
+          "maxComputeWorkgroupSizeY": 1024,
+          "maxComputeWorkgroupSizeZ": 64,
+          "maxComputeWorkgroupsPerDimension": 65535,
+          "maxImmediateSize": 64,
+          "maxStorageBuffersInFragmentStage": 10,
+          "maxStorageTexturesInFragmentStage": 8,
+          "maxStorageBuffersInVertexStage": 10,
+          "maxStorageTexturesInVertexStage": 8
+        },
+        "preferredCanvasFormat": "bgra8unorm",
+        "wgslLanguageFeatures": [
+          "buffer_view",
+          "fragment_depth",
+          "immediate_address_space",
+          "linear_indexing",
+          "packed_4x8_integer_dot_product",
+          "pointer_composite_access",
+          "readonly_and_readwrite_storage_textures",
+          "subgroup_id",
+          "subgroup_uniformity",
+          "swizzle_assignment",
+          "texture_and_sampler_let",
+          "texture_formats_tier1",
+          "uniform_buffer_standard_layout",
+          "unrestricted_pointer_parameters"
+        ],
+        "device": true,
+        "computeReadbackCorrect": true,
+        "computeSample": [
+          7,
+          10,
+          13,
+          16
+        ]
+      },
+      "coi": {
+        "crossOriginIsolated": true,
+        "sharedArrayBufferDefined": true,
+        "roundTrip": true,
+        "waitAsync": "not-equal",
+        "workerMessages": [
+          {
+            "type": "ready"
+          }
+        ]
+      },
+      "wasm": {
+        "library": "wasm-feature-detect",
+        "features": {
+          "bigInt": true,
+          "bulkMemory": true,
+          "exceptions": true,
+          "exceptionsFinal": true,
+          "extendedConst": true,
+          "gc": true,
+          "jsStringBuiltins": true,
+          "jspi": true,
+          "memory64": true,
+          "multiMemory": true,
+          "multiValue": true,
+          "mutableGlobals": true,
+          "referenceTypes": true,
+          "relaxedSimd": true,
+          "saturatedFloatToInt": true,
+          "signExtensions": true,
+          "simd": true,
+          "streamingCompilation": true,
+          "tailCall": true,
+          "threads": true,
+          "typeReflection": false,
+          "typedFunctionReferences": true,
+          "wideArithmetic": false
+        }
+      },
+      "storage": {
+        "quota": 10737418240,
+        "usage": 0,
+        "persistedBefore": false,
+        "persist": false,
+        "persistedAfter": false
+      },
+      "opfs": {
+        "getDirectory": true,
+        "createWritable": true,
+        "roundTrip": true
+      },
+      "idb": {
+        "blobType": "application/x-probe",
+        "dateType": true,
+        "roundTrip": true
+      },
+      "audio": {
+        "available": true,
+        "initialState": "running",
+        "sampleRate": 44100,
+        "baseLatency": 0.005804988662131519,
+        "resume": {
+          "ok": true
+        },
+        "stateAfterResume": "running"
+      }
+    }
+  }
+}
