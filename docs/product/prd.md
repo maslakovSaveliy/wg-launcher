@@ -1,6 +1,7 @@
 # Product requirements: wg-launcher MVP
 
-Status: draft for Phase 0, 2026-10-24. Codename `wg-launcher`; the display name is open. Sources: the owner's concept
+Status: draft for Phase 0, 2026-10-24; updated 2026-10-25 after the specifications and ADRs were written. Codename
+`wg-launcher`; the display name is open. Sources: the owner's concept
 document [concept-v1.0.ru.md](sources/concept-v1.0.ru.md) (Russian, kept verbatim), the owner's decisions of 2026-10-24
 (recorded in [MEMORY.md](../../MEMORY.md) and the [Phase 0 plan](../plans/2026-10-24-phase-0-foundation.md)) and the
 research in [foundations.md](../research/foundations.md) and
@@ -100,7 +101,9 @@ The scenario is done when AC-6 passes.
 | F-13 | Diagnostics for load errors and graphics capabilities | Should | `Concept` |
 | F-14 | The client proposes a title and cover when a URL is added (both stay editable) | Should | `Concept` |
 
-Platform behavior of F-6 to F-8 follows section 11.
+Platform behavior of F-6 to F-8 is specified in [architecture.md](../specs/architecture.md#8-shortcuts-and-deep-links)
+(shortcuts and deep links, section 8) and [architecture.md](../specs/architecture.md#9-window-state-and-fullscreen)
+(window state and fullscreen, section 9); the platform status is in section 11.
 
 ## 7. Honest badges
 
@@ -111,7 +114,7 @@ Badges come from recorded state only. A badge is shown if and only if its condit
 | By link | The entry's support mode is "by link" (the only mode in the MVP) | `Owner` |
 | Needs internet | The entry depends on the original site; in the MVP this coincides with "By link", and it becomes a separate state when local packages exist | `Assumed` |
 | Local data | The game's own session holds data (storage usage above zero at the last check; the check time is recorded) | `Owner` |
-| Export verified | A round trip (export, restore, compare) passed for this game with the current exporter version | `Owner` for the meaning, `Assumed` for the exporter-version condition |
+| Export verified | A round trip (export, restore, compare) passed for this game with the current exporter version; the round trip ("Verify") is defined in [save-transfer.md](../specs/save-transfer.md#6-restore-protocol) and the badge condition in [architecture.md](../specs/architecture.md#11-badges) | `Owner` for the meaning, `Assumed` for the exporter-version condition |
 | Compatibility not verified | The default; it is removed only by a recorded verification (the MVP has no catalog, so it appears on every entry) | `Owner` |
 
 - Never shown: install, sync, FPS or download indicators or progress bars that have no real state behind them; a
@@ -134,12 +137,15 @@ Three distinct actions with different consequences. Each has its own confirmatio
 
 | Action | Removes | Keeps | Safety |
 | --- | --- | --- | --- |
-| Remove from library | The card and its metadata | Snapshots and backups | What happens to the game's live session storage is open (OQ-2) |
+| Remove from library | The card and its metadata | Snapshots and backups | The game's live session storage stays as orphaned data until the user deletes it (OQ-2, decided in [architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics)) |
 | Clear cache | Cache, shader cache and service workers (asset cache, never game data) | Game data, snapshots, backups | None needed |
 | Delete local saves | The game's local data (localStorage, IndexedDB and similar) | Snapshots and backups | A backup is made and verified first |
 
 Backups are never deleted automatically or as a side effect of another action. A way to prune them by hand is not part
-of the MVP. `Assumed` (rule from [AGENTS.md](../../AGENTS.md#data-safety-invariants))
+of the MVP. `Owner` for "backups are never auto-deleted silently" (the owner decisions of 2026-10-24 in the
+[Phase 0 plan](../plans/2026-10-24-phase-0-foundation.md)); `Concept` for "deleting a game must not silently destroy
+backups" (concept section 11); `Assumed` for the wider wording above and for the missing manual pruning, as in
+[architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics).
 
 ## 10. Saves and snapshots
 
@@ -184,14 +190,15 @@ Flush state:
 
 | Platform | Role | Status |
 | --- | --- | --- |
-| macOS arm64 | First tested platform; the dev machine | Nothing is verified yet; the dev machine is macOS 27.0.1 on an Apple M3. Verified (2026-10-24, run locally: `sw_vers`, `sysctl -n machdep.cpu.brand_string`) |
-| Windows | Target platform | CI-verified only: CI runs install and unit tests on `windows-latest`, which says nothing about game compatibility; no Windows machine is available. Verified (2026-10-24, [ci.yml](../../.github/workflows/ci.yml), [MEMORY.md](../../MEMORY.md)) |
-| Linux | Next stage, after GPU, input and packaging checks on chosen distributions | Not started. `Concept` |
-| iOS and Android | Future, a separate client | Out of scope for version 1 (`Owner`). App Store guideline 2.5.6 requires apps that browse the web to use WebKit; alternative engines need an entitlement available only in the EU and Japan. Verified (2026-10-24, <https://developer.apple.com/app-store/review/guidelines/>, guideline 2.5.6). A future iOS client is therefore assumed to be a separate WebKit-based client, and desktop Chromium code cannot be assumed reusable there. Android's system WebView is Chromium-based. Assumed |
+| macOS arm64 | First tested platform; the dev machine | Tested in the runtime spike on one machine, a MacBook Air with an Apple M3 on macOS 27.0.1: Electron 45.0.0 passed isolation, persistence, cross-origin isolation, WebGPU, hardware WebGL2 and the save-transfer checks; frame time against Chrome (H7) is deferred to Phase 1. No game is verified, because the launcher does not exist yet. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md), [matrix.md](../compat/matrix.md)) |
+| Windows | Target platform | Not tested. CI runs only install and unit tests on `windows-latest` (the fixture's browser tests do not run there), which says nothing about game compatibility; no Windows machine is available. Verified (2026-10-25, [ci.yml](../../.github/workflows/ci.yml), [matrix.md](../compat/matrix.md) "Not tested") |
+| Linux | Next stage, after GPU, input and packaging checks on chosen distributions | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks and the fixture's Chromium tests, which prove nothing about the launcher or games. `Concept` for the plan; Verified (2026-10-25, [ci.yml](../../.github/workflows/ci.yml)) for the CI coverage |
+| iOS and Android | Future, a separate client | Not tested. Out of scope for version 1 (`Owner`). App Store guideline 2.5.6 requires apps that browse the web to use WebKit; alternative engines need an entitlement available only in the EU and Japan. Verified (2026-10-24, <https://developer.apple.com/app-store/review/guidelines/>, guideline 2.5.6). A future iOS client is therefore assumed to be a separate WebKit-based client, and desktop Chromium code cannot be assumed reusable there. Android's system WebView is Chromium-based. Assumed |
 
 - Electron 45 builds only for x64 and arm64. Verified (2026-10-24, <https://releases.electronjs.org/release/v45.0.0>).
-- The runtime is provisional: Electron 45 is the planned choice and Tauri 2 the alternative, decided by ADR-0002 after the
-  runtime spike. Assumed
+- The runtime is Electron 45.0.0, decided by [ADR-0002](../adr/0002-desktop-runtime.md): accepted by the owner on
+  2026-10-25 on the condition that Phase 1 re-measures H7 (frame time) on the launcher against Chrome. Tauri was not
+  built (owner-approved scope change); Safari served only as a labeled WebKit proxy. `Owner`
 - An unsupported or untested OS is never called verified. A game, runtime or OS is verified only after a real recorded
   run in `docs/compat/` (date, version, machine). `Owner`
 - Snapshots must not depend on Chromium internals, so a WebKit or WebView client could read them later. Assumed
@@ -255,7 +262,8 @@ Not part of the MVP. It starts only after local export and import are proven (AC
 ## 16. Acceptance criteria
 
 Test types: unit, integration, e2e (the launcher driven end to end), manual. Planned tests live where the code will
-live (`apps/desktop`, `packages/snapshot`, `packages/exporters`, `fixtures/test-games/progress-lab`); none exists yet.
+live (`apps/desktop`, `packages/snapshot`, `packages/exporters`, `fixtures/test-games/progress-lab`); none of these
+acceptance tests exists yet (the fixture has its own suite).
 Stage "Later" means it depends on work after the MVP.
 
 | Id | Criterion (testable) | Test type | Stage |
@@ -264,7 +272,7 @@ Stage "Later" means it depends on work after the MVP.
 | AC-2 | Two entries (including two entries with the same URL) get different `gameId` and partitions; localStorage, IndexedDB and cookie markers written by one are absent in the other; the launcher UI shares no session with any game | integration, e2e | MVP |
 | AC-3 | In a game window there is no `require`, `process` or launcher bridge, and game content cannot reach launcher IPC; the window factory is unit-tested for `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`, no preload and `webSecurity` on | unit, e2e | MVP |
 | AC-4 | In a game session camera, microphone, geolocation, notifications and display capture are denied and logged, while fullscreen, pointer lock and keyboard lock are allowed | unit (handler), e2e | MVP |
-| AC-5 | Navigation off the game's site, `window.open` and downloads are blocked or routed by the rules; `shell.openExternal` accepts only a validated http or https URL after confirmation; the URL decision is unit-tested with `javascript:`, `file:`, a custom-scheme URL, userinfo tricks and lookalike hostnames | unit, e2e | MVP |
+| AC-5 | Navigation off the game's site and `window.open` are blocked or routed by the rules, and downloads are denied in the MVP; `shell.openExternal` accepts only a validated http or https URL after confirmation; the URL decision is unit-tested with `javascript:`, `file:`, a custom-scheme URL, userinfo tricks and lookalike hostnames | unit, e2e | MVP |
 | AC-6 | The vertical scenario (section 5) runs automatically on `progress-lab` and ends with an equal `#progress-hash` after the restore | e2e | MVP |
 | AC-7 | Export then restore into a clean session reproduces the progress of at least one controlled game (equal `#progress-hash`), with Date, ArrayBuffer, Uint8Array and Blob values preserved, also for the service-worker and cross-site iframe variants | integration, e2e | MVP |
 | AC-8 | With a fault injected at each restore step (validate, lock, backup, wipe, import, verify), the state afterwards equals the pre-import state, and the backup exists and verifies | integration | MVP |
@@ -272,12 +280,12 @@ Stage "Later" means it depends on work after the MVP.
 | AC-10 | A value type the exporter cannot represent fails the export with a named error (key path and type) and is never dropped silently | unit | MVP |
 | AC-11 | Export and restore are refused while that game's window is open | integration | MVP |
 | AC-12 | The manifest flush state is `confirmed` only when a known flush hook reports completion before the export; with no hook, a failing hook or a timeout it is `unconfirmed`, and the UI then shows "flush unconfirmed" and never calls the snapshot a guaranteed save point; "Export verified" appears only after a successful round trip | unit (fake flush hook) | MVP |
-| AC-13 | After a game window is closed, within 5 s no window of that game and no process belonging to it remain (process list before and after); the same holds after quitting the app | e2e, manual | MVP |
+| AC-13 | After a game window is closed, within 5 s (the threshold is `Assumed`) no window of that game and no process belonging to it remain (process list before and after); the same holds after quitting the app | e2e, manual | MVP |
 | AC-14 | For each badge, entries in each recorded state show it if and only if its condition in section 7 holds; no UI element indicates install, sync, FPS or download progress without backing state | unit, manual review | MVP |
 | AC-15 | With a fake clock and window events, playtime accrues only while the window is visible and focused, stops on blur, minimize, suspend and lock, and drops sessions under 10 s | unit | MVP |
 | AC-16 | The three delete actions behave as in section 9: remove keeps snapshots; clear cache leaves game data; delete local saves creates and verifies a backup before wiping | integration | MVP |
-| AC-17 | Editing title or cover persists and changes neither `gameId` nor partition; adding a URL that is not HTTPS is rejected (development exception: OQ-3) | unit, e2e | MVP |
-| AC-18 | Window size, position and fullscreen state are restored on the next launch; fullscreen toggles from the UI and the keyboard and exits on Esc | e2e, manual (real input on macOS) | MVP |
+| AC-17 | Editing title or cover persists and changes neither `gameId` nor partition; adding a URL that is not HTTPS is rejected (development and test builds also accept `http://localhost` and `http://127.0.0.1`: OQ-3) | unit, e2e | MVP |
+| AC-18 | Window size, position and fullscreen state are restored on the next launch; fullscreen toggles from the UI and the keyboard; a fullscreen set by the launcher exits with the toggle, the UI, or Esc held for 1.5 s, and short Esc presses reach the game, because the launcher never takes Esc from a game ([architecture.md](../specs/architecture.md#9-window-state-and-fullscreen), `Assumed`, OQ-8) | e2e, manual (real input on macOS) | MVP |
 | AC-19 | The deep link or launch argument for a game id focuses or opens its single window, starts the client first if it is not running, and an unknown or malformed id is rejected without navigating anywhere; no per-game bundle exists | integration, manual (packaged macOS build) | MVP |
 | AC-20 | Logs contain no tokens, cookies or save contents; a snapshot contains no cookies, HTTP cache, Cache Storage, service workers or shader cache | unit, integration | MVP |
 | AC-21 | Every "verified" statement in the README, docs or UI points to a record in `docs/compat/` (date, version, machine); Windows and Linux entries are absent or "not tested" | manual review | MVP |
@@ -290,31 +298,41 @@ Stage "Later" means it depends on work after the MVP.
 
 | Risk | State | Resolved by |
 | --- | --- | --- |
-| Electron fails isolation, persistence, cross-origin isolation, WebGPU or frame-time criteria | Unverified (2026-10-24, no spike has run) | `spikes/runtime-compat/HYPOTHESES.md`, H1 to H7 |
-| The quiescent-window export and restore mechanism does not work for service-worker or cross-site iframe games | Unverified (2026-10-24, no spike has run) | H14 |
+| Electron fails frame-time criteria (H7); it passed isolation, persistence, cross-origin isolation, WebGPU and hardware WebGL2 | Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H1 to H6) for what passed, on one machine; H7 is not measured, deferred to Phase 1 by the owner (2026-10-25) | The Phase 1 H7 re-run on the launcher against Chrome, the condition of [ADR-0002](../adr/0002-desktop-runtime.md) |
+| The quiescent-window export and restore mechanism does not work for service-worker or cross-site iframe games | Verified (2026-10-24, RESULTS.md H14) that it worked in four variants on the controlled game; that the page-level service-worker bypass covers subframes is Assumed (no control run) | The MUST tests in [save-transfer.md](../specs/save-transfer.md), [ADR-0005](../adr/0005-save-transfer-mechanism.md) |
 | Real game saves (Emscripten flush timing, Unity paths, OPFS) behave differently from the controlled game | Unverified (2026-10-24, not tested) | Later fixtures and real runs |
-| Windows and Linux behave differently from macOS | Unverified (2026-10-24, no machine) | CI for install and unit tests; real runs later |
+| Windows and Linux behave differently from macOS | Unverified (2026-10-25, no machine; [matrix.md](../compat/matrix.md) lists both as not tested) | CI for install and unit tests; real runs later |
 | The value hypothesis is wrong | Unverified (2026-10-24, not tested with any user) | Repeat-use observation after the MVP |
-| `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` have legal gaps | Unverified (2026-10-24, no lawyer review yet) | Lawyer review before outside contributions |
+| [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and [TRADEMARKS.md](../../TRADEMARKS.md) have legal gaps | Unverified (2026-10-25, no lawyer review yet) | Lawyer review before outside contributions |
 
 ## 18. Open questions
 
 - OQ-1: the product's display name (the codename is `wg-launcher`).
-- OQ-2: what "remove from library" does to the game's live session storage. Proposal: keep it, listed as orphaned data
-  until the user deletes it, so an accidental removal cannot destroy progress. To be fixed in the architecture spec.
-- OQ-3: the vertical scenario and tests use `http://localhost`, but entries must be HTTPS. Proposal: allow plain
-  `http://localhost` and `http://127.0.0.1` only in development and test builds.
+- OQ-2: closed. "Remove from library" keeps the game's live session storage, listed as orphaned data until the user
+  deletes it, so an accidental removal cannot destroy progress. Decided as proposed in
+  [architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics). `Assumed`; the owner can override.
+- OQ-3: closed. Entries must be HTTPS; plain `http://localhost` and `http://127.0.0.1` are accepted only in development
+  and test builds. Decided as proposed in [architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics).
+  `Assumed`; the owner can override.
 - OQ-4: how repeat use is measured, and whether any telemetry exists at all (no decision yet).
 - OQ-5: whether search and favorites (F-12) and automatic title and cover proposals (F-14) enter the first MVP.
 - OQ-6: whether cloud storage is a paid feature; the concept hypothesizes paid extra volume, and the core-free list in
   `LICENSING.md` does not mention cloud.
-- OQ-7: whether Electron may ship with the experimental `enable-unsafe-webgpu` switch if the spike finds that WebGPU
-  works only with it (hypothesis H5, outcome CONDITIONAL). Default until decided: no, and not without an ADR.
+- OQ-7: closed. WebGPU worked on Electron 45.0.0 without the `enable-unsafe-webgpu` switch (spike H5), so the switch is
+  not shipped; shipping it would need an ADR. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H5);
+  the policy is `Assumed`.
+- OQ-8: how a fullscreen that the launcher set ends. Default in
+  [architecture.md](../specs/architecture.md#9-window-state-and-fullscreen): the toggle, the UI, or Esc held for 1.5 s;
+  short Esc presses go to the game. If the owner prefers "every Esc exits", it is a one-line policy change. `Assumed`
 
 ## 19. Related documents
 
 - [concept-v1.0.ru.md](sources/concept-v1.0.ru.md): the original concept (Russian).
 - [foundations.md](../research/foundations.md) and [runtime-and-storage.md](../research/runtime-and-storage.md): evidence.
-- [HYPOTHESES.md](../../spikes/runtime-compat/HYPOTHESES.md): the runtime experiment, written before it runs.
+- Specifications: [architecture.md](../specs/architecture.md), [snapshot-format.md](../specs/snapshot-format.md),
+  [save-transfer.md](../specs/save-transfer.md) and [security.md](../specs/security.md).
+- Decisions: the [ADRs](../adr/) 0001 to 0006; the runtime is [ADR-0002](../adr/0002-desktop-runtime.md) and the save
+  mechanism [ADR-0005](../adr/0005-save-transfer-mechanism.md).
+- [HYPOTHESES.md](../../spikes/runtime-compat/HYPOTHESES.md) (the runtime experiment, written before it ran),
+  [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) and the [compatibility matrix](../compat/matrix.md).
 - [AGENTS.md](../../AGENTS.md): security, data-safety and honesty rules that these requirements rest on.
-- Planned, not written yet: `docs/specs/` (architecture, snapshot format, save transfer, security) and `docs/adr/`.

@@ -7,10 +7,35 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 ## Decisions
 
 - 2026-10-24 Phase 0 plan: [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md).
-  Decisions are formalized as ADRs in `docs/adr/` later in Phase 0; until then this plan is the record.
+  Decisions are recorded as ADRs in [docs/adr/](docs/adr/) (index: [docs/README.md](docs/README.md)):
+  ADR-0001 own small client, not a fork (Accepted); ADR-0002 desktop runtime, Electron 45.0.0 (Accepted by the owner on
+  2026-10-25 under the Phase 1 H7 condition below); ADR-0003 native languages, Rust deferred and Go not adopted
+  (Accepted); ADR-0004 toolchain and repository layout (Accepted; its Electron-specific rows are reopened with ADR-0002);
+  ADR-0005 save transfer mechanism, the quiescent window (Accepted with ADR-0002, same condition); ADR-0006 licensing
+  model (Accepted; awaits a lawyer's review).
 - Phase 0 produces specs, docs, rules and tooling only. No launcher client code until Phase 1, which gets its own plan.
 - Own small Electron client, not a fork of itch, Flashpoint, Pixens or web-runner. Their code is not reused (patterns
-  only). The runtime choice stays provisional until a throwaway Electron / Tauri 2 / Chrome compatibility spike runs.
+  only). The runtime is Electron 45.0.0 (ADR-0002); the compatibility spike supplied the evidence, on one machine
+  (macOS arm64).
+- 2026-10-25 Owner: ADR-0002 (Electron) and ADR-0005 (save transfer) are Accepted on one condition: Phase 1 re-runs
+  H7 (p95 frame time at most Chrome's p95 x 1.15) on the launcher, with the frozen method, because the hands-off timing
+  runs (H7, the Chrome side of H8, the H9 rerun, H20-6 and the demo frame samples) were deferred out of Phase 0. A
+  Phase 1 H7 FAIL reopens both ADRs ([A] the fallback, Chrome `--app` with CDP, has no preload, `ses.protocol.handle` or
+  `webContents.debugger`, so ADR-0005's mechanism would not carry over). Source: ADR-0002 "Decision", ADR-0005 "Status".
+- 2026-10-25 Owner: the Tauri build was dropped (hypotheses H17 and H18 are N/A) and Safari is used only as a labeled
+  WebKit proxy; Phase 1 is code and tests only (no spikes, one review per task); exports without a confirmed in-game
+  flush are allowed and labeled "flush unconfirmed" (ADR-0005 decision 7). The owner keeps their own git identity in
+  commits.
+- 2026-10-25 Owner: CLA counterparty is Savelii Maslakov as an individual (passport spelling), governing law is the
+  Russian Federation; both are now written into `CLA.md`. The CLA stays inactive, and no outside contribution is
+  accepted, until a lawyer has reviewed it and the CLA Assistant app is set up.
+- 2026-10-25 Decided in the specs (Assumed; the owner can override): the snapshot record encoding is deterministic CBOR
+  (snapshot-format.md section 6.1); packaging is electron-builder (ADR-0004, option P1); PRD OQ-2 (removing a game keeps
+  its data as orphaned until deleted) and OQ-3 (plain `http://localhost` and `http://127.0.0.1` only in development and
+  test builds) are decided as proposed (architecture.md section 12).
+- 2026-10-25 `spikes/runtime-compat/` stays where it is, labeled THROWAWAY: the ADRs and specs link to its results, and
+  Phase 1's H7 re-run uses its method. It is deleted or archived only after the Phase 1 H7 outcome is recorded.
+  Routine decision, Assumed.
 - Rust is deferred to the local-packages stage. The MVP snapshot codec is TypeScript; a language-neutral spec with
   golden vectors lets a later Rust version pass the same vectors. Go is not adopted in the MVP.
 - English everywhere in the repo. Codename `wg-launcher`, deep-link scheme `wglauncher`; display name is open.
@@ -27,6 +52,8 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   separate `test:e2e` script added with the test game. License gate: production dependencies strict against the
   AGENTS.md allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
 - Execution style: subagent-driven development; test-first where code exists.
+- 2026-10-25 Phase 0 close-out (Task 9): `README.md`, `CONTRIBUTING.md` and the docs index `docs/README.md` exist, and
+  the branch `phase-0-foundation` waits for the owner's review before any merge to `main`.
 - Controlled test game (Task 4): `fixtures/test-games/progress-lab`, a pnpm workspace package
   (`@wg-launcher/fixture-progress-lab`, private) with its own Playwright suite. The interface the spike depends on
   (server, element ids, `?ephemeral=1`, `/coi/`, `iframe-host.html`, `sw.js`, storage shapes, hash) is in its
@@ -38,8 +65,9 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   on 2026-10-24 before any spike ran. After the first run it changes only through its dated "Amendments" section.
   Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5 (no adapter even with the switch), a persistent H6 failure
   (software renderer) and H7 (p95 > Chrome x 1.15); Tauri must beat a criterion Electron fails; Electron failing a GPU
-  or performance comparison against a valid Chrome baseline means reconsidering Chrome `--app` + CDP. The chosen
-  Electron version gets H1 to H7 re-measured before ADR-0002 is accepted.
+  or performance comparison against a valid Chrome baseline means reconsidering Chrome `--app` + CDP. H1 to H6 were
+  measured on Electron 45.0.0; H7 was not, and ADR-0002 was accepted on 2026-10-25 with H7 as a Phase 1 condition (see
+  above).
 - PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; acceptance criteria AC-1 to AC-25
   each name a test type.
 - Public GitHub repo: <https://github.com/maslakovSaveliy/wg-launcher>. Work happens on branches; merge to `main` only
@@ -212,8 +240,11 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - [V] H13 INVALID: `navigator.keyboard.lock()` resolves without a gesture; injected mouse and key input grant gestures;
   `requestPointerLock()` right after `requestFullscreen()` in one handler fails ("A user gesture is required") but works
   alone or first. [A] Cause: `requestFullscreen()` consumes the transient activation.
-- [V] H16 FAIL: a closed window's renderer lives until its service worker stops (about 28 s). H9 not yet valid (window
-  interrupted by use of the machine in three attempts).
+- [V] H16 FAIL: a closed game window's renderer was still alive 5 s after the close and exited 27.8 s after it, at the
+  moment the session reported no running service worker; 5 s after the app quit no process of the bundle remained
+  (RESULTS.md H16). [A] Cause: the game's service worker keeps that renderer alive until it stops; the coincidence in
+  time does not prove it. H9 is INVALID in all three attempts (the window was hidden and unfocused because the machine
+  was in use); its rerun is deferred to Phase 1.
 - [V] After SIGKILL 5 s after writes, a persistent cookie was lost; localStorage, IndexedDB, Cache Storage and OPFS kept.
 - [V] Quiescent export: `ses.protocol.handle("http")` stub at the game origin plus CDP `Network.setBypassServiceWorker`
   keeps a registered service worker out of a top-level stub navigation; without the bypass the worker controls the
@@ -234,7 +265,7 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   and never run for a result.
 - Tauri was not built (owner-approved scope change): decision-irrelevant because Tauri can only win by passing a criterion
   Electron fails and cannot replace H7. [A] WKWebView has no CDP, so ADR-0005's save transfer would not work there
-  (`docs/research/runtime-and-storage.md` sections 3 and 9: Assumed and Unverified, not tested). H17 and H18 are N/A. A Windows
+  (reasoning in `docs/research/runtime-and-storage.md` section 3; not tested, section 9). H17 and H18 are N/A. A Windows
   CI job was not added: the runner's process accounting is macOS-only and [V, 2026-10-25, GitHub Actions events reference] a
   `workflow_dispatch` file must be on the default branch to run, and merging to `main` was out of scope.
 - [V] Installed Chrome is 155.0.8059.85, Electron 45's Chromium is 156.0.8078.48 (version mismatch, Chrome not updated);
@@ -319,9 +350,17 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - `webContents.debugger` commands (even `Network.enable`) hang on a window that never navigated: load `about:blank`
   first. `app.getGPUFeatureStatus()` right after `ready` says everything is disabled until `app.getGPUInfo("complete")`
   or a first render. [V, 2026-10-24, Electron 45 spike]
-- Frame timing on the dev Mac: a locked screen puts `loginwindow` in front and no window can be focused; uncapped
-  Chromium (`--disable-gpu-vsync --disable-frame-rate-limit`) queues seconds of GPU work, and interleaving uncapped runs
-  with capped ones slowed the capped runs; keep cooldowns. [V, 2026-10-24, Electron 45 spike]
+- Frame timing on the dev Mac: [V, 2026-10-24, Electron 45 spike, RESULTS.md "Findings and gotchas"] a locked screen puts
+  `loginwindow` in front and no window can be focused. With `--disable-gpu-vsync --disable-frame-rate-limit` the uncapped
+  launches took 38.5, 37.4 and 63.5 s instead of about 23 s (15 to 41 s of work after the page had finished), and a dev
+  run that interleaved uncapped with capped runs gave a capped p95 of 34.2 and 33.3 ms against 18.6 ms with cooldowns and
+  no interleaving (those dev runs are not committed). [A] Cause: uncapped Chromium queues GPU work (heat is possible; `pmset -g therm` recorded no
+  warning); keep cooldowns and do not interleave.
+- The prebuilt Electron 45.0.0 app's `Info.plist` ships five usage descriptions: `NSCameraUsageDescription`,
+  `NSMicrophoneUsageDescription`, `NSAudioCaptureUsageDescription` and two Bluetooth ones. [V, 2026-10-25, `plutil -p` on
+  `Electron.app/Contents/Info.plist` of `electron@45.0.0` in the spike's `node_modules`] The packaged launcher must not
+  ship them (security.md section 5). electron-vite's example `electron-builder.yml` adds the camera and microphone
+  ones, so do not copy it as is. [V, 2026-10-25, electron-vite docs "Distribution", as recorded in ADR-0004]
 - `app.setAsDefaultProtocolClient` leaves a LaunchServices handler preference (an `LSHandlers` entry in
   `~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist`) that outlives `lsregister -u`
   and the deleted app. [V, 2026-10-24, Electron 45 spike]
@@ -338,16 +377,17 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 ## Open questions
 
 - Final product display name (codename is `wg-launcher`).
-- Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md`; jurisdiction and legal-name placeholders in the CLA;
-  setting up the CLA Assistant app (owner action).
+- Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (the CLA party and governing law are filled in; whether
+  the Harmony template wording, such as the UN Convention exclusion in section 6.1, and the waiver of moral rights fit
+  Russian law is for the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal
+  address or another contact for the owner beyond the GitHub account? Default: the lawyer decides.
+- Does Electron pass H7 on the launcher (Phase 1 condition of ADR-0002 and ADR-0005)? Chrome 156 is not installed on the
+  dev machine, so a result against Chrome 155 carries the label "version mismatch". Default until measured: Electron
+  stays the runtime.
 - `node:sqlite` works in Electron 45 main and `utilityProcess` without a warning (spike H10); its stability label in
   Node 24.22 is still unchecked.
 - WebGPU works by default in Electron 45 on this Mac (spike H5); Chrome 155 reports 23 features, Electron 24 (one extra, `texture-compression-unaligned`): cause unknown.
 - Cross-origin isolation works on Electron 45.0.0 (spike H3, H4); 44.x was not tested (no retry was needed).
-- Snapshot record encoding: deterministic CBOR or tagged JSONL (decided in the snapshot spec).
+- Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
+  presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
-- Which packaging tool wins after the spike packages once (electron-builder is the current lean)?
-- What does "remove from library" do to a game's live session storage (PRD OQ-2)? Proposal: keep it as orphaned data.
-- May Electron ship the experimental `enable-unsafe-webgpu` switch if WebGPU works only with it (spike hypothesis H5
-  outcome CONDITIONAL; PRD OQ-7)? Default: no, not without an ADR. The PASS, CONDITIONAL and FAIL split itself is Assumed.
-- Entries must be HTTPS, but the fixture runs on `http://localhost`: allow it in development and test builds only (PRD OQ-3)?

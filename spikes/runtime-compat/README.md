@@ -2,8 +2,9 @@
 
 Runtime-compatibility spike for ADR-0002 (desktop runtime) and ADR-0005 (save transfer). It produces evidence for the
 frozen, pre-registered hypotheses in [HYPOTHESES.md](HYPOTHESES.md); the verdicts and their evidence files are in
-[RESULTS.md](RESULTS.md). After ADR-0002 is decided this directory is deleted or archived and only the results are kept.
-Nothing here is reused by the launcher.
+[RESULTS.md](RESULTS.md). It stays in place for now because the ADRs, specs and the compatibility records link to it and
+Phase 1 re-runs H7 with its method (ADR-0002); it can be deleted or archived once that outcome is recorded, and only the
+results are kept. Nothing here is reused by the launcher.
 
 ## Layout
 

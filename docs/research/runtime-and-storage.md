@@ -1,8 +1,9 @@
 # Research: runtime, platforms and save extraction
 
 Evidence for ADR-0002 (desktop runtime), ADR-0003 (native languages), ADR-0005 (save transfer) and the save-transfer
-spec. Collected on 2026-10-24. Open-source bases and test games are in [foundations.md](foundations.md). The planned
-runtime experiment is `spikes/runtime-compat/HYPOTHESES.md`.
+spec. Collected on 2026-10-24, before the runtime experiment ran. Open-source bases and test games are in
+[foundations.md](foundations.md). The experiment is `spikes/runtime-compat/HYPOTHESES.md` (frozen before the runs) and its
+outcomes are in `spikes/runtime-compat/RESULTS.md`; the decision is [ADR-0002](../adr/0002-desktop-runtime.md).
 
 ## Reading this document
 
@@ -15,12 +16,15 @@ runtime experiment is `spikes/runtime-compat/HYPOTHESES.md`.
 
 ## 1. Where this leaves the runtime choice
 
-- Electron 45 is the planned runtime, provisional until the spike has run. Assumed (the owner's preliminary choice, see
-  [MEMORY.md](../../MEMORY.md); no spike result exists yet).
-- Tauri 2 is the only alternative worth measuring. Tauri 3 with a CEF runtime is alpha and not a candidate (section 3).
-  Assumed (reasoning from section 3).
-- A Chrome `--app` mode with a per-game profile is the fallback architecture if Electron fails the GPU or performance
-  criteria while Chrome passes (H20). Assumed (decision rule in the hypotheses file).
+- The runtime decision is [ADR-0002](../adr/0002-desktop-runtime.md): Electron 45.0.0, accepted by the owner on
+  2026-10-25 on the condition that Phase 1 re-measures H7 frame time on the launcher against Chrome. `Owner`. The
+  statements below are the evidence collected before the spike ran, with the dates they carry; they are not updated to
+  the spike's results.
+- Tauri 2 was the alternative worth measuring. It was not built (owner-approved scope change; H17 and H18 are N/A).
+  Verified (2026-10-25, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H17 and H18). Tauri 3 with a CEF runtime
+  is alpha and not a candidate (section 3). Assumed (reasoning from section 3).
+- A Chrome `--app` mode with a per-game profile is the documented fallback architecture if the Phase 1 H7 fails (ADR-0002,
+  option E); the spike's H20 checks ran it on one machine. Verified (2026-10-24, RESULTS.md H20).
 
 ## 2. Electron
 
@@ -255,7 +259,9 @@ the runtime and storage decisions.
 
 ## 9. Open questions
 
-Every Unverified item above (and the key Assumed ones), and what can settle it.
+Every Unverified item above (and the key Assumed ones), and what can settle it. The state column is as of 2026-10-24;
+the spike has run since, and its outcomes are in [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) (for example H5
+settled WebGPU on Electron 45 for macOS arm64).
 
 | Item | State | Settled by |
 | --- | --- | --- |

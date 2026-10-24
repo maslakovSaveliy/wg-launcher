@@ -17,9 +17,13 @@ It is not cloud streaming, not a reverse-engineering tool and not an automatic c
 **Phase 0 (foundation): specifications, documentation, rules, tooling and a runtime evaluation. There is no launcher
 client code yet, and none may be written in this phase.** The plan is
 [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md). Phase 1 (the first
-vertical scenario: add URL, play, save progress, export, restore in a clean session) gets its own plan.
+vertical scenario: add URL, play, save progress, export, restore in a clean session) gets its own plan. It is code and
+tests only, with no spikes and one review per task (owner decision, 2026-10-25).
 
-Planned stack, not yet confirmed by the runtime spike: Electron, React with TypeScript, Vite, SQLite. Rust is deferred.
+Stack: Electron 45 ([ADR-0002](docs/adr/0002-desktop-runtime.md), accepted by the owner on the condition that Phase 1
+re-measures H7 frame time on the launcher against Chrome), React with TypeScript, electron-vite and `node:sqlite`
+([ADR-0004](docs/adr/0004-toolchain-and-repo-layout.md)). Rust is deferred
+([ADR-0003](docs/adr/0003-native-languages.md)). None of it is installed in the pnpm workspace yet.
 
 ## Repository map
 
@@ -31,11 +35,15 @@ Exists now:
 | `SECURITY.md`, `CODE_OF_CONDUCT.md` | Vulnerability reporting, community rules |
 | `AGENTS.md`, `CLAUDE.md`, `MEMORY.md`, `.cursor/rules/` | Agent rules and shared memory |
 | `.github/` | Pull request template, issue forms, CI workflow (`workflows/ci.yml`) |
+| `README.md`, `CONTRIBUTING.md` | Project overview and contributor guide |
+| `docs/README.md` | Index of all documentation |
+| `docs/product/` | PRD (`prd.md`); `sources/` holds the original concept document (Russian, kept verbatim) |
+| `docs/specs/` | Technical specifications: architecture, snapshot format, save transfer, security |
+| `docs/adr/` | Architecture decision records `0001` to `0006`, and the template `0000` |
+| `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
 | `docs/compat/` | Compatibility matrix (generated from the spike results) and measurement methodology; real runs only |
 | `docs/plans/` | Implementation plans |
-| `docs/product/` | PRD (`prd.md`); `sources/` holds the original concept document (Russian, kept verbatim) |
-| `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
-| `spikes/runtime-compat/` | Throwaway runtime experiment: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy and demo runners (and a timing runner that was never run: deferred to Phase 1), committed `results/` and `RESULTS.md`; see its `README.md` |
+| `spikes/runtime-compat/` | THROWAWAY runtime experiment, not product code, kept in place as the evidence the ADRs and specs link to: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy and demo runners (and a timing runner that was never run: deferred to Phase 1), committed `results/` and `RESULTS.md`; see its `README.md` |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
@@ -94,7 +102,7 @@ A game is untrusted third-party content. It must never get Node.js, arbitrary fi
 8. Never put secrets in the renderer, in logs or in snapshots.
 9. Do not start every game ahead of time. Do not block the main thread; limit background work while a game runs.
 
-Details live in `docs/specs/security.md` (a Phase 0 deliverable, not written yet).
+Details live in [docs/specs/security.md](docs/specs/security.md).
 
 ### Data-safety invariants
 
@@ -155,7 +163,11 @@ paths, game isolation).
 ### Dependency and license policy
 
 - Dependencies shipped in the product must be permissive: MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD,
-  BlueOak-1.0.0, or MPL-2.0 (file-level, unmodified). No GPL, AGPL or LGPL third-party code in the product.
+  BlueOak-1.0.0, or MPL-2.0 (file-level, unmodified). No GPL, AGPL or LGPL third-party code among the resolved npm and
+  crate dependencies; `pnpm licenses:check` enforces this for npm.
+- The Electron and Chromium runtime brings its own bundled components and notices (for example FFmpeg, which Chromium
+  bundles under the LGPL; Assumed, not checked here). They are not covered by the gate above and are handled when the
+  app is packaged (third-party notices).
 - Dev-only dependencies are reported, not blocking.
 - GPL games are used only as external test URLs and are never vendored. Never copy code from GPL projects; other open
   projects are a source of ideas only.
@@ -183,7 +195,8 @@ paths, game isolation).
 4. When something fails, debug systematically: reproduce, find the root cause, test one hypothesis at a time. No
    guess-and-retry loops.
 5. Spikes are throwaway: they live in `spikes/`, are labeled THROWAWAY, keep their own lockfiles and stay outside the
-   pnpm workspace.
+   pnpm workspace. Biome, the TypeScript project and Vitest ignore `spikes/`; only Markdown linting covers its documents.
+   Phase 1 starts no new spikes.
 
 ## Definition of Done
 
@@ -198,6 +211,8 @@ A change is done only when all of these hold:
 - Commit messages are conventional.
 
 ## Where documentation lives
+
+The full index is [docs/README.md](docs/README.md).
 
 | Folder | Content |
 | --- | --- |
