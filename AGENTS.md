@@ -34,7 +34,7 @@ Exists now:
 | `docs/plans/` | Implementation plans |
 | `docs/product/` | PRD (`prd.md`); `sources/` holds the original concept document (Russian, kept verbatim) |
 | `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
-| `spikes/runtime-compat/` | Throwaway runtime experiment; for now only `HYPOTHESES.md`, written before anything runs |
+| `spikes/runtime-compat/` | Throwaway runtime experiment: frozen `HYPOTHESES.md`, shared probe pages, spike server and runner, the Electron spike (`electron/`, own npm lockfile), committed `results/` and `RESULTS.md`; see its `README.md` |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
@@ -44,7 +44,7 @@ Exists now:
 Reserved, **not created yet**. Do not create a directory until the work that needs it exists:
 
 - `apps/desktop` (Electron client), `packages/shared`, `packages/snapshot`, `packages/exporters`.
-- Spike code with its own lockfiles under `spikes/`, beyond `spikes/runtime-compat/HYPOTHESES.md`.
+- Further spike code under `spikes/` (the Tauri app and the Chrome baseline come with Task 6).
 - `crates/` (Rust, only if and when the local-packages stage needs it).
 
 ## Commands

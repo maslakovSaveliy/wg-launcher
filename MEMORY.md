@@ -187,12 +187,35 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   driven by Playwright, showed exactly that: the iframe on `127.0.0.1` inside a `localhost` page saw the top-level
   progress. Adding `--enable-features=ThirdPartyStoragePartitioning` changed nothing (disable wins); a later
   `--disable-features=Translate` argument replaces Playwright's list (last switch wins) and partitions storage in both
-  browsers. [U] Whether `_electron.launch` has the same effect: the spike must check before it trusts H14 variant c.
+  browsers. [V] `_electron.launch` has the same effect in Electron 45 (cross-site iframe storage shared); a normal
+  launch partitions. Re-appending `disable-features` without that entry in the app's main process restores
+  partitioning under Playwright (Task 5 spike, `spikes/runtime-compat/RESULTS.md` H11).
 - [V] `localhost` and `127.0.0.1` count as different sites for storage partitioning in Chromium 156 and Chrome 155.
 - [V] IndexedDB `clear()` on an `autoIncrement` store does not reset its key generator (keys 1, 2, clear, next add is 3 in
   Chromium 156); deleting the database does. A snapshot format has to say how it handles the generator.
 - [V] The 14 fixture tests pass three times in a row in both Playwright projects (84 runs): bundled Chromium 156.0.8078.4
   and the installed Google Chrome 155.0.8059.85 (`channel: "chrome"`).
+
+### Runtime spike, Electron 45 (Task 5; run locally, `spikes/runtime-compat/RESULTS.md`)
+
+- [V] Dev machine is a MacBook Air M3 (`Mac15,12`, fanless), built-in display 60 Hz.
+- [V] Electron 45.0.0 here: partitions isolated and persistent across `app.quit()` (H1, H2); `crossOriginIsolated`
+  with server or `onHeadersReceived` headers (H3, H4); WebGPU adapter, device and compute without switches (H5); WebGL2
+  on ANGLE Metal (H6); `node:sqlite` (SQLite 3.53.4) and zstd in main and `utilityProcess` with no warning (H10);
+  Playwright `_electron.launch` (H11); quiescent export and restore of progress-lab in four variants (H14); packaged
+  ad-hoc-signed deep link with one instance (H15). H7 needs the Chrome baseline (Task 6).
+- [V] Failures and invalid runs: H12 FAIL (microphone `getUserMedia` never reaches `setPermissionRequestHandler` while
+  macOS access is not determined; the request stalls), H13 INVALID (`navigator.keyboard.lock()` needs no gesture;
+  `requestFullscreen()` consumes the activation, so a later `requestPointerLock()` in the same handler fails), H16 FAIL
+  (a closed window's renderer lives until its service worker stops, about 28 s), H9 not yet valid (window interrupted).
+- [V] After SIGKILL 5 s after writes, a persistent cookie was lost; localStorage, IndexedDB, Cache Storage and OPFS kept.
+- [V] Quiescent export: `ses.protocol.handle("http")` stub at the game origin plus CDP `Network.setBypassServiceWorker`
+  keeps a registered service worker out of the stub navigation, the cross-site iframe included; without the bypass the
+  worker controls the stub. Electron's `WebFrameMain` has no isolated-world execution; for a subframe use a preload
+  (`nodeIntegrationInSubFrames`) calling `webFrame.executeJavaScriptInIsolatedWorld`.
+- [V] Restoring `autoIncrement` records with explicit keys 1 to 7 advances the key generator: the next `add` gets 8.
+- [V] Partitioned iframe storage key `http://127.0.0.1:4417/^0http://localhost`; `ses.clearStorageData({origin})` does
+  not clear it, CDP `Storage.clearDataForStorageKey` does; `ses.clearStorageData()` without options clears everything.
 
 ### Licensing precedent
 
@@ -256,6 +279,14 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   ignored paths such as `.superpowers/`. MD013 (line length) is off, MD041 is off only for the pull request template,
   and MD004, MD022 and MD032 are off only under `docs/plans/` (compact plan layout). [V, 2026-10-24]
 - Biome 2.6 deprecates `linter.rules.recommended`; use `linter.rules.preset: "recommended"`. [V, 2026-10-24]
+- `webContents.debugger` commands (even `Network.enable`) hang on a window that never navigated: load `about:blank`
+  first. `app.getGPUFeatureStatus()` right after `ready` says everything is disabled until `app.getGPUInfo("complete")`
+  or a first render. [V, 2026-10-24, Electron 45 spike]
+- Frame timing on the dev Mac: a locked screen puts `loginwindow` in front and no window can be focused; uncapped
+  Chromium (`--disable-gpu-vsync --disable-frame-rate-limit`) queues seconds of GPU work, and interleaving uncapped runs
+  with capped ones slowed the capped runs; keep cooldowns. [V, 2026-10-24, Electron 45 spike]
+- `app.setAsDefaultProtocolClient` leaves a LaunchServices handler preference that outlives `lsregister -u` and the
+  deleted app. [V, 2026-10-24, Electron 45 spike]
 - lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the
   Biome fix. [U] not tested here
 
@@ -264,9 +295,10 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Final product display name (codename is `wg-launcher`).
 - Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md`; jurisdiction and legal-name placeholders in the CLA;
   setting up the CLA Assistant app (owner action).
-- Is `node:sqlite` stable enough in Electron 45 for the main process? The spike verifies it.
-- Does WebGPU work by default in Electron 45 on macOS arm64? The spike verifies it.
-- Which Electron versions carry the COOP/COEP regression fix, and does cross-origin isolation work on 44 and 45?
+- `node:sqlite` works in Electron 45 main and `utilityProcess` without a warning (spike H10); its stability label in
+  Node 24.22 is still unchecked.
+- WebGPU works by default in Electron 45 on this Mac (spike H5); the feature-count comparison with Chrome is Task 6.
+- Cross-origin isolation works on Electron 45.0.0 (spike H3, H4); 44.x was not tested (no retry was needed).
 - Snapshot record encoding: deterministic CBOR or tagged JSONL (decided in the snapshot spec).
 - Branch protection on `main` (suggested only, owner decision).
 - Which packaging tool wins after the spike packages once (electron-builder is the current lean)?

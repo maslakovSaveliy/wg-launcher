@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "cold-start",
+  "createdAt": "2026-10-24T15:06:34.420Z",
+  "runtime": {
+    "name": "electron",
+    "version": "45.0.0",
+    "chromium": "156.0.8078.48",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) wgspike/0.0.0 Chrome/156.0.8078.48 Electron/45.0.0 Safari/537.36"
+  },
+  "label": "warm-2",
+  "page": {
+    "url": "http://localhost:4418/?mode=coldstart&runtime=electron&load=64&spawn=1792854394051&label=warm-2",
+    "devicePixelRatio": 2,
+    "hardwareConcurrency": 8,
+    "visibility": {
+      "log": [
+        {
+          "t": 96,
+          "event": "load",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 119,
+          "event": "first-frame",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 120,
+          "event": "done",
+          "visibilityState": "visible",
+          "hasFocus": true
+        }
+      ],
+      "everHidden": false,
+      "everUnfocused": false
+    }
+  },
+  "data": {
+    "scene": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+      "softwareRenderer": false,
+      "load": 64,
+      "instances": 1024,
+      "seed": 1592594996,
+      "devicePixelRatio": 2,
+      "cssWidth": 1280,
+      "cssHeight": 720,
+      "drawingBufferWidth": 2560,
+      "drawingBufferHeight": 1440
+    },
+    "spawnWallMs": 1792854394051,
+    "firstFrameWallMs": 1792854394420,
+    "spawnToFirstFrameMs": 369,
+    "timeOriginWallMs": 1792854394301,
+    "navigation": {
+      "responseEnd": 46.400000005960464,
+      "domContentLoaded": 119.09999999403954
+    }
+  }
+}
