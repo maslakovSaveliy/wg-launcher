@@ -45,7 +45,8 @@ export const ALLOWED_LICENSES = Object.freeze([
 const OPERATORS = new Set(["AND", "OR", "WITH"]);
 
 /**
- * Decide whether an SPDX license expression is acceptable.
+ * Decide whether an SPDX license expression is acceptable. License ids are compared case-insensitively
+ * (as SPDX prescribes); the operators `AND`, `OR` and `WITH` must be upper case.
  * `A OR B` needs one allowed alternative, `A AND B` needs both, AND binds tighter than OR, and
  * `A WITH exception` is judged by `A` (an exception only adds permissions). Anything that is not a
  * well-formed expression (`Unknown`, `SEE LICENSE IN ...`, unbalanced parentheses) is rejected.
@@ -54,7 +55,8 @@ const OPERATORS = new Set(["AND", "OR", "WITH"]);
  * @returns {boolean}
  */
 export function isLicenseAllowed(expression, allowed = ALLOWED_LICENSES) {
-  const allowedIds = new Set(allowed);
+  // SPDX license identifiers are matched case-insensitively; the operators stay upper case.
+  const allowedIds = new Set(allowed.map((id) => id.toLowerCase()));
   const tokens = expression.match(/\(|\)|[^\s()]+/g) ?? [];
   let position = 0;
 
@@ -86,7 +88,7 @@ export function isLicenseAllowed(expression, allowed = ALLOWED_LICENSES) {
         return fail();
       }
     }
-    return allowedIds.has(token);
+    return allowedIds.has(token.toLowerCase());
   }
 
   /** @returns {boolean} */
@@ -131,9 +133,12 @@ function flatten(report) {
   const findings = [];
   for (const [group, entries] of Object.entries(report)) {
     for (const entry of entries) {
-      const raw = (entry.license ?? group).trim();
-      const license = raw === "" ? "Unknown" : raw;
-      const versions = entry.versions.length > 0 ? entry.versions : ["unknown"];
+      // pnpm output is not trusted to have the documented shape: a license that is not a string counts as
+      // Unknown (fails closed for production) and versions that are not an array count as none.
+      const raw = entry.license ?? group;
+      const license = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : "Unknown";
+      const listed = Array.isArray(entry.versions) ? entry.versions : [];
+      const versions = listed.length > 0 ? listed : ["unknown"];
       for (const version of versions) {
         findings.push({ name: entry.name, version, license });
       }
@@ -226,9 +231,25 @@ function main() {
   console.log("\nOK: all production dependencies use allowed licenses.");
 }
 
-// Run only when executed directly (not when imported by the tests). The real path is compared on
-// purpose: a symlinked checkout must not silently turn the gate into a no-op.
-const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(realpathSync(entryPoint)).href) {
+/**
+ * True when this file is the script node was started with. The real path is compared on purpose: a
+ * symlinked checkout must not silently turn the gate into a no-op. A missing or unreadable
+ * `process.argv[1]` (for example `node -e ... <arg>`) means this module was imported, not run.
+ * @returns {boolean}
+ */
+function isEntryPoint() {
+  const entryPoint = process.argv[1];
+  if (entryPoint === undefined) {
+    return false;
+  }
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entryPoint)).href;
+  } catch {
+    return false;
+  }
+}
+
+// Run only when executed directly (not when imported by the tests).
+if (isEntryPoint()) {
   main();
 }

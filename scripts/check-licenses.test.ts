@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { evaluateLicenses } from "./check-licenses.mjs";
 
@@ -138,5 +139,70 @@ describe("evaluateLicenses", () => {
     });
 
     expect(result.violations.map((finding) => finding.version)).toEqual(["1.0.0", "2.0.0"]);
+  });
+});
+
+describe("malformed pnpm output", () => {
+  it("treats a non-string license as Unknown", () => {
+    const report = { MIT: [{ name: "odd", versions: ["1.0.0"], license: { type: "MIT" } }] };
+
+    // @ts-expect-error: the point of the test is a license that is not a string
+    const result = evaluateLicenses({ prod: report, dev: {} });
+
+    expect(result.violations).toEqual([{ name: "odd", version: "1.0.0", license: "Unknown" }]);
+  });
+
+  it("treats non-array versions as no versions", () => {
+    const report = { MIT: [{ name: "odd", versions: "1.0.0", license: "GPL-3.0" }] };
+
+    // @ts-expect-error: the point of the test is a versions field that is not an array
+    const result = evaluateLicenses({ prod: report, dev: {} });
+
+    expect(result.violations).toEqual([{ name: "odd", version: "unknown", license: "GPL-3.0" }]);
+  });
+});
+
+describe("SPDX identifiers", () => {
+  it("are matched case-insensitively", () => {
+    const result = evaluateLicenses({
+      prod: grouped(
+        pkg("a", "mit"),
+        pkg("b", "apache-2.0"),
+        pkg("c", "Bsd-3-Clause"),
+        pkg("d", "(isc OR gpl-3.0)"),
+        pkg("e", "Apache-2.0 WITH llvm-exception"),
+      ),
+      dev: {},
+    });
+
+    expect(result.violations).toEqual([]);
+  });
+
+  it("do not let a different case make a disallowed license pass", () => {
+    const result = evaluateLicenses({ prod: grouped(pkg("a", "gpl-3.0")), dev: {} });
+
+    expect(result.violations).toHaveLength(1);
+  });
+});
+
+describe("running as an entry point", () => {
+  it("does not crash when process.argv[1] is not a file", () => {
+    const moduleUrl = new URL("./check-licenses.mjs", import.meta.url).href;
+
+    // `node -e <code> <arg>` makes the argument process.argv[1]; here it does not exist.
+    const run = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `await import(${JSON.stringify(moduleUrl)})`,
+        "no-such-file.mjs",
+      ],
+      { encoding: "utf8" },
+    );
+
+    expect(run.stderr).toBe("");
+    expect(run.stdout).toBe("");
+    expect(run.status).toBe(0);
   });
 });
