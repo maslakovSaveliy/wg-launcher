@@ -29,9 +29,11 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Execution style: subagent-driven development; test-first where code exists.
 - Spike hypotheses are frozen: `spikes/runtime-compat/HYPOTHESES.md` (H1 to H21, thresholds, decision rules) was written
   on 2026-10-24 before any spike ran. After the first run it changes only through its dated "Amendments" section.
-  Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5, H7 (p95 > Chrome x 1.15); Tauri must beat a criterion
-  Electron fails; Electron failing GPU or performance while Chrome passes means reconsidering Chrome `--app` + CDP.
-- PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; acceptance criteria AC-1 to AC-23
+  Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5 (no adapter even with the switch), a persistent H6 failure
+  (software renderer) and H7 (p95 > Chrome x 1.15); Tauri must beat a criterion Electron fails; Electron failing a GPU
+  or performance comparison against a valid Chrome baseline means reconsidering Chrome `--app` + CDP. The chosen
+  Electron version gets H1 to H7 re-measured before ADR-0002 is accepted.
+- PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; acceptance criteria AC-1 to AC-25
   each name a test type.
 - Public GitHub repo: <https://github.com/maslakovSaveliy/wg-launcher>. Work happens on branches; merge to `main` only
   on the owner's approval.
@@ -238,4 +240,6 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Branch protection on `main` (suggested only, owner decision).
 - Which packaging tool wins after the spike packages once (electron-builder is the current lean)?
 - What does "remove from library" do to a game's live session storage (PRD OQ-2)? Proposal: keep it as orphaned data.
+- May Electron ship the experimental `enable-unsafe-webgpu` switch if WebGPU works only with it (spike hypothesis H5
+  outcome CONDITIONAL; PRD OQ-7)? Default: no, not without an ADR. The PASS, CONDITIONAL and FAIL split itself is Assumed.
 - Entries must be HTTPS, but the fixture runs on `http://localhost`: allow it in development and test builds only (PRD OQ-3)?

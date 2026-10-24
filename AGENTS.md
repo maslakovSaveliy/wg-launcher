@@ -101,8 +101,9 @@ Details live in `docs/specs/security.md` (a Phase 0 deliverable, not written yet
    Keep game data and asset cache apart.
 3. Back up the current state before every import. Any failure restores that backup and verifies it. A failure must never
    destroy existing saves.
-4. Closing a window does not prove a game has flushed its storage (for example Emscripten IDBFS). Export only after a
-   confirmed flush.
+4. Closing a window does not prove a game has flushed its storage (for example Emscripten IDBFS). Record a snapshot's
+   flush as confirmed only when a known flush hook reported completion; otherwise label it "flush unconfirmed" in the
+   manifest and the UI, and never present it as a guaranteed save point.
 5. Snapshots are versioned and carry a content hash. Reject unknown versions explicitly. A value type that cannot be
    exported is an explicit error, never silently dropped.
 6. Treat archives as hostile: reject absolute paths, `..`, symlinks, hardlinks and device entries, too many entries,

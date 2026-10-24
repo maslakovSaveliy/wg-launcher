@@ -155,8 +155,9 @@ runtime experiment is `spikes/runtime-compat/HYPOTHESES.md`.
 - The in-memory file system is the truth while the program runs. `syncfs(true)` loads IndexedDB into MEMFS,
   `syncfs(false)` writes back, and `autoPersist` saves on close. Verified (2026-10-24,
   <https://raw.githubusercontent.com/emscripten-core/emscripten/main/src/lib/libidbfs.js>).
-- So closing a window does not prove the game flushed: export only after a confirmed flush, and restore before the
-  startup `syncfs(true)`. Assumed (reasoning from the two points above).
+- So closing a window does not prove the game flushed: export after a confirmed flush where a flush hook is known, label
+  the snapshot "flush unconfirmed" otherwise, and restore before the startup `syncfs(true)`. Assumed (reasoning from the
+  two points above; PRD section 10 and AC-12).
 
 ### 5.4 Unity WebGL
 

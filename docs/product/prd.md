@@ -147,7 +147,7 @@ of the MVP. `Assumed` (rule from [AGENTS.md](../../AGENTS.md#data-safety-invaria
 | --- | --- | --- |
 | localStorage | Export and restore before launch | `Owner` |
 | IndexedDB | Export and restore, including binary types, key paths, indexes and the database version | `Owner` |
-| Emscripten IDBFS (stored in IndexedDB) | Through the IndexedDB exporter, only after a confirmed flush; needs an Emscripten fixture first | `Assumed` |
+| Emscripten IDBFS (stored in IndexedDB) | Through the IndexedDB exporter; the snapshot is labeled "flush unconfirmed" unless a known flush hook confirmed completion; a real Emscripten fixture comes later | `Assumed` |
 | OPFS and other virtual file systems | Later, as an adapter | `Concept` |
 | The game's own server | Not exported; the game's account serves it | `Owner` |
 | Process memory only | Not supported; no universal suspend and resume | `Owner` |
@@ -155,8 +155,30 @@ of the MVP. `Assumed` (rule from [AGENTS.md](../../AGENTS.md#data-safety-invaria
 Rules (`Owner`): never read the files of a live browser profile; never export or sync a whole profile, cookies or
 tokens; keep game data apart from asset cache; back up before every import and restore the backup if anything fails;
 version every snapshot (game id, exporter and adapter version, content and hash, parent revision, device, game version
-when known); closing a window does not prove that a game flushed its storage; treat archives as hostile; an
-unsupported value type is an explicit error. A game is called export-capable only after a restore was verified.
+when known); treat archives as hostile; an unsupported value type is an explicit error. A game is called
+export-capable only after a restore was verified.
+
+Storage keys and origins:
+
+- A snapshot records the full storage key of the data it holds: the origin, plus the top-level site for storage of
+  partitioned third-party iframes. Since Chrome 115 that storage is keyed by the iframe's origin and the top-level site.
+  Verified (2026-10-24, <https://developer.chrome.com/docs/privacy-sandbox/storage-partitioning>). Nested origins (a game
+  running in an iframe on another origin) are recorded separately. `Owner`
+- A change of scheme, host, port or top-level site between export and restore changes which storage the game sees. A
+  restore under a changed key is refused with an explicit error naming both keys, or goes ahead only through a mapping
+  the user confirmed. It is never a silent no-op and never a silent partial restore (AC-24). `Owner` for the
+  requirement (the brief and concept section 9), `Assumed` for the exact interaction.
+
+Flush state:
+
+- Closing a window does not prove that a game flushed its storage. Each snapshot records a flush state in its manifest
+  (the field name is decided in the snapshot spec): `confirmed` only when a known flush hook or adapter reported
+  completion before the export, otherwise `unconfirmed`. The generic exporter has no hook, so its snapshots are
+  `unconfirmed` unless an adapter says otherwise. `Assumed`
+- An `unconfirmed` snapshot holds the persisted storage state only. The UI labels it "flush unconfirmed" and never
+  presents it as a guaranteed save point. The "Export verified" badge needs a successful round trip and says nothing
+  about flush. `Assumed` (an MVP compromise: no universal flush hook exists, so a snapshot is never claimed safer than it
+  is; AGENTS.md invariant 4 says the same)
 
 ## 11. Platforms
 
@@ -165,7 +187,7 @@ unsupported value type is an explicit error. A game is called export-capable onl
 | macOS arm64 | First tested platform; the dev machine | Nothing is verified yet; the dev machine is macOS 27.0.1 on an Apple M3. Verified (2026-10-24, run locally: `sw_vers`, `sysctl -n machdep.cpu.brand_string`) |
 | Windows | Target platform | CI-verified only: CI runs install and unit tests on `windows-latest`, which says nothing about game compatibility; no Windows machine is available. Verified (2026-10-24, [ci.yml](../../.github/workflows/ci.yml), [MEMORY.md](../../MEMORY.md)) |
 | Linux | Next stage, after GPU, input and packaging checks on chosen distributions | Not started. `Concept` |
-| iOS and Android | Future, a separate client | Out of scope for version 1 (`Owner`). iOS apps that browse the web must use WebKit, so a future iOS client is a separate WebKit-based client and desktop Chromium code cannot be reused. Verified (2026-10-24, <https://developer.apple.com/app-store/review/guidelines/>, guideline 2.5.6). Android's system WebView is Chromium-based. Assumed |
+| iOS and Android | Future, a separate client | Out of scope for version 1 (`Owner`). App Store guideline 2.5.6 requires apps that browse the web to use WebKit; alternative engines need an entitlement available only in the EU and Japan. Verified (2026-10-24, <https://developer.apple.com/app-store/review/guidelines/>, guideline 2.5.6). A future iOS client is therefore assumed to be a separate WebKit-based client, and desktop Chromium code cannot be assumed reusable there. Android's system WebView is Chromium-based. Assumed |
 
 - Electron 45 builds only for x64 and arm64. Verified (2026-10-24, <https://releases.electronjs.org/release/v45.0.0>).
 - The runtime is provisional: Electron 45 is the planned choice and Tauri 2 the alternative, decided by ADR-0002 after the
@@ -249,7 +271,7 @@ Stage "Later" means it depends on work after the MVP.
 | AC-9 | Snapshot validation rejects each of: truncated or malformed input, an absolute path, `..`, a symlink, a hardlink, a device entry, too many entries, oversize content, a bad compression ratio, a bad entry hash, a bad content hash and an unknown format version, each with a distinct error, and nothing is written before validation passes | unit (golden vectors) | MVP |
 | AC-10 | A value type the exporter cannot represent fails the export with a named error (key path and type) and is never dropped silently | unit | MVP |
 | AC-11 | Export and restore are refused while that game's window is open | integration | MVP |
-| AC-12 | For games that flush through a known hook (Emscripten IDBFS), export is allowed only after the flush is confirmed | integration | Later (needs an Emscripten fixture) |
+| AC-12 | The manifest flush state is `confirmed` only when a known flush hook reports completion before the export; with no hook, a failing hook or a timeout it is `unconfirmed`, and the UI then shows "flush unconfirmed" and never calls the snapshot a guaranteed save point; "Export verified" appears only after a successful round trip | unit (fake flush hook) | MVP |
 | AC-13 | After a game window is closed, within 5 s no window of that game and no process belonging to it remain (process list before and after); the same holds after quitting the app | e2e, manual | MVP |
 | AC-14 | For each badge, entries in each recorded state show it if and only if its condition in section 7 holds; no UI element indicates install, sync, FPS or download progress without backing state | unit, manual review | MVP |
 | AC-15 | With a fake clock and window events, playtime accrues only while the window is visible and focused, stops on blur, minimize, suspend and lock, and drops sessions under 10 s | unit | MVP |
@@ -261,6 +283,8 @@ Stage "Later" means it depends on work after the MVP.
 | AC-21 | Every "verified" statement in the README, docs or UI points to a record in `docs/compat/` (date, version, machine); Windows and Linux entries are absent or "not tested" | manual review | MVP |
 | AC-22 | Every published start-up, frame-time or memory number has a measurement record (cold and warm separate, same-machine Chrome comparison, scene id) | manual review | MVP |
 | AC-23 | With a fake backend, two devices changing the same base revision produce two kept branches and a user choice; the device clock never decides; a local backup precedes every import; a quota failure keeps the local data | integration | Later (cloud) |
+| AC-24 | A snapshot records the full storage key (origin, plus top-level site for partitioned iframe storage). Restoring it where the scheme, host, port or top-level site differs fails with an explicit error naming both keys and writes nothing, unless the user confirmed a mapping, in which case every record lands under the mapped key; no case ends in a silent no-op or a partial restore | integration (`progress-lab` on `localhost` and `127.0.0.1`, with a nested iframe) | MVP |
+| AC-25 | With a small real Emscripten program that writes through IDBFS, an export taken after `syncfs` completes contains the latest in-game save, and an export taken before it is labeled `unconfirmed` | integration | Later (needs an Emscripten fixture) |
 
 ## 17. Risks and unverified assumptions
 
@@ -284,6 +308,8 @@ Stage "Later" means it depends on work after the MVP.
 - OQ-5: whether search and favorites (F-12) and automatic title and cover proposals (F-14) enter the first MVP.
 - OQ-6: whether cloud storage is a paid feature; the concept hypothesizes paid extra volume, and the core-free list in
   `LICENSING.md` does not mention cloud.
+- OQ-7: whether Electron may ship with the experimental `enable-unsafe-webgpu` switch if the spike finds that WebGPU
+  works only with it (hypothesis H5, outcome CONDITIONAL). Default until decided: no, and not without an ADR.
 
 ## 19. Related documents
 

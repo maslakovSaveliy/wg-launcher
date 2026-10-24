@@ -15,9 +15,15 @@ transfer).
 
 ## 2. Conventions
 
-- **Verdicts:** PASS, FAIL, INVALID (the run is unusable, for example a software renderer; rerun up to 3 times) and N/A
-  (cannot be run; the reason is recorded). INVALID and N/A are never counted as PASS. An INVALID that persists in one
-  runtime while the other runtime's run is valid counts as FAIL for the criterion it blocks.
+- **Verdicts:** PASS, FAIL, INVALID (the run is unusable, for example a software renderer; rerun up to 3 times),
+  INCONCLUSIVE (H7 only, see its noise rule), CONDITIONAL (H5 only) and N/A (cannot be run; the reason is recorded).
+  INVALID, INCONCLUSIVE and N/A are never counted as PASS. A control that does not give its expected result makes the
+  run INVALID, never FAIL, because the probe cannot be trusted. An INVALID that persists in one runtime while the other
+  runtime's run is valid counts as FAIL for the criterion it blocks.
+- **Visibility:** every timing or frame measurement (H7, H8, H9, H18 to H21) runs with the window visible, unobscured
+  and in the foreground for the whole run, because occlusion and background state throttle `requestAnimationFrame` and
+  timers. Each run records `document.visibilityState` and `document.hasFocus()` at the start, at the end and on every
+  `visibilitychange`, `blur` and `focus` event; a run in which the page was ever hidden or unfocused is INVALID.
 - **Machine:** the dev Mac (macOS arm64, Apple M3), plugged in, one display, no other heavy apps. Record OS version,
   display refresh rate, GPU and exact runtime versions with every result. Nothing from this machine is extrapolated to
   other machines or operating systems.
@@ -46,8 +52,8 @@ transfer).
 - **Runtime:** Electron 45.0.0.
 - **Method:** two windows (sandbox on, context isolation on, no preload) on partitions `persist:spike:a` and
   `persist:spike:b`, both loading `http://localhost:<n>/` from the same spike server. Window A writes one marker of each
-  kind: a localStorage key, an IndexedDB record (with a Blob and a Date), a cookie, a Cache Storage entry and an OPFS
-  file. Window B reads all five; then the roles swap. Control: two windows on the same partition `persist:spike:a`.
+  kind: a localStorage key, an IndexedDB record (with a Blob and a Date), a persistent cookie (`Max-Age` of at least one
+  day; a session cookie would not survive the restart in H2), a Cache Storage entry and an OPFS file. Window B reads all five; then the roles swap. Control: two windows on the same partition `persist:spike:a`.
 - **Metric:** number of marker kinds visible across partitions, 0 to 5 per direction.
 - **PASS:** 0 leaked kinds in both directions, each window sees its own 5, and the control sees 5 of 5. **FAIL:** any
   leaked kind. A control below 5 of 5 makes the run INVALID (the probe cannot detect sharing).
@@ -61,7 +67,8 @@ transfer).
   no process of the app remains, relaunch, and read the markers back in the same partitions. Variant H2b (reported, no
   threshold): kill the app with SIGKILL 5 s after the writes and record which kinds survived.
 - **Metric:** all marker kinds present in the right partitions, and the SHA-256 of the large values equal.
-- **PASS:** everything present and byte-equal after the graceful quit. **FAIL:** anything lost or altered.
+- **PASS:** everything present and byte-equal after the graceful quit. **FAIL:** anything lost or altered. Session
+  cookies are excluded from this comparison, because they are not kept across restarts by design.
 - **FAIL means:** progress would not survive normal use. Fatal for Electron.
 
 ### H3. Cross-origin isolation with server headers
@@ -74,17 +81,18 @@ transfer).
   report false.
 - **Metric:** `crossOriginIsolated` and the round trip.
 - **PASS:** true and the round trip works, control false. **FAIL:** false on 45.0.0, then retry on 44.9.x; fatal only
-  if both fail.
+  if both fail. A control that reports true makes the run INVALID.
 - **FAIL means:** games needing threads or shared memory (for example Emscripten with pthreads) cannot run; the known
   Electron 41 regression (#50242) would still be present.
 
 ### H4. Cross-origin isolation with injected headers
 
 - **Tests:** isolation also works when the host injects the headers.
-- **Runtime:** Electron 45.0.0.
+- **Runtime:** Electron 45.0.0; if it fails, retry on the latest 44.9.x, as in H3.
 - **Method:** serve the page without COOP and COEP; in the session, `webRequest.onHeadersReceived` adds both headers to
   the document and its worker responses; check as in H3.
-- **Metric and thresholds:** as H3. **PASS:** true and round trip works. **FAIL:** otherwise.
+- **Metric and thresholds:** as H3, including its control (an unexpected control result is INVALID). **PASS:** true and
+  round trip works on 45.0.0 or on the 44.9.x retry. **FAIL:** false on both.
 - **FAIL means:** games whose server lacks the headers cannot be helped by the launcher and stay "Compatibility not
   verified". Not fatal.
 
@@ -96,9 +104,12 @@ transfer).
   description), features and limits, then `requestDevice()` and runs a one-workgroup compute pass whose result is read
   back from a mapped buffer.
 - **Metric:** adapter non-null, device created, readback value correct, adapter info, feature count against Chrome.
-- **PASS:** all of it without any switch. **CONDITIONAL:** works only with `enable-unsafe-webgpu` (an experimental
-  switch conflicts with our no-experimental-features rule, so it needs an owner decision). **FAIL:** adapter null even
-  with the switch while Chrome has one. If Chrome has none either, the comparison is N/A.
+- **PASS:** all of it without any switch. **CONDITIONAL:** works only with `enable-unsafe-webgpu`. **FAIL:** adapter
+  null even with the switch while Chrome has one. If Chrome has none either, the comparison is N/A. The split into PASS,
+  CONDITIONAL and FAIL is Assumed; the brief names only "null even after the switch" as fatal.
+- **CONDITIONAL means:** not fatal, but the risk is recorded in ADR-0002 and the question becomes an owner decision
+  (PRD OQ-7). The switch is experimental and conflicts with our no-experimental-features rule, so production must not
+  ship it without an ADR; until then WebGPU-dependent games stay "Compatibility not verified". Assumed
 - **FAIL means:** heavy WebGPU games cannot run in Electron on this machine. Fatal for Electron if Chrome passes.
 
 ### H6. WebGL2 renderer is hardware
@@ -116,15 +127,24 @@ transfer).
 
 - **Tests:** Electron renders the same scene as smoothly as Chrome.
 - **Runtime:** Electron 45.0.0 against Chrome (H19); the same method is reused for Tauri (H18) and Chrome `--app` (H20).
-- **Method:** the frame-time scene from section 2, 3 alternating runs per runtime, same viewport size, only valid runs
-  (H6).
-- **Metric:** p50 and p95 frame time, count and share of long frames, each the median of 3 runs.
+- **Calibration (before any comparison):** a vsync cap can hide differences, so the scene must put real load on the GPU.
+  In Chrome with the frame-rate limit and vsync disabled (the H7b conditions below), the scene's p50 frame time must be
+  between 60% and 120% of the vsync interval. If it is lower, increase the scene load and recalibrate; the final load is
+  then fixed for every runtime and recorded. The 60% and 120% bounds are Assumed. If Chrome's cap cannot be removed,
+  calibrate with a GPU timer query (`EXT_disjoint_timer_query_webgl2`, availability Unverified); if neither works, H7 is
+  N/A. A run on an uncalibrated or saturated scene (Chrome sitting at the vsync interval with no load pressure) is
+  INVALID, never PASS.
+- **Method:** the frame-time scene from section 2 at the calibrated load, 3 alternating runs per runtime, same viewport
+  size, only valid runs (H6, visibility, calibration).
+- **Metric:** p50 and p95 frame time, count and share of long frames, each the median of the runs.
+- **Noise rule:** the spread of Chrome's p95 is (max minus min) divided by the median over its runs. If it is 15% or
+  more, the comparison is INCONCLUSIVE: rerun both runtimes with 5 runs each before any verdict. If the spread is still
+  15% or more, H7 stays INCONCLUSIVE, is not counted as PASS, and the owner decides (decision rule 5). Assumed
 - **PASS:** Electron p95 is at most Chrome p95 times 1.15. **FAIL:** above that. p50 and long frames are reported, not
   thresholded.
 - **Variant H7b (reported):** the same scene with the frame-rate limit and vsync disabled in both runtimes (Chromium
-  switches such as `--disable-frame-rate-limit` and `--disable-gpu-vsync`; names Unverified, check at run time), because
-  a vsync cap can hide differences. If both runtimes sit at the vsync interval, H7 is marked "saturated" and does not
-  count as evidence of equal performance.
+  switches such as `--disable-frame-rate-limit` and `--disable-gpu-vsync`; names Unverified, check at run time). It
+  doubles as the calibration condition above.
 - **FAIL means:** the runtime costs frames the user would notice. Fatal for Electron.
 
 ### H8. Cold and warm start
@@ -167,14 +187,16 @@ transfer).
 
 ### H12. Deny-by-default permissions
 
-- **Tests:** the permission handlers block sensitive permissions and allow only the three we need.
+- **Tests:** the permission handlers block five sensitive permissions and allow only the three we need.
 - **Runtime:** Electron 45.0.0.
 - **Method:** a session with `setPermissionRequestHandler` and `setPermissionCheckHandler` that allow only `fullscreen`,
-  `pointerLock` and `keyboardLock` and log every denial. The page requests camera, microphone, geolocation and
-  notifications, then fullscreen, pointer lock and keyboard lock (with trusted input, H13); `display-capture` is also
-  requested and reported. Control: with the handlers removed, `Notification.requestPermission()` resolves `granted`
-  (Electron approves by default); camera and microphone are not requested in the control.
-- **PASS:** the four are denied and logged, the three are allowed, the control shows `granted`. **FAIL:** any other result.
+  `pointerLock` and `keyboardLock` and log every denial. The page requests camera, microphone, geolocation,
+  notifications and display capture (`getDisplayMedia`, which arrives as `display-capture` in Electron 45), then
+  fullscreen, pointer lock and keyboard lock; requests that need a gesture use trusted input (H13). Control: with the
+  handlers removed, `Notification.requestPermission()` resolves `granted` (Electron approves by default); camera,
+  microphone and display capture are not requested in the control.
+- **PASS:** the five are denied and logged and the three are allowed. **FAIL:** any of the eight has another outcome. A
+  control that does not show `granted` makes the run INVALID.
 - **FAIL means:** the security invariant "deny by default" cannot be enforced as designed. Not fatal for the runtime
   choice, but blocks the security spec until understood.
 
@@ -184,7 +206,8 @@ transfer).
 - **Runtime:** Electron 45.0.0.
 - **Method:** a test page with a button; the runner clicks it with `webContents.sendInputEvent` (mouse down and up, key
   events); the handler calls `requestFullscreen()`, `requestPointerLock()` and `navigator.keyboard.lock()`. Control:
-  the same calls from a script without a gesture must be rejected. One manual run with a real click is also recorded.
+  the same calls from a script without a gesture must be rejected (otherwise the run is INVALID). One manual run with a
+  real click is also recorded.
 - **PASS:** all three succeed after injected input and are rejected without it. **FAIL:** injected input grants no
   gesture; the automated tests then become manual. A failure of the manual run too is a serious finding for the owner.
 
@@ -287,22 +310,29 @@ transfer).
 1. **Electron fatal criteria:** H1 FAIL (partition leak); H2 FAIL (lost persistence); H3 FAIL on both 45 and 44.9.x
    (`crossOriginIsolated` false with correct headers); H5 FAIL (no WebGPU adapter where Chrome has one, also after
    `enable-unsafe-webgpu`); H7 FAIL (p95 worse than Chrome by more than 15%). A persistent H6 FAIL also counts as a GPU
-   failure (Assumed interpretation).
+   failure (Assumed interpretation). A CONDITIONAL H5 is not fatal.
 2. **If Electron passes every fatal criterion:** ADR-0002 is accepted with Electron 45 (or 44.9.x if H3 forced it).
-   Findings from the non-fatal hypotheses become spec changes, not runtime changes.
+   A CONDITIONAL H5 counts as passing here, but its risk and the `enable-unsafe-webgpu` question are recorded in the ADR
+   and the switch is not shipped without an ADR. H1, H2, H5, H6 and H7 are measured on 45.0.0 only (H3 and H4 also on
+   44.9.x when retried), so before the ADR is accepted H1 to H7, including H4, are re-run on the exact version finally
+   chosen. Findings from the non-fatal hypotheses become spec changes, not runtime changes.
 3. **If Electron fails H1, H2 or H3:** Electron is not accepted. The candidates are then Tauri (rule 6) and Chrome
-   `--app` (H20); the owner decides.
-4. **If Electron fails a GPU or performance criterion (H5, H6, H7) while Chrome passes it:** reconsider the architecture
-   around Chrome `--app` with CDP, using the H20 evidence. ADR-0002 is not accepted as is; the owner decides, because
-   this changes the window, shortcut and packaging design.
-5. **If Chrome fails the same GPU or performance criterion:** it is a limit of the machine or the OS, not a runtime
-   difference, and it is recorded without counting against Electron.
+   `--app` (H20); the owner decides. Assumed
+4. **If Electron's comparison against a valid Chrome baseline (H19) fails a GPU or performance criterion:** H5 (Chrome
+   has an adapter and Electron has none, also after the switch), H6 (Chrome reports hardware and Electron persistently
+   reports software) or H7 (p95 above Chrome times 1.15, after the noise rule is satisfied). Then reconsider the
+   architecture around Chrome `--app` with CDP, using the H20 evidence. ADR-0002 is not accepted as is; the owner
+   decides, because this changes the window, shortcut and packaging design.
+5. **If there is no valid Chrome baseline for the criterion** (Chrome has no WebGPU adapter, or Chrome's own H6 reports
+   software), it is a limit of the machine or the OS, not a runtime difference, and it is recorded without counting
+   against Electron. If H7 is still INCONCLUSIVE after the 5-run rerun, there is no verdict: Electron cannot be accepted
+   on H7 alone and the owner decides.
 6. **Tauri wins only by passing a criterion that Electron fails**, and only if it also passes H17 and the H18 counterparts
    of the other fatal criteria. Equal results are not a reason to switch: the default stays Electron (Assumed: planned
    stack, one engine on every OS, a pinned version, CDP available).
-7. **Never counted as PASS:** INVALID runs, N/A items and anything that was not run. Windows is covered only by
-   non-GPU checks on a CI runner if they are run (H1, H2, H3, H10, H14), recorded as "Windows (CI runner, no GPU)" and
-   never as game compatibility.
+7. **Never counted as PASS:** INVALID runs, INCONCLUSIVE results, N/A items and anything that was not run. Windows is
+   covered only by non-GPU checks on a CI runner if they are run (H1, H2, H3, H10, H14), recorded as "Windows (CI
+   runner, no GPU)" and never as game compatibility.
 
 ## 5. Not covered
 
