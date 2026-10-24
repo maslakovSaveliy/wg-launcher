@@ -1,8 +1,9 @@
 # Individual Contributor License Agreement
 
-> **DRAFT. Not legal advice.** This agreement must be reviewed by a lawyer, and the placeholders in square brackets
-> completed, before the project accepts any external contribution. Until the signing mechanism below exists, outside
-> code contributions are not accepted.
+> **DRAFT. Not legal advice.** This agreement must be reviewed by a lawyer before the project accepts any external
+> contribution. The party and the governing law below were filled in on 2026-10-25 from the project owner's decision;
+> the review has not happened yet. The agreement is not in effect, and outside code contributions are not accepted,
+> until the review is done and the signing mechanism below exists.
 >
 > **Signing mechanism:** the project will use the CLA Assistant GitHub app. Setting it up is an action for the project
 > owner and has not been done yet.
@@ -13,12 +14,12 @@
 > project name and submission method filled in; outbound license set to the template's "Option Five" (any license,
 > including commercial) together with a guarantee that the Contribution also stays available under the project's
 > public license; the optional "Affiliates" wording and the media-license list removed; instructions for work you
-> do not own written out; the jurisdiction and party details left as placeholders.
+> do not own written out; the party and the governing law filled in for this project.
 
 Thank you for your interest in contributing to wg-launcher ("We" or "Us").
 
-"We" and "Us" mean the owner of the wg-launcher project, currently the GitHub user `maslakovSaveliy`
-[legal name and address of the project owner: to be completed by the owner], together with its successors and assigns.
+"We" and "Us" mean Savelii Maslakov, an individual and the owner of the wg-launcher project (GitHub user
+`maslakovSaveliy`), together with their successors and assigns.
 
 This contributor agreement ("Agreement") documents the rights granted by contributors to Us. To make this document
 effective, please sign it by following the instructions given by the CLA Assistant when you open your first pull
@@ -131,8 +132,8 @@ BASED.
 
 ## 6. Miscellaneous
 
-6.1 This Agreement will be governed by and construed in accordance with the laws of
-[jurisdiction: to be chosen by the owner on legal advice] excluding its conflicts of law provisions. Under certain
+6.1 This Agreement will be governed by and construed in accordance with the laws of the
+Russian Federation excluding its conflicts of law provisions. Under certain
 circumstances, the governing law in this section might be superseded by the United Nations Convention on Contracts for
 the International Sale of Goods ("UN Convention") and the parties intend to avoid the application of the UN Convention
 to this Agreement and, thus, exclude the application of the UN Convention in its entirety to this Agreement.

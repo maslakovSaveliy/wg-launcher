@@ -13,8 +13,8 @@ In short: you may use, study, modify and redistribute the software. If you distr
 people interact with a modified version over a network, you must offer them the corresponding source code under the same
 license. Read the license text for the exact terms.
 
-The exceptions are third-party material that keeps its own license (see "Third-party material" below) and any file whose
-header names a different license.
+The only exception is third-party material that keeps its own license (see "Third-party material" below), for example a
+third-party file that keeps its upstream license header.
 
 ## Commercial license (dual licensing)
 
@@ -29,17 +29,20 @@ Forks that follow the AGPL need no agreement, but must follow the [trademark pol
 
 To keep the commercial option above possible, outside contributors sign the Contributor License Agreement in
 [CLA.md](CLA.md). Contributors keep the copyright in their work; the CLA gives the project the right to license
-contributions under the AGPL and under other licenses, including commercial ones. The signing mechanism (the CLA
-Assistant GitHub app) is not set up yet, and outside code contributions are not accepted until it is.
+contributions under the AGPL and under other licenses, including commercial ones. The agreement is made with the project
+owner as an individual (Savelii Maslakov) and is governed by the law of the Russian Federation. It is not in effect
+yet: outside code contributions are not accepted until a lawyer has reviewed it and the signing mechanism (the CLA
+Assistant GitHub app) is set up.
 
 ## Future paid features
 
 There are no paid or subscription features today. If any are ever added:
 
-- They will live only in one clearly named top-level directory, under a separate source-available license whose text
-  is stored in that directory.
+- They will live only in one clearly named directory, under a separate source-available license whose text is stored
+  in that directory.
 - Every file outside that directory stays `AGPL-3.0-or-later`.
-- The plan will be announced publicly before the directory is created.
+- The change will be announced; the details (the directory, the license text and the timing of the announcement) will
+  be decided in a future ADR.
 
 No such directory exists now.
 
