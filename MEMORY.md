@@ -27,6 +27,12 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   separate `test:e2e` script added with the test game. License gate: production dependencies strict against the
   AGENTS.md allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
 - Execution style: subagent-driven development; test-first where code exists.
+- Spike hypotheses are frozen: `spikes/runtime-compat/HYPOTHESES.md` (H1 to H21, thresholds, decision rules) was written
+  on 2026-10-24 before any spike ran. After the first run it changes only through its dated "Amendments" section.
+  Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5, H7 (p95 > Chrome x 1.15); Tauri must beat a criterion
+  Electron fails; Electron failing GPU or performance while Chrome passes means reconsidering Chrome `--app` + CDP.
+- PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; acceptance criteria AC-1 to AC-23
+  each name a test type.
 - Public GitHub repo: <https://github.com/maslakovSaveliy/wg-launcher>. Work happens on branches; merge to `main` only
   on the owner's approval.
 
@@ -231,3 +237,5 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Snapshot record encoding: deterministic CBOR or tagged JSONL (decided in the snapshot spec).
 - Branch protection on `main` (suggested only, owner decision).
 - Which packaging tool wins after the spike packages once (electron-builder is the current lean)?
+- What does "remove from library" do to a game's live session storage (PRD OQ-2)? Proposal: keep it as orphaned data.
+- Entries must be HTTPS, but the fixture runs on `http://localhost`: allow it in development and test builds only (PRD OQ-3)?

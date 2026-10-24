@@ -32,7 +32,9 @@ Exists now:
 | `AGENTS.md`, `CLAUDE.md`, `MEMORY.md`, `.cursor/rules/` | Agent rules and shared memory |
 | `.github/` | Pull request template, issue forms, CI workflow (`workflows/ci.yml`) |
 | `docs/plans/` | Implementation plans |
-| `docs/product/sources/` | Original concept document (Russian, kept verbatim) |
+| `docs/product/` | PRD (`prd.md`); `sources/` holds the original concept document (Russian, kept verbatim) |
+| `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
+| `spikes/runtime-compat/` | Throwaway runtime experiment; for now only `HYPOTHESES.md`, written before anything runs |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
@@ -41,7 +43,7 @@ Exists now:
 Reserved, **not created yet**. Do not create a directory until the work that needs it exists:
 
 - `apps/desktop` (Electron client), `packages/shared`, `packages/snapshot`, `packages/exporters`.
-- `fixtures/test-games/` (controlled test game), `spikes/` (throwaway experiments with their own lockfiles).
+- `fixtures/test-games/` (controlled test game); spike code with its own lockfiles under `spikes/`.
 - `crates/` (Rust, only if and when the local-packages stage needs it).
 
 ## Commands
