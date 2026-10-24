@@ -11,13 +11,20 @@ const HOOKS = readFileSync(join(ROOT, "probe", "demo-hooks.js"), "utf8");
 const UNREACHABLE = /ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|CONNECTION_(REFUSED|RESET|TIMED_OUT|CLOSED)|TIMED_OUT|NETWORK_CHANGED|ADDRESS_UNREACHABLE|PROXY)/;
 
 function sampleVisibility(log, whole) {
-  const start = log.findIndex((e) => e.event === "sample-start");
+  // Judge from "sample-start"; without sampling, from "focus-ready" (or "focus-timeout"); never from the
+  // "init" entry, which is written before a new window has focus.
+  let start = log.findIndex((e) => e.event === "sample-start");
+  let from = "sample-start";
+  if (start < 0) {
+    start = log.findLastIndex((e) => e.event === "focus-ready" || e.event === "focus-timeout");
+    from = start >= 0 ? log[start].event : "whole log";
+  }
   const since = start >= 0 ? log.slice(start) : log;
   return {
     everHidden: since.some((e) => e.visibilityState !== "visible"),
     everUnfocused: since.some((e) => !e.hasFocus),
+    judgedFrom: from,
     wholeLoad: { everHidden: whole.everHidden, everUnfocused: whole.everUnfocused },
-    fromSampleStart: start >= 0,
   };
 }
 
@@ -111,6 +118,10 @@ export async function runDemoChrome(run, demo, { settleMs, warmupMs, durationMs,
     }
     const loadMs = Date.now() - started;
     await sleep(settleMs);
+    if (loadOk) {
+      await page.bringToFront().catch(() => {});
+      await page.evaluate("window.__wgDemo ? window.__wgDemo.waitFocus(5000) : null").catch(() => null);
+    }
     const snapshot = loadOk ? await page.evaluate("window.__wgDemo ? window.__wgDemo.snapshot() : null").catch(() => null) : null;
     let sample = null;
     if (loadOk && durationMs > 0) sample = await page.evaluate(`window.__wgDemo.sample(${durationMs}, ${warmupMs})`);

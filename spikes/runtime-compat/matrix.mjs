@@ -29,7 +29,6 @@ const lastOf = (runtimeName) => aggregates.filter((a) => a.data.runtime.name ===
 const date = (a) => (a ? a.data.createdAt.slice(0, 10) : "not tested");
 const cell = (text) => String(text ?? "").replaceAll("|", "\\|").replaceAll("\n", " ");
 const st = (found) => (found ? found.h.status : "not run");
-const ms = (n) => (typeof n === "number" ? `${n.toFixed(1)} ms` : "n/a");
 
 const anyAggregate = aggregates.at(-1);
 const machine = anyAggregate?.data.machine;
@@ -47,6 +46,8 @@ out("> Do not edit by hand; running the command twice gives identical output. On
 out("> Verified on the date and for the OS shown, with the evidence file named in its last column (a file under");
 out("> `spikes/runtime-compat/results/`). Nothing is extrapolated to other machines, operating systems or games: see");
 out("> [methodology.md](methodology.md). \"Verified\" never applies to a platform or game that has no row with a run.");
+out("> The timing measurements (frame time against Chrome, Chrome-side start time, memory, demo frame samples) are deferred to Phase 1");
+out("> by the owner's decision of 2026-10-25 and show as deferred, not as results.");
 out();
 out("## Runs on the dev machine");
 out();
@@ -77,25 +78,23 @@ const tally = (id) => {
   return parts.length ? parts.join(", ") : "not run";
 };
 if (app) {
+  const heights = appRuns.map((a) => a.data.hypotheses["H20-3"]?.metrics?.uiHeightPx).filter((x) => typeof x === "number");
+  const uiHeights = heights.length ? (Math.min(...heights) === Math.max(...heights) ? `${heights[0]}` : `${Math.min(...heights)} to ${Math.max(...heights)}`) : "n/a";
   const survived = appRuns.filter((a) => a.data.checks.progressLab?.persistedAcrossRestart === true).length;
   out(
-    `| progress-lab (controlled test fixture, not a real game) | \`fixtures/test-games/progress-lab\`, served from localhost | ${date(app)} | ${cell(osText)} | Google Chrome ${app.data.runtime.version}, launched directly with \`--app=URL\` and one \`--user-data-dir\` per game | window opens without tab strip or address bar (H20-3 ${tally("H20-3")}) | \`#play-step\` clicked through CDP | progress hash survived a graceful quit and relaunch in ${survived} of ${appRuns.length} runs (H20-2 ${tally("H20-2")}) | not tested (CDP IndexedDB can read but not write) | ${appRuns.length} runs. Two profiles isolated (H20-1 ${tally("H20-1")}); CDP reads (H20-4 ${tally("H20-4")}); the closed window's renderer exits ${cell(appRuns.map((a) => a.data.checks.progressLab && a.data.hypotheses["H20-5"]?.metrics?.rendererExitAfterCloseMs).filter((x) => x != null).map((x) => `${(x / 1000).toFixed(1)}`).join(", "))} s after the close (H20-5 ${tally("H20-5")}, threshold 5 s is Assumed); Chrome keeps running after its last window closes (a launcher must quit it itself) | ${cell(appRuns.map((a) => a.file).join(", "))} |`,
+    `| progress-lab (controlled test fixture, not a real game) | \`fixtures/test-games/progress-lab\`, served from localhost | ${date(app)} | ${cell(osText)} | Google Chrome ${app.data.runtime.version}, launched directly with \`--app=URL\` and one \`--user-data-dir\` per game | window opens with a title bar only (H20-3 ${tally("H20-3")}): browser UI height ${uiHeights} px in ${appRuns.filter((a) => a.data.hypotheses["H20-3"]?.status === "PASS").length} of ${appRuns.length} runs (a normal window: 87 px); one screenshot read once by the agent (RESULTS.md, H20) | \`#play-step\` clicked through CDP | progress hash survived a graceful quit and relaunch in ${survived} of ${appRuns.length} runs (H20-2 ${tally("H20-2")}) | not tested (CDP IndexedDB can read but not write) | ${appRuns.length} runs. Two profiles isolated (H20-1 ${tally("H20-1")}); CDP reads (H20-4 ${tally("H20-4")}); the closed window's renderer exits ${cell(appRuns.map((a) => a.data.checks.progressLab && a.data.hypotheses["H20-5"]?.metrics?.rendererExitAfterCloseMs).filter((x) => x != null).map((x) => `${(x / 1000).toFixed(1)}`).join(", "))} s after the close (H20-5 ${tally("H20-5")}, threshold 5 s is Assumed); Chrome keeps running after its last window closes (a launcher must quit it itself) | ${cell(appRuns.map((a) => a.file).join(", "))} |`,
   );
 } else out("| progress-lab | n/a | not tested | n/a | Chrome `--app` | not tested | not tested | not tested | not tested | no result file | none |");
 
 const demos = lastOf("demos");
-const timing = lastOf("timing");
-const timingRows = new Map((timing?.data.checks?.demos?.rows ?? []).map((r) => [`${r.id}|${r.runtime.split("-")[0]}`, r]));
 if (demos) {
   for (const r of demos.data.checks.rows) {
     const family = r.runtime.split("-")[0];
     const runtimeText = family === "electron" ? `Electron ${r.runtime.replace("electron-", "")}` : `Google Chrome ${r.runtime.replace("chrome-", "")}`;
-    const sampled = timingRows.get(`${r.id}|${family}`);
-    const frames = sampled?.stats ? `; 20 s rAF sample p50 ${ms(sampled.stats.p50Ms)}, p95 ${ms(sampled.stats.p95Ms)}, ${sampled.stats.longFrames} long frames (indicative only, uncalibrated page${sampled.validForTiming ? "" : ", run not valid"})` : "";
     const favicon = r.faviconErrors ? `; ${r.faviconErrors} of the console errors is the /favicon.ico 404 that only Chrome requests` : "";
     const launch = r.unreachable ? "not tested (unreachable)" : r.loadOk ? `loads, ${r.canvases} canvas(es)` : `did not load: ${r.loadError}`;
     out(
-      `| ${cell(`${r.id} (${r.id.startsWith("webgpu") || r.url.includes("webgpu") ? "WebGPU" : "WebGL"} demo)`)} | \`${cell(r.url)}\` | ${date(demos)} | ${cell(osText)} | ${cell(runtimeText)} | ${cell(launch)} | not tested | n/a (no game save) | n/a | WebGPU used: ${r.webgpuUsed}; console errors: ${r.consoleErrors}${cell(favicon)}${cell(frames)} | ${cell(demos.file)} |`,
+      `| ${cell(`${r.id} (${r.id.startsWith("webgpu") || r.url.includes("webgpu") ? "WebGPU" : "WebGL"} demo)`)} | \`${cell(r.url)}\` | ${date(demos)} | ${cell(osText)} | ${cell(runtimeText)} | ${cell(launch)} | not tested | n/a (no game save) | n/a | WebGPU used: ${r.webgpuUsed}; console errors: ${r.consoleErrors}${cell(favicon)}; frame sample deferred to Phase 1 | ${cell(demos.file)} |`,
     );
   }
 } else out("| public demos (webgpu-samples, three.js examples) | n/a | not tested | n/a | Electron, Chrome | not tested | not tested | not tested | not tested | no result file | none |");
@@ -118,21 +117,15 @@ out("| --- | --- | --- | --- |");
 const electronGpuAggregate = aggregates.filter((a) => a.data.runtime.name === "electron" && a.data.checks?.gpu?.runs).at(-1);
 const electronGpu = electronGpuAggregate?.data.checks.gpu.runs.at(-1)?.output?.result?.probe?.result?.data?.checks;
 const gl = (c) => c?.webgl2?.renderer ?? "not recorded";
-const chromeProbe = chrome?.data.checks.fullProbeAttempts?.at(-1);
 out(`| WebGL2 renderer (H6) | ${cell(gl(electronGpu))} | ${chrome ? cell(chrome.data.hypotheses.H6?.reason) : "not tested"} | ${chromium ? `Playwright bundled Chromium ${chromium.data.runtime.version}: ${cell(chromium.data.hypotheses.H6?.status)}` : "bundled Chromium not run"} |`);
 out(`| WebGPU adapter and features (H5) | ${electronGpu?.webgpu?.adapter ? `${electronGpu.webgpu.adapter.vendor}/${electronGpu.webgpu.adapter.architecture}, ${electronGpu.webgpu.featureCount} features` : "not recorded"} | ${chrome ? cell(chrome.data.hypotheses.H5?.reason) : "not tested"} | ${chrome?.data.hypotheses.H5?.metrics?.featuresOnlyInElectron?.length ? `only in Electron: ${cell(chrome.data.hypotheses.H5.metrics.featuresOnlyInElectron.join(", "))}` : "no feature differences recorded"} |`);
 out(`| Cross-origin isolation with server headers (H3) | ${cell(latest("electron", "H3")?.h.reason ?? "not recorded")} | ${chrome ? cell(chrome.data.hypotheses.H3?.reason) : "not tested"} | |`);
-void chromeProbe;
-
-const h7 = timing?.data.hypotheses?.H7;
-const m = h7?.metrics;
-out(`| Frame time, capped scene (H7) | ${m?.electron ? `p50 ${ms(m.electron.medianP50Ms)}, p95 ${ms(m.electron.medianP95Ms)}, ${m.electron.medianLongFrames} long frames (${m.electron.validRuns} valid runs)` : "not run"} | ${m?.chrome ? `p50 ${ms(m.chrome.medianP50Ms)}, p95 ${ms(m.chrome.medianP95Ms)}, ${m.chrome.medianLongFrames} long frames (${m.chrome.validRuns} valid runs)` : "not run"} | ${h7 ? cell(`H7 ${h7.status}: ${h7.reason}; load ${m?.load}, vsync ${m?.vsyncHz?.toFixed?.(2)} Hz, 1280x720 CSS px`) : "not run"} |`);
-const h20 = timing?.data.hypotheses?.["H20-6"];
-out(`| Frame time, Chrome \`--app\` (H20-6) | n/a | ${h20?.metrics?.chromeApp ? `p50 ${ms(h20.metrics.chromeApp.medianP50Ms)}, p95 ${ms(h20.metrics.chromeApp.medianP95Ms)}` : "not run"} | ${h20 ? cell(`H20-6 ${h20.status}: ${h20.reason}`) : "not run"} |`);
-const h8 = timing?.data.hypotheses?.H8;
-out(`| Spawn to first frame, cold and warm (H8) | ${h8 ? `cold ${h8.metrics.medians.electronCold} ms, warm ${h8.metrics.medians.electronWarm} ms` : "not run"} | ${h8 ? `cold ${h8.metrics.medians.chromeCold} ms, warm ${h8.metrics.medians.chromeWarm} ms` : "not run"} | medians of 3; cold = empty profile, OS file cache not flushed |`);
-const h9 = timing?.data.hypotheses?.H9;
-out(`| Memory after 60 s of the scene (H9) | ${h9?.metrics ? `${h9.metrics.electronRssMiB?.toFixed(0)} MiB resident, ${h9.metrics.electronFootprintMiB?.toFixed(0)} MiB footprint` : "not run"} | ${h9?.metrics ? `${h9.metrics.chromeRssMiB?.toFixed(0)} MiB resident, ${h9.metrics.chromeFootprintMiB?.toFixed(0)} MiB footprint` : "not run"} | process tree summed from outside with \`ps\` and \`footprint\`; definitions differ between runtimes, no percentage is claimed |`);
+const DEFERRED = "deferred to Phase 1 (owner decision 2026-10-25)";
+const electronH8 = latest("electron", "H8");
+out(`| Frame time, capped scene (H7) | ${DEFERRED} | ${DEFERRED} | the Task 5 Electron numbers (see RESULTS.md) have no verdict without a calibrated Chrome baseline; deferred is not N/A and not a pass |`);
+out(`| Frame time, Chrome \`--app\` (H20-6) | n/a | ${DEFERRED} | |`);
+out(`| Spawn to first frame, cold and warm (H8) | ${electronH8?.h.metrics ? `cold ${electronH8.h.metrics.coldMedianMs} ms, warm ${electronH8.h.metrics.warmMedianMs} ms` : "not recorded"} | ${DEFERRED} | Electron: medians of 3 from ${cell(electronH8?.file ?? "no file")}; cold = empty profile, OS file cache not flushed |`);
+out(`| Memory after 60 s of the scene (H9) | ${DEFERRED} (the Task 5 attempts were INVALID) | ${DEFERRED} | no number is reported |`);
 
 out();
 out("## Not tested");
@@ -142,10 +135,10 @@ out();
 out("| Platform or item | Status | Reason |");
 out("| --- | --- | --- |");
 out("| Windows on real hardware (any GPU) | not tested | no Windows machine is available |");
-out("| Windows, GitHub-hosted runner, no GPU | not tested | the optional non-GPU CI job was not added: the spike runner's process accounting is macOS-only, and a `workflow_dispatch` workflow can only be started once its file is on the default branch, which this task may not change. Even if run, it would prove install and non-GPU storage checks only, never game compatibility |");
+out("| Windows, GitHub-hosted runner, no GPU | not tested | the optional non-GPU CI job was not added: the spike runner's process accounting is macOS-only, and a `workflow_dispatch` workflow can only be started once its file is on the default branch, and merging to `main` was out of scope. Even if run, it would prove install and non-GPU storage checks only, never game compatibility |");
 out("| Linux | not tested | no Linux machine is available |");
 out("| Other Macs, other macOS versions, other displays | not tested | one machine only |");
-out("| Tauri 2 with WKWebView (H17, H18) | not tested | not run, decision-irrelevant (controller ruling R27): per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView lacks |");
+out("| Tauri 2 with WKWebView (H17, H18) | not tested | not run, decision-irrelevant (owner-approved scope change): per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7 (deferred to Phase 1), which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack (Assumed, runtime-and-storage.md sections 3 and 9) |");
 out("| Gamepad input | not tested | no hardware |");
 out("| Real Emscripten or Unity builds, heavy ports of commercial games | not tested | none is available; `progress-lab` only imitates the IDBFS layout. Their completeness is unproven |");
 process.stdout.write(`${lines.join("\n")}\n`);

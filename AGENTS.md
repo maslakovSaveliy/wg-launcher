@@ -35,7 +35,7 @@ Exists now:
 | `docs/plans/` | Implementation plans |
 | `docs/product/` | PRD (`prd.md`); `sources/` holds the original concept document (Russian, kept verbatim) |
 | `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
-| `spikes/runtime-compat/` | Throwaway runtime experiment: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy, demo and timing runners, committed `results/` and `RESULTS.md`; see its `README.md` |
+| `spikes/runtime-compat/` | Throwaway runtime experiment: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy and demo runners (and a timing runner that was never run: deferred to Phase 1), committed `results/` and `RESULTS.md`; see its `README.md` |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |

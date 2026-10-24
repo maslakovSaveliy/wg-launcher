@@ -37,7 +37,6 @@ const { values: opts } = parseArgs({
     "fixture-port": { type: "string", default: "4417" },
     "spike-port": { type: "string", default: "4418" },
     "keep-temp": { type: "boolean", default: false },
-    "h20-3-observation": { type: "string" },
   },
   strict: true,
 });

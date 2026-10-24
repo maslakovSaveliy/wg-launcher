@@ -1342,6 +1342,12 @@ async function modeDemo() {
   }
   const loadMs = Date.now() - started;
   await sleep(settleMs);
+  if (loadOk) {
+    // A freshly navigated page may not have focus yet: bring the window to the front and wait for it.
+    bringToFront(win);
+    wc.focus();
+    await wc.executeJavaScript("window.__wgDemo ? window.__wgDemo.waitFocus(5000) : null").catch(() => null);
+  }
   const snapshot = loadOk ? await wc.executeJavaScript("window.__wgDemo ? window.__wgDemo.snapshot() : null").catch(() => null) : null;
   let sampleResult = null;
   if (loadOk && durationMs > 0) {

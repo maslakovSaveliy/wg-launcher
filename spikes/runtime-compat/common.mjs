@@ -82,6 +82,57 @@ export function onBattery() {
   return /Battery Power/.test(sh("pmset", ["-g", "batt"]));
 }
 
+/** Listener on a loopback TCP port: [{ pid, command }] (empty when the port is free). */
+export function portListeners(port) {
+  const out = sh("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpc"]);
+  if (out.startsWith("ERROR") || !out) return [];
+  const rows = [];
+  let current = null;
+  for (const line of out.split("\n")) {
+    if (line.startsWith("p")) {
+      current = { pid: Number(line.slice(1)), command: "" };
+      rows.push(current);
+    } else if (line.startsWith("c") && current) current.command = line.slice(1);
+  }
+  return rows;
+}
+
+/** `pmset -g therm`: CPU speed limit in percent (100 = not limited) and whether a warning level was recorded. */
+export function thermalStatus() {
+  const out = sh("pmset", ["-g", "therm"]);
+  const limit = /CPU_Speed_Limit\s*=\s*(\d+)/.exec(out)?.[1];
+  return {
+    cpuSpeedLimit: limit === undefined ? null : Number(limit),
+    warningRecorded: !/No thermal warning level has been recorded/.test(out) && /warning/i.test(out),
+    raw: out.split("\n").slice(0, 4).join(" | ").slice(0, 200),
+  };
+}
+
+/** Sum and count of CPU use of the busiest processes (ps %cpu), for the "who else is working" check. */
+export function topCpu(limit = 8) {
+  const rows = sh("ps", ["-Ao", "pcpu=,comm=", "-r"])
+    .split("\n")
+    .slice(0, limit)
+    .map((l) => /^\s*([\d.]+)\s+(.*)$/.exec(l))
+    .filter(Boolean)
+    .map(([, cpu, comm]) => ({ cpu: Number(cpu), name: comm.split("/").pop() }));
+  return { rows, sumPercent: rows.reduce((a, r) => a + r.cpu, 0) };
+}
+
+/** Synchronous last-resort cleanup: SIGKILL every process whose command line mentions `dir`. */
+export function killProcessesWithinSync(dir) {
+  let killed = 0;
+  for (const p of processList()) {
+    if (p.command.includes(dir) && p.pid !== process.pid) {
+      try {
+        process.kill(p.pid, "SIGKILL");
+        killed++;
+      } catch {}
+    }
+  }
+  return killed;
+}
+
 /** SIGTERM (then SIGKILL) every process whose command line mentions `dir`: leftovers of this run only. */
 export async function killProcessesWithin(dir) {
   for (const signal of ["SIGTERM", "SIGKILL"]) {
@@ -224,7 +275,7 @@ export function stamp() {
 }
 
 /** Writes an aggregate (kind "run") into results/ after sanitizing and validates it with the schema. */
-export function writeAggregate(run, { runtime, label, machine, startedAt, groups, hypotheses, checks, probeFiles, leftoverProcesses, extra = {} }) {
+export function writeAggregate(run, { runtime, label, machine, startedAt, groups, hypotheses, checks, probeFiles, leftoverProcesses, extra = {}, fixedFile = null }) {
   const aggregate = {
     schemaVersion: 1,
     kind: "run",
@@ -243,11 +294,17 @@ export function writeAggregate(run, { runtime, label, machine, startedAt, groups
   };
   mkdirSync(run.resultsDir, { recursive: true });
   const safeVersion = String(runtime.version).replace(/[^A-Za-z0-9._-]/g, "_");
-  const file = join(run.resultsDir, `${runtime.name}-${safeVersion}-${stamp()}.json`);
+  const file = fixedFile ?? join(run.resultsDir, `${runtime.name}-${safeVersion}-${stamp()}.json`);
   const text = run.sanitize(JSON.stringify(aggregate, null, 2));
   writeFileSync(file, `${text}\n`);
   const error = makeValidator()(JSON.parse(text));
   return { file, rel: relative(ROOT, file), schemaError: error };
+}
+
+/** The path an aggregate of `runtime` would get now; a long run reuses one path for its checkpoints. */
+export function aggregatePath(run, runtime) {
+  const safeVersion = String(runtime.version).replace(/[^A-Za-z0-9._-]/g, "_");
+  return join(run.resultsDir, `${runtime.name}-${safeVersion}-${stamp()}.json`);
 }
 
 export function validateFiles(files) {

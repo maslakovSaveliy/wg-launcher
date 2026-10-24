@@ -4,6 +4,11 @@
 > Nothing below changes a threshold; every interpretation or deviation from a method is listed in its own section. The first
 > half of this file covers Electron (Task 5). Task 6 adds the Chrome baseline (H19), Chrome `--app` (H20), the Safari WebKit
 > proxy and the public demos (H21) in the section "Task 6" below; Tauri (H17, H18) was not built and is N/A.
+>
+> **Owner decision (2026-10-25): the hands-off timing runs are deferred to Phase 1.** H7 (frame time against Chrome), the Chrome
+> side of H8, the H9 memory rerun, H20-6 (frame time of Chrome `--app`) and the frame-time samples of the public demos are not
+> measured in Phase 0. They will be measured on the real launcher against Chrome in Phase 1. "Deferred" is not a result: it is
+> neither N/A nor INVALID, nothing below counts it as a pass, and the Electron numbers already recorded stay as reported.
 
 ## Run
 
@@ -32,10 +37,10 @@
 | H4 | PASS | `…150310.061Z` (injected), `…150310.887Z` (control) | Same with COOP/COEP added by `webRequest.onHeadersReceived` to the document and worker responses; control false |
 | H5 | PASS (Electron side) | `…150312.029Z` (`checks.webgpu`) | Adapter `apple` / `metal-3`, 24 features, device created, compute readback correct, no switch. Feature count vs Chrome: Task 6 |
 | H6 | PASS | `…150312.029Z`, every frame-time file | `ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)` in every run |
-| H7 | not decided | `…150833.269Z`, `…150926.645Z`, `…151019.994Z` | Electron only: p50 16.7 ms, p95 18.6 / 18.7 / 18.7 ms, 0 long frames. Verdict needs the calibrated Chrome baseline (Task 6) |
-| H7b | reported | `…151113.336Z`, `…151221.931Z`, `…151329.509Z` | Uncapped: p50 13.9 / 14.0 / 20.5 ms, p95 14.2 / 15.3 / 26.5 ms |
-| H8 | reported | `…150631.684Z` to `…150636.190Z` | Spawn to first frame: cold 420, 362, 341 ms (median 362); warm 370, 369, 320 ms (median 369); all focused and visible |
-| H9 | INVALID | aggregate `checks.memory`, `…151642.234Z`, `…152143.695Z` (reruns) | In all three attempts the window was hidden and lost focus 4 to 6 s into the 60 s because the machine was in use |
+| H7 | not decided | `…150833.269Z`, `…150926.645Z`, `…151019.994Z` | Electron only: p50 16.7 ms, p95 18.6 / 18.7 / 18.7 ms, 0 long frames. H7 is deferred to Phase 1 (owner decision 2026-10-25): it needs a calibrated Chrome baseline and alternating runs |
+| H7b | reported (Electron only) | `…151113.336Z`, `…151221.931Z`, `…151329.509Z` | Uncapped: p50 13.9 / 14.0 / 20.5 ms, p95 14.2 / 15.3 / 26.5 ms. The Chrome counterpart is deferred to Phase 1 (optional, not planned) |
+| H8 | reported | `…150631.684Z` to `…150636.190Z` | Spawn to first frame: cold 420, 362, 341 ms (median 362); warm 370, 369, 320 ms (median 369); all focused and visible. The Chrome side is deferred to Phase 1 (owner decision 2026-10-25) |
+| H9 | INVALID (Task 5); rerun deferred | aggregate `checks.memory`, `…151642.234Z`, `…152143.695Z` (reruns) | In all three attempts the window was hidden and lost focus 4 to 6 s into the 60 s because the machine was in use. The valid rerun and the Chrome value are deferred to Phase 1 (owner decision 2026-10-25) |
 | H10 | PASS | aggregate `checks.sqlite` | `node:sqlite` (SQLite 3.53.4) and zstd work in the main process and a `utilityProcess`; no warning emitted |
 | H11 | PASS | aggregate `checks.playwright` | `_electron.launch`, `firstWindow`, click, `evaluate` in main, close. Playwright turns iframe storage partitioning off |
 | H12 | FAIL in the full run, PASS in the rerun: environment-dependent | aggregate `checks.permissions`; H12 rerun `checks.permissions` | Full run: the microphone request never reached the handler (8 s timeout) while macOS microphone access was undecided. Rerun after the owner allowed the macOS prompt (`getMediaAccessStatus` `granted`): it reached the handler and was denied; all eight as specified. Depends on macOS TCC state; rerun with the packaged app before relying on it |
@@ -43,17 +48,17 @@
 | H14 | PASS | aggregate `checks.h14`, `hypotheses.H14` | Variants a, b, c, d: Hd equals Hs, negative control differs, no game code ran in any quiescent window |
 | H15 | PASS | aggregate `checks.package` | One main process in every case; id `x` via `open-url` (not running, running) and `second-instance` (second executable) |
 | H16 | FAIL | aggregate `checks.h16` | The closed window's renderer lived 27.8 s, until the game's service worker stopped; windows and quit cleanup fine |
-| H17 | N/A | none | Tauri was not built. Not run, decision-irrelevant: per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView lacks (Verified notes) |
+| H17 | N/A | none | Tauri was not built. Not run, decision-irrelevant: per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7 (deferred to Phase 1), which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack (Assumed, `docs/research/runtime-and-storage.md` sections 3 and 9) |
 | H18 | N/A | none | Same reason. Safari was run as a WebKit proxy instead (capabilities only, not WKWebView, no frame time); see "Task 6" |
 | H19 | valid baseline (reported) | `chrome-155.0.8059.85-…` (`…171517.695Z`) | Chrome 155.0.8059.85 (major 155, not 156: version mismatch). Hardware WebGL2, WebGPU adapter `apple`/`metal-3` with 23 features, `crossOriginIsolated` true on `/coi/`, control false |
-| H20-1 to H20-5 | PASS, PASS, PASS (window), PASS (CDP), mixed (cleanup) | five `chrome-app-155.0.8059.85-…` aggregates | Isolation and persistence PASS in 5 of 5 runs; no tab strip or address bar; CDP reads work; the closed window's renderer exited 2.8 to 5.2 s after the close, so H20-5 is PASS in 3 and FAIL in 2 of 5 runs against the Assumed 5 s |
-| H20-6 | pending | none | Frame time of Chrome `--app`: hands-off phase |
-| H21 | reported (load part) | `demos-electron-45.0.0_chrome-155.0.8059.85-…` | Six public demos load in both runtimes, WebGPU used wherever the page uses it, no failure that is only in Electron; frame-time samples pending |
-| H7, H8, H9 | pending | none | The hands-off measurements for Chrome, Chrome `--app` and Electron are not run yet |
+| H20-1 to H20-5 | PASS, PASS, PASS (window), PASS (CDP), mixed (cleanup) | five `chrome-app-155.0.8059.85-…` aggregates | Isolation and persistence PASS in 5 of 5 runs; the browser UI was 32 px high in 5 of 5 runs (a normal window: 87 px) and one screenshot read once by the agent showed a title bar only; CDP reads work; the closed window's renderer exited 3.1 to 5.9 s after the close, so H20-5 is PASS in 2 and FAIL in 3 of 5 runs against the Assumed 5 s |
+| H20-6 | deferred to Phase 1 (owner decision 2026-10-25) | none | Frame time of Chrome `--app` is not measured in Phase 0 |
+| H21 | reported (load part) | `demos-electron-45.0.0_chrome-155.0.8059.85-…` | Six public demos load in both runtimes, WebGPU used wherever the page uses it, no failure that is only in Electron; frame-time samples deferred to Phase 1 (owner decision 2026-10-25) |
+| H7, H8 (Chrome side), H9 rerun, demo frame samples | deferred to Phase 1 (owner decision 2026-10-25) | none | The hands-off measurements (`run-timing.mjs`, built and wiring-checked but never run for a result) will be taken on the real launcher against Chrome |
 
 Decision-rule view (HYPOTHESES section 4), Electron side only: none of the Electron fatal criteria that can be judged
-without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). H7 has no verdict yet, so
-ADR-0002 cannot be accepted from this file alone. H3 passed on 45.0.0, so no 44.9.x retry was run.
+without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). H7 has no verdict: it is deferred to
+Phase 1 (owner decision 2026-10-25), so this file alone does not decide it. H3 passed on 45.0.0, so no 44.9.x retry was run.
 
 ## Per hypothesis
 
@@ -116,7 +121,7 @@ ADR-0002 cannot be accepted from this file alone. H3 passed on 45.0.0, so no 44.
 - H7b, `--disable-frame-rate-limit --disable-gpu-vsync`: p50 13.9, 14.0, 20.5 ms; p95 14.2, 15.3, 26.5 ms; long frames
   0, 0, 32. The third run was slower; see the findings on GPU backlog and heat.
 - No verdict: H7 compares Electron p95 with a calibrated Chrome p95 in alternating E, C runs and applies the noise rule
-  to Chrome's spread. Both need Task 6.
+  to Chrome's spread. Both are deferred to Phase 1 (owner decision 2026-10-25).
 
 ### H8: cold and warm start
 
@@ -284,16 +289,21 @@ itself; this is a Chromium lifetime rule, not a crash.
 ## Task 6: Chrome, Chrome `--app`, Safari proxy, demos (non-timing part)
 
 Date 2026-10-24, same machine as above (macOS 27.0.1, Apple M3, 60 Hz, scale factor 2), run on **battery power** (the
-timing groups refuse to run that way; these checks do not depend on it). Commands: `node run-compare.mjs --only=chrome,chromium,safari,demos`
-and five times `node run-compare.mjs --only=app --h20-3-observation=...`. Runner code: `common.mjs`, `run-compare.mjs`,
-`groups/*.mjs`; probe, scene and server are the Task 5 files, unchanged.
+timing runner refuses to run that way; these checks do not depend on it). Commands: `node run-compare.mjs
+--only=chrome,chromium,safari,demos` and five times `node run-compare.mjs --only=app`. Runner code: `common.mjs`,
+`run-compare.mjs`, `groups/*.mjs`; probe, scene and server are the Task 5 files, unchanged. The timing part (H7, H8 on
+Chrome, H9, H20-6 and the demo frame samples) is deferred to Phase 1 by the owner's decision of 2026-10-25;
+`run-timing.mjs` and `timing-logic.mjs` were built for it and wiring-checked with tiny durations and mocked inputs, but never
+run for a result.
 
 ### H17 and H18: Tauri (N/A)
 
-Not run, decision-irrelevant (controller ruling R27, owner-approved): per decision rule 6 Tauri wins only by passing a
-criterion Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace; and the
-save-transfer mechanism (ADR-0005) needs CDP, which WKWebView lacks (Verified, `MEMORY.md`: Tauri has no CDP). No Tauri
-crate or app was written. Nothing here is a Tauri result, and no Tauri row appears in the matrix.
+Not run, decision-irrelevant (owner-approved scope change): per decision rule 6 Tauri wins only by passing a criterion
+Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace (and H7 is deferred to
+Phase 1); and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack. Assumed (reasoning, not
+tested): `docs/research/runtime-and-storage.md` section 3 ("WKWebView does not speak the Chrome DevTools Protocol", tagged
+Assumed) and section 9 ("How a Tauri (WKWebView) app would extract saves without CDP", Unverified). No Tauri crate or app was
+written. Nothing here is a Tauri result, and no Tauri row appears in the matrix.
 
 ### H19: Chrome baseline (capability part)
 
@@ -326,23 +336,27 @@ Installed Chrome 155.0.8059.85 started directly: `--app=<url> --user-data-dir=<d
    included, and both 1 MiB values (SHA-256 equal) were present in the right profile. progress-lab in a third profile showed
    the same hash after a quit and relaunch (3 steps, hash `893799c1…` every time; the empty state matched the Electron
    reference `e0bc6e48…`).
-3. **No tab strip or address bar (PASS in 5 of 5, a human reading).** `outerHeight - innerHeight` was 32 px (a normal Chrome
-   window is 87 px in the Playwright runs); `matchMedia('(display-mode: standalone)')` is true. `window.locationbar`,
-   `toolbar` and `menubar` `.visible` all say `true` even here, so they prove nothing. A screenshot of the window region
-   (`screencapture -R`, not stored) read by the agent showed only a title bar with the page title and the traffic-light
-   buttons. UX note: on a fresh profile Chrome showed a Google Translate bubble inside the app window (the profile's language
-   differs from the page's); an app launcher would have to suppress it (for example with a language or a policy; Unverified).
+3. **No tab strip or address bar (PASS in 5 of 5 by the UI-height proxy, one screenshot read once by the agent).**
+   `outerHeight - innerHeight` was 32 px in 5 of 5 runs (a normal Chrome window is 87 px in the Playwright baseline; below 50 px
+   is read as "title bar only", an Assumed proxy); `matchMedia('(display-mode: standalone)')` is true. `window.locationbar`,
+   `toolbar` and `menubar` `.visible` all say `true` even here, so they prove nothing. Every run captured a screenshot of the
+   window region (`screencapture -R`, not stored); the agent looked at **one** of them, from the fifth run, and saw only a
+   title bar with the page title and the traffic-light buttons (a copy is kept outside the repository for the owner to look at;
+   a fresh look is welcome). The other four screenshots were not read, and the result files do not claim a reading. UX
+   note: on a fresh profile Chrome showed a Google Translate bubble inside the app window (the profile's language differs from
+   the page's); an app launcher would have to suppress it (for example with a language or a policy; Unverified).
 4. **CDP (PASS in 5 of 5).** `/json/version` answered; `DOMStorage.getDOMStorageItems` read `progress-lab:state`;
    `IndexedDB.requestData` read the three `stepLog` records. CDP IndexedDB has no write method (Verified in `MEMORY.md`), so
    restore is not available in this mode. Gotcha found: `IndexedDB.requestData` fails with "Could not get index" when
    `indexName` is an empty string; omit the parameter to read the object store itself (Chrome 155).
 5. **Process cleanup (mixed: PASS 3, FAIL 2 of 5).** After the window of the progress-lab game was closed
-   (`Target.closeTarget`), its renderer exited after 5.14, 2.83, 2.96, 5.20 and 4.93 s. The Assumed 5 s threshold falls inside
-   that spread, so the verdict flips between runs; no run was discarded. After `Browser.close` no process of the profile
+   (`Target.closeTarget`), its renderer exited after 5.09, 3.16, 3.10, 5.91 and 5.03 s. The Assumed 5 s threshold falls inside
+   that spread, so the verdict flips between runs (PASS in 2, FAIL in 3); no run was discarded. An earlier set of five runs
+   (not kept: the code was reworked afterwards) showed the same spread, 2.8 to 5.2 s. After `Browser.close` no process of the profile
    remained 5 s later in any run. **Chrome keeps running after its last window closes** (the browser process was still there
    5 s after the close in all runs): a launcher built on `--app` must quit the browser itself. In Electron the equivalent
    renderer lived 27.8 s (H16), so Chrome is quicker, probably because its service worker stops earlier (Unverified).
-6. **Frame time:** pending (hands-off phase), listed as H20-6.
+6. **Frame time:** deferred to Phase 1 (owner decision 2026-10-25), listed as H20-6.
 
 ### Safari as a WebKit proxy (not WKWebView)
 
@@ -372,15 +386,18 @@ three.js `webgl_animation_keyframes`, `webgl_shadowmap`, `webgpu_compute_birds`.
 three webgpu-samples pages and by `webgpu_compute_birds` in both runtimes (adapter and device acquired through the injected
 hook); the two WebGL three.js examples used no WebGPU. Console errors: Electron 0 everywhere; Chrome 1 on each webgpu-samples
 page, in every case the `/favicon.ico` 404 that Chrome requests and an Electron window does not. So no demo fails in Electron
-while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples are pending.
+while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples are deferred to Phase 1 (owner
+decision 2026-10-25). Visibility is judged from the moment the page reported itself visible and focused (`focus-ready`):
+the log entry written when a new Electron window opens is made before it has focus, so judging from it would call every
+Electron row unfocused.
 
 ### Windows CI job (N/A)
 
 Not added. (1) `run.mjs`'s process accounting (`ps`), machine facts (`sw_vers`, `system_profiler`, `ioreg`, `pmset`) and
 bundle detection are macOS-only; H2's "no process remained" and H14 would need a Windows process-listing adapter, which is more
-than the small adapter the dispatch allows. (2) GitHub documents that a `workflow_dispatch` workflow only runs if its file is on
+than a small adapter. (2) GitHub documents that a `workflow_dispatch` workflow only runs if its file is on
 the default branch ("This event will only trigger a workflow run if the workflow file exists on the default branch", checked
-2026-10-25 in the GitHub Actions events reference), and this task may not touch `main`, so the job could not be run or
+2026-10-25 in the GitHub Actions events reference), and merging to `main` was out of scope for this work, so the job could not be run or
 verified from this branch. An unrun workflow was not committed. Windows stays "not tested".
 
 ## Deviations from the methods, and why
@@ -409,7 +426,7 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 8. **H2b** kills only the main process (helpers exit with it).
 9. **H15** also calls `setAsDefaultProtocolClient`, which the method does not require.
 10. **H3 and H4 server.** The probe was served by the spike server's `/coi/` prefix on port 4418 (the same three headers
-    as the fixture's `/coi/`: COOP, COEP, CORP) rather than by the fixture server, as the dispatch notes direct; the
+    as the fixture's `/coi/`: COOP, COEP, CORP) rather than by the fixture server; the
     fixture's `/coi/` serves the game, not the probe. No effect on validity: the control is the same page without the
     prefix.
 11. **H15 "one main process"** is read as the steady state after each case (`mainsAfter` 1). In case 2b a second main
@@ -431,17 +448,20 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 16. **H20 method.** DevTools ports are chosen by Chrome (`--remote-debugging-port=0`, read from `DevToolsActivePort`) instead of
     fixed distinct values; the same-profile control is a second window opened with `Target.createTarget`, not a second
     command-line launch; the H1 markers (`storage.html`) cover checks 1 and 2, progress-lab covers checks 3 to 5 and the
-    gameplay-persistence cells of the matrix; check 3 is a person's reading of a screenshot, recorded through
-    `--h20-3-observation` (the programmatic `window.locationbar.visible` is `true` even in `--app` and proves nothing).
+    gameplay-persistence cells of the matrix; check 3 rests on the measured height of the browser UI in every run, plus one
+    screenshot that the agent read once (the programmatic `window.locationbar.visible` is `true` even in `--app` and proves nothing).
 17. **H21 pages.** The webgpu-samples pages are the standalone sample pages (`/sample/<name>/`) rather than the sample shell,
     which embeds them in a frame. The same hooks are injected into both runtimes through CDP
     `Page.addScriptToEvaluateOnNewDocument`; they wrap `requestAdapter` and `requestDevice` and `getContext` only to count calls.
 18. **Electron app changed after the Task 5 measurements.** `electron/main.mjs` gained a `demo` mode and a `memory-ready` event
     with an optional `--memory-hold-ms` (default 0, so Task 5's memory mode behaves as before); `results.schema.json` accepts
     hypothesis keys H1 to H21 (`H20-1` to `H20-6` for the per-check results of H20). No Task 5 measuring code changed.
-19. **H9 definition (planned for the hands-off phase).** Chrome's Task Manager "memory footprint", which the method sums by hand
+19. **H9 definition (for the deferred rerun).** Chrome's Task Manager "memory footprint", which the method sums by hand
     from a screenshot, is replaced by the macOS `footprint` tool and `ps` over the process tree, applied to Electron as well.
-20. **Safari proxy.** Added by controller ruling R27 in place of the Tauri build; capability checks only.
+20. **Safari proxy.** Added by an owner-approved scope change in place of the Tauri build; capability checks only.
+21. **Hands-off timing deferred.** The owner decided on 2026-10-25 that H7, the Chrome side of H8, the H9 rerun, H20-6 and the demo
+    frame samples are measured in Phase 1 on the real launcher, not in Phase 0. The frozen HYPOTHESES.md still lists them; they
+    are reported as "deferred", not as N/A or INVALID, and are never counted as a pass.
 
 ## Findings and gotchas
 
@@ -464,7 +484,8 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 
 ## Open items for the owner
 
-- H9 and the H13 manual real-click run need a run with nobody else using the machine.
+- H7, the Chrome side of H8, the H9 rerun, H20-6 and the demo frame samples: deferred to Phase 1 (owner decision 2026-10-25).
+- The H13 manual real-click run needs the owner at the machine.
 - H12: rerun with the packaged app (its own bundle id) and with an undecided and a denied macOS microphone state.
 - H13: the frozen control cannot pass for keyboard lock; an Amendment would be the owner's call.
 - Optional: remove the LaunchServices `wgspike` handler preference (recipe under H15; harmless if left).

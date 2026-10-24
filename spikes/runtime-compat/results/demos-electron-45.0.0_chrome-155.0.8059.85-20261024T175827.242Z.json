@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "run",
-  "createdAt": "2026-10-24T17:16:57.566Z",
+  "createdAt": "2026-10-24T17:58:27.242Z",
   "runtime": {
     "name": "demos",
     "version": "electron-45.0.0_chrome-155.0.8059.85"
@@ -22,8 +22,8 @@
     "screenLockedAtStart": false,
     "runnerNode": "v24.13.0"
   },
-  "startedAt": "2026-10-24T17:15:13.769Z",
-  "finishedAt": "2026-10-24T17:16:57.566Z",
+  "startedAt": "2026-10-24T17:56:53.552Z",
+  "finishedAt": "2026-10-24T17:58:27.242Z",
   "groups": [
     "demos"
   ],
@@ -57,7 +57,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 680,
+        "loadMs": 938,
         "title": "webgpu-samples: helloTriangle",
         "finalUrl": "https://webgpu.github.io/webgpu-samples/sample/helloTriangle/",
         "canvases": 1,
@@ -88,12 +88,12 @@
         "consoleMessagesSample": [],
         "visibility": {
           "everHidden": false,
-          "everUnfocused": true,
+          "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
-            "everHidden": false,
+            "everHidden": true,
             "everUnfocused": true
-          },
-          "fromSampleStart": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -103,7 +103,7 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 7296
+        "launchMs": 7657
       },
       {
         "runtime": "chrome-155.0.8059.85",
@@ -112,7 +112,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 118,
+        "loadMs": 97,
         "title": "webgpu-samples: helloTriangle",
         "finalUrl": "https://webgpu.github.io/webgpu-samples/sample/helloTriangle/",
         "canvases": 1,
@@ -149,11 +149,11 @@
         "visibility": {
           "everHidden": false,
           "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
             "everUnfocused": false
-          },
-          "fromSampleStart": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -163,7 +163,7 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 1136
+        "launchMs": 1262
       },
       {
         "runtime": "electron-45.0.0",
@@ -172,7 +172,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 903,
+        "loadMs": 787,
         "title": "webgpu-samples: cubemap",
         "finalUrl": "https://webgpu.github.io/webgpu-samples/sample/cubemap/",
         "canvases": 1,
@@ -203,12 +203,12 @@
         "consoleMessagesSample": [],
         "visibility": {
           "everHidden": false,
-          "everUnfocused": true,
+          "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
-            "everHidden": false,
+            "everHidden": true,
             "everUnfocused": true
-          },
-          "fromSampleStart": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -218,7 +218,7 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 7387
+        "launchMs": 7448
       },
       {
         "runtime": "chrome-155.0.8059.85",
@@ -227,7 +227,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 113,
+        "loadMs": 124,
         "title": "webgpu-samples: cubemap",
         "finalUrl": "https://webgpu.github.io/webgpu-samples/sample/cubemap/",
         "canvases": 1,
@@ -264,11 +264,11 @@
         "visibility": {
           "everHidden": false,
           "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
             "everUnfocused": false
-          },
-          "fromSampleStart": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -278,7 +278,7 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 1092
+        "launchMs": 1247
       },
       {
         "runtime": "electron-45.0.0",
@@ -287,7 +287,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 824,
+        "loadMs": 634,
         "title": "webgpu-samples: computeBoids",
         "finalUrl": "https://webgpu.github.io/webgpu-samples/sample/computeBoids/",
         "canvases": 1,
@@ -318,12 +318,12 @@
         "consoleMessagesSample": [],
         "visibility": {
           "everHidden": false,
-          "everUnfocused": true,
+          "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
             "everUnfocused": true
-          },
-          "fromSampleStart": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -333,7 +333,7 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 7339
+        "launchMs": 7251
       },
       {
         "runtime": "chrome-155.0.8059.85",
@@ -342,7 +342,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 488,
+        "loadMs": 99,
         "title": "webgpu-samples: computeBoids",
         "finalUrl": "https://webgpu.github.io/webgpu-samples/sample/computeBoids/",
         "canvases": 1,
@@ -379,11 +379,11 @@
         "visibility": {
           "everHidden": false,
           "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
             "everUnfocused": false
-          },
-          "fromSampleStart": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -393,7 +393,7 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 1127
+        "launchMs": 1205
       },
       {
         "runtime": "electron-45.0.0",
@@ -402,74 +402,7 @@
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 1463,
-        "title": "three.js webgl - animation - keyframes",
-        "finalUrl": "https://threejs.org/examples/webgl_animation_keyframes.html",
-        "canvases": 4,
-        "canvasContexts": [
-          {
-            "type": "2d",
-            "ok": true
-          },
-          {
-            "type": "2d",
-            "ok": true
-          },
-          {
-            "type": "2d",
-            "ok": true
-          },
-          {
-            "type": "webgl2",
-            "ok": true
-          }
-        ],
-        "webgpu": {
-          "navigatorGpu": true,
-          "requestAdapterCalls": 0,
-          "adapters": 0,
-          "nullAdapters": 0,
-          "requestDeviceCalls": 0,
-          "devices": 0,
-          "errors": []
-        },
-        "webgpuUsed": false,
-        "consoleErrors": 0,
-        "faviconErrors": 0,
-        "consoleErrorBreakdown": {
-          "consoleError": 0,
-          "exceptions": 0,
-          "logErrors": 0,
-          "consoleWarnings": 0
-        },
-        "consoleMessagesSample": [],
-        "visibility": {
-          "everHidden": false,
-          "everUnfocused": true,
-          "wholeLoad": {
-            "everHidden": false,
-            "everUnfocused": true
-          },
-          "fromSampleStart": false
-        },
-        "viewport": {
-          "innerWidth": 1280,
-          "innerHeight": 720,
-          "devicePixelRatio": 2
-        },
-        "vsyncHz": 60.00239944458008,
-        "stats": null,
-        "deltasMs": null,
-        "launchMs": 7954
-      },
-      {
-        "runtime": "chrome-155.0.8059.85",
-        "id": "three-animation-keyframes",
-        "url": "https://threejs.org/examples/webgl_animation_keyframes.html",
-        "loadOk": true,
-        "unreachable": false,
-        "loadError": null,
-        "loadMs": 439,
+        "loadMs": 1652,
         "title": "three.js webgl - animation - keyframes",
         "finalUrl": "https://threejs.org/examples/webgl_animation_keyframes.html",
         "canvases": 4,
@@ -513,11 +446,11 @@
         "visibility": {
           "everHidden": false,
           "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
-            "everUnfocused": false
-          },
-          "fromSampleStart": false
+            "everUnfocused": true
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -527,34 +460,34 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 1103
+        "launchMs": 8186
       },
       {
-        "runtime": "electron-45.0.0",
-        "id": "three-shadowmap",
-        "url": "https://threejs.org/examples/webgl_shadowmap.html",
+        "runtime": "chrome-155.0.8059.85",
+        "id": "three-animation-keyframes",
+        "url": "https://threejs.org/examples/webgl_animation_keyframes.html",
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 981,
-        "title": "three.js webgl - shadow map",
-        "finalUrl": "https://threejs.org/examples/webgl_shadowmap.html",
-        "canvases": 1,
+        "loadMs": 270,
+        "title": "three.js webgl - animation - keyframes",
+        "finalUrl": "https://threejs.org/examples/webgl_animation_keyframes.html",
+        "canvases": 4,
         "canvasContexts": [
           {
+            "type": "2d",
+            "ok": true
+          },
+          {
+            "type": "2d",
+            "ok": true
+          },
+          {
+            "type": "2d",
+            "ok": true
+          },
+          {
             "type": "webgl2",
-            "ok": true
-          },
-          {
-            "type": "2d",
-            "ok": true
-          },
-          {
-            "type": "2d",
-            "ok": true
-          },
-          {
-            "type": "2d",
             "ok": true
           }
         ],
@@ -579,12 +512,12 @@
         "consoleMessagesSample": [],
         "visibility": {
           "everHidden": false,
-          "everUnfocused": true,
+          "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
-            "everUnfocused": true
-          },
-          "fromSampleStart": false
+            "everUnfocused": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -594,16 +527,16 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 7566
+        "launchMs": 1201
       },
       {
-        "runtime": "chrome-155.0.8059.85",
+        "runtime": "electron-45.0.0",
         "id": "three-shadowmap",
         "url": "https://threejs.org/examples/webgl_shadowmap.html",
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 199,
+        "loadMs": 813,
         "title": "three.js webgl - shadow map",
         "finalUrl": "https://threejs.org/examples/webgl_shadowmap.html",
         "canvases": 1,
@@ -647,11 +580,11 @@
         "visibility": {
           "everHidden": false,
           "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
-            "everUnfocused": false
-          },
-          "fromSampleStart": false
+            "everUnfocused": true
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -661,22 +594,22 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 1122
+        "launchMs": 7349
       },
       {
-        "runtime": "electron-45.0.0",
-        "id": "three-webgpu-compute-birds",
-        "url": "https://threejs.org/examples/webgpu_compute_birds.html",
+        "runtime": "chrome-155.0.8059.85",
+        "id": "three-shadowmap",
+        "url": "https://threejs.org/examples/webgl_shadowmap.html",
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 1639,
-        "title": "three.js webgpu - compute birds",
-        "finalUrl": "https://threejs.org/examples/webgpu_compute_birds.html",
-        "canvases": 5,
+        "loadMs": 215,
+        "title": "three.js webgl - shadow map",
+        "finalUrl": "https://threejs.org/examples/webgl_shadowmap.html",
+        "canvases": 1,
         "canvasContexts": [
           {
-            "type": "2d",
+            "type": "webgl2",
             "ok": true
           },
           {
@@ -689,23 +622,19 @@
           },
           {
             "type": "2d",
-            "ok": true
-          },
-          {
-            "type": "webgpu",
             "ok": true
           }
         ],
         "webgpu": {
           "navigatorGpu": true,
-          "requestAdapterCalls": 2,
-          "adapters": 2,
+          "requestAdapterCalls": 0,
+          "adapters": 0,
           "nullAdapters": 0,
-          "requestDeviceCalls": 1,
-          "devices": 1,
+          "requestDeviceCalls": 0,
+          "devices": 0,
           "errors": []
         },
-        "webgpuUsed": true,
+        "webgpuUsed": false,
         "consoleErrors": 0,
         "faviconErrors": 0,
         "consoleErrorBreakdown": {
@@ -717,12 +646,12 @@
         "consoleMessagesSample": [],
         "visibility": {
           "everHidden": false,
-          "everUnfocused": true,
+          "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
-            "everUnfocused": true
-          },
-          "fromSampleStart": false
+            "everUnfocused": false
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -732,16 +661,16 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 8158
+        "launchMs": 1144
       },
       {
-        "runtime": "chrome-155.0.8059.85",
+        "runtime": "electron-45.0.0",
         "id": "three-webgpu-compute-birds",
         "url": "https://threejs.org/examples/webgpu_compute_birds.html",
         "loadOk": true,
         "unreachable": false,
         "loadError": null,
-        "loadMs": 231,
+        "loadMs": 1931,
         "title": "three.js webgpu - compute birds",
         "finalUrl": "https://threejs.org/examples/webgpu_compute_birds.html",
         "canvases": 5,
@@ -789,11 +718,11 @@
         "visibility": {
           "everHidden": false,
           "everUnfocused": false,
+          "judgedFrom": "focus-ready",
           "wholeLoad": {
             "everHidden": false,
-            "everUnfocused": false
-          },
-          "fromSampleStart": false
+            "everUnfocused": true
+          }
         },
         "viewport": {
           "innerWidth": 1280,
@@ -803,7 +732,78 @@
         "vsyncHz": 60.00239944458008,
         "stats": null,
         "deltasMs": null,
-        "launchMs": 1096
+        "launchMs": 8320
+      },
+      {
+        "runtime": "chrome-155.0.8059.85",
+        "id": "three-webgpu-compute-birds",
+        "url": "https://threejs.org/examples/webgpu_compute_birds.html",
+        "loadOk": true,
+        "unreachable": false,
+        "loadError": null,
+        "loadMs": 235,
+        "title": "three.js webgpu - compute birds",
+        "finalUrl": "https://threejs.org/examples/webgpu_compute_birds.html",
+        "canvases": 5,
+        "canvasContexts": [
+          {
+            "type": "2d",
+            "ok": true
+          },
+          {
+            "type": "2d",
+            "ok": true
+          },
+          {
+            "type": "2d",
+            "ok": true
+          },
+          {
+            "type": "2d",
+            "ok": true
+          },
+          {
+            "type": "webgpu",
+            "ok": true
+          }
+        ],
+        "webgpu": {
+          "navigatorGpu": true,
+          "requestAdapterCalls": 2,
+          "adapters": 2,
+          "nullAdapters": 0,
+          "requestDeviceCalls": 1,
+          "devices": 1,
+          "errors": []
+        },
+        "webgpuUsed": true,
+        "consoleErrors": 0,
+        "faviconErrors": 0,
+        "consoleErrorBreakdown": {
+          "consoleError": 0,
+          "exceptions": 0,
+          "logErrors": 0,
+          "consoleWarnings": 0
+        },
+        "consoleMessagesSample": [],
+        "visibility": {
+          "everHidden": false,
+          "everUnfocused": false,
+          "judgedFrom": "focus-ready",
+          "wholeLoad": {
+            "everHidden": false,
+            "everUnfocused": false
+          }
+        },
+        "viewport": {
+          "innerWidth": 1280,
+          "innerHeight": 720,
+          "devicePixelRatio": 2
+        },
+        "vsyncHz": 60.00239944458008,
+        "stats": null,
+        "deltasMs": null,
+        "launchMs": 1144
       }
     ]
   },

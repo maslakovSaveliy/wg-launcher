@@ -58,6 +58,28 @@
     return context;
   };
 
+  /**
+   * Resolves when the page is visible and focused (records "focus-ready"), or after timeoutMs (records
+   * "focus-timeout"). The early "init" entry of the log is written before a new window has focus, so a
+   * run is judged from this entry (or from "sample-start") on, never from "init".
+   */
+  function waitFocus(timeoutMs) {
+    return new Promise((resolve) => {
+      const started = performance.now();
+      const check = () => {
+        const waitedMs = Math.round(performance.now() - started);
+        if (document.hasFocus() && document.visibilityState === "visible") {
+          record("focus-ready");
+          resolve({ ready: true, waitedMs });
+        } else if (waitedMs > timeoutMs) {
+          record("focus-timeout");
+          resolve({ ready: false, waitedMs });
+        } else setTimeout(check, 100);
+      };
+      check();
+    });
+  }
+
   /** rAF deltas for `durationMs` after `warmupMs` (same sampler as probe.js frametime mode). */
   function sample(durationMs, warmupMs) {
     return new Promise((resolve) => {
@@ -91,5 +113,6 @@
       visibilityState: document.visibilityState,
     }),
     sample,
+    waitFocus,
   };
 })();

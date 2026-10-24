@@ -197,15 +197,16 @@ export async function group(context) {
     ? { status: "PASS", reason: "/json/version answered; DOMStorage read progress-lab:state; IndexedDB.requestData read the 3 stepLog records", metrics: cdp }
     : { status: "FAIL", reason: "a CDP read did not return the expected data", metrics: cdp };
 
-  // window.locationbar/toolbar/menubar.visible say true in an --app window, so they prove nothing.
-  // The evidence is the height of the browser UI (outer minus inner height; a normal window is 87 px,
-  // measured in the Playwright Chrome window) and a human reading of the captured screenshot.
-  const observation = context.opts["h20-3-observation"] ?? null;
-  const verdict = observation ? (/^pass/i.test(observation) ? "PASS" : /^fail/i.test(observation) ? "FAIL" : "REPORTED") : "REPORTED";
+  // window.locationbar/toolbar/menubar.visible say true in an --app window, so they prove nothing. The
+  // programmatic evidence is the height of the browser UI (outer minus inner height) in every run, against the
+  // 87 px of a normal Chrome window measured in the Playwright baseline: below 50 px means a title bar only
+  // (Assumed proxy for "no tab strip, no address bar"). The screenshot is captured but not stored; whether and
+  // when the agent looked at one is described in RESULTS.md, never claimed by the run itself.
+  const uiHeight = lab.ui.titleBarAndBorderHeight;
   hypotheses["H20-3"] = {
-    status: verdict,
-    reason: `browser UI height outerHeight - innerHeight = ${lab.ui.titleBarAndBorderHeight} px (a normal Chrome window: 87 px in the Playwright run); display-mode ${ui.displayMode}; window.locationbar/toolbar/menubar.visible are ${ui.locationbar}/${ui.toolbar}/${ui.menubar} even here, so they say nothing; screenshot ${lab.screenshot.captured ? "captured" : `not captured (${lab.screenshot.reason})`}; manual reading: ${observation ?? "none given (--h20-3-observation)"}`,
-    metrics: { ui: lab.ui, screenshot: { captured: lab.screenshot.captured, region: lab.screenshot.region }, manualObservation: observation },
+    status: uiHeight < 50 ? "PASS" : "FAIL",
+    reason: `browser UI height (outerHeight - innerHeight) ${uiHeight} px in this run (a normal Chrome window: 87 px in the Playwright baseline; below 50 px is read as a title bar only, an Assumed proxy); display-mode ${ui.displayMode}; window.locationbar/toolbar/menubar.visible are ${ui.locationbar}/${ui.toolbar}/${ui.menubar} even here, so they say nothing; screenshot ${lab.screenshot.captured ? "captured, not stored" : `not captured (${lab.screenshot.reason})`}`,
+    metrics: { ui: lab.ui, uiHeightPx: uiHeight, screenshot: { captured: lab.screenshot.captured, region: lab.screenshot.region } },
   };
 
   // (5) close the window; renderers of the page; then quit

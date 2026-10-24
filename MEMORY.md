@@ -203,7 +203,7 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   with server or `onHeadersReceived` headers (H3, H4); WebGPU adapter, device and compute without switches (H5); WebGL2
   on ANGLE Metal (H6); `node:sqlite` (SQLite 3.53.4) and zstd in main and `utilityProcess` with no warning (H10);
   Playwright `_electron.launch` (H11); quiescent export and restore of progress-lab in four variants (H14); packaged
-  ad-hoc-signed deep link with one instance (H15). H7 needs the Chrome baseline (Task 6).
+  ad-hoc-signed deep link with one instance (H15). H7 is deferred to Phase 1 (owner decision 2026-10-25).
 - [V] H12 is environment-dependent. Full run: microphone `getUserMedia` stalled 8 s and never reached
   `setPermissionRequestHandler` (FAIL). Rerun after the owner allowed the macOS microphone prompt
   (`getMediaAccessStatus` `granted`): it reached the handler and was denied (PASS). [A] Cause: Chromium touches the
@@ -226,12 +226,17 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - [V] Partitioned iframe storage key `http://127.0.0.1:4417/^0http://localhost`; `ses.clearStorageData({origin})` does
   not clear it, CDP `Storage.clearDataForStorageKey` does; `ses.clearStorageData()` without options clears everything.
 
-### Runtime spike, Chrome, Safari proxy, demos (Task 6, phase A: non-timing; run locally 2026-10-24, `spikes/runtime-compat/RESULTS.md`)
+### Runtime spike, Chrome, Safari proxy, demos (Task 6, non-timing part; run locally 2026-10-24, `spikes/runtime-compat/RESULTS.md`)
 
-- [V] Tauri was not built (controller ruling R27, owner-approved): decision-irrelevant because Tauri can only win by passing a
-  criterion Electron fails, H7 cannot be replaced by it, and ADR-0005's save transfer needs CDP, which WKWebView lacks. H17 and
-  H18 are N/A. A Windows CI job was not added: the runner's process accounting is macOS-only and a `workflow_dispatch` file must
-  be on the default branch to run (GitHub Actions events reference, checked 2026-10-25), which this branch is not.
+- Owner decision (2026-10-25): the hands-off timing runs (H7 frame time against Chrome, the Chrome side of H8, the H9 rerun,
+  H20-6, the demo frame samples) are deferred to Phase 1 and will be measured on the real launcher against Chrome. They are
+  "deferred", not N/A or INVALID; the Electron numbers from Task 5 stay as reported. `run-timing.mjs` was wiring-checked only
+  and never run for a result.
+- Tauri was not built (owner-approved scope change): decision-irrelevant because Tauri can only win by passing a criterion
+  Electron fails and cannot replace H7. [A] WKWebView has no CDP, so ADR-0005's save transfer would not work there
+  (`docs/research/runtime-and-storage.md` sections 3 and 9: Assumed and Unverified, not tested). H17 and H18 are N/A. A Windows
+  CI job was not added: the runner's process accounting is macOS-only and [V, 2026-10-25, GitHub Actions events reference] a
+  `workflow_dispatch` file must be on the default branch to run, and merging to `main` was out of scope.
 - [V] Installed Chrome is 155.0.8059.85, Electron 45's Chromium is 156.0.8078.48 (version mismatch, Chrome not updated);
   Playwright's bundled Chromium is 156.0.8078.4. All three give hardware WebGL2 (`ANGLE Metal Renderer: Apple M3`), WebGPU
   adapter `apple`/`metal-3`, `crossOriginIsolated` on `/coi/`. WebGPU features: Chrome and bundled Chromium 23, Electron 24 (the
@@ -240,8 +245,9 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   WebGL2 `Apple GPU`, `crossOriginIsolated` true on `/coi/`, OPFS `createWritable` works, `AudioContext` stays suspended without a
   gesture. Safari's AppleScript lets a script close its own tabs (`tabs of window` indexes shift: iterate backwards).
 - [V] Chrome `--app=<url> --user-data-dir=<dir>`: two profiles are isolated and persistent across `Browser.close` (5 of 5 runs),
-  the window has only a title bar (32 px of UI against 87 px for a normal window), CDP reads storage but cannot write it. The
-  closed window's renderer exits 2.8 to 5.2 s after the close (the Assumed 5 s threshold falls inside the spread), and the Chrome
+  the browser UI is 32 px high in 5 of 5 runs against 87 px for a normal window (one screenshot, read once by the agent, showed a
+  title bar only), CDP reads storage but cannot write it. The closed window's renderer exits 3.1 to 5.9 s after the close (the
+  Assumed 5 s threshold falls inside the spread: PASS in 2, FAIL in 3 of 5 runs), and the Chrome
   process keeps running after its last window closes, so a launcher must quit it. A fresh profile showed a Google Translate bubble
   in the app window.
 - [V] Public demos (webgpu-samples helloTriangle, cubemap, computeBoids; three.js webgl_animation_keyframes, webgl_shadowmap,

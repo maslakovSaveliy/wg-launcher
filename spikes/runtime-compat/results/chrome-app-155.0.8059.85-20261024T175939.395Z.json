@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "run",
-  "createdAt": "2026-10-24T17:21:26.890Z",
+  "createdAt": "2026-10-24T17:59:39.395Z",
   "runtime": {
     "name": "chrome-app",
     "version": "155.0.8059.85"
@@ -22,8 +22,8 @@
     "screenLockedAtStart": false,
     "runnerNode": "v24.13.0"
   },
-  "startedAt": "2026-10-24T17:21:10.399Z",
-  "finishedAt": "2026-10-24T17:21:26.890Z",
+  "startedAt": "2026-10-24T17:59:21.674Z",
+  "finishedAt": "2026-10-24T17:59:39.395Z",
   "groups": [
     "app"
   ],
@@ -117,7 +117,7 @@
     },
     "H20-3": {
       "status": "PASS",
-      "reason": "browser UI height outerHeight - innerHeight = 32 px (a normal Chrome window: 87 px in the Playwright run); display-mode standalone; window.locationbar/toolbar/menubar.visible are true/true/true even here, so they say nothing; screenshot captured; manual reading: pass: the window has a title bar with the page title and the traffic-light buttons only: no tab strip, no address bar, no toolbar (screenshot of the window region read by the agent; Chrome showed a Translate bubble at the top right of the page area)",
+      "reason": "browser UI height (outerHeight - innerHeight) 32 px in this run (a normal Chrome window: 87 px in the Playwright baseline; below 50 px is read as a title bar only, an Assumed proxy); display-mode standalone; window.locationbar/toolbar/menubar.visible are true/true/true even here, so they say nothing; screenshot captured, not stored",
       "metrics": {
         "ui": {
           "locationbar": true,
@@ -126,9 +126,9 @@
           "statusbar": true,
           "personalbar": true,
           "outerWidth": 1200,
-          "outerHeight": 814,
+          "outerHeight": 817,
           "innerWidth": 1200,
-          "innerHeight": 782,
+          "innerHeight": 785,
           "screenX": 22,
           "screenY": 55,
           "devicePixelRatio": 2,
@@ -137,25 +137,25 @@
             "left": 22,
             "top": 55,
             "width": 1200,
-            "height": 814,
+            "height": 817,
             "windowState": "normal"
           },
           "titleBarAndBorderHeight": 32
         },
+        "uiHeightPx": 32,
         "screenshot": {
           "captured": true,
-          "region": "22,55,1200,814"
-        },
-        "manualObservation": "pass: the window has a title bar with the page title and the traffic-light buttons only: no tab strip, no address bar, no toolbar (screenshot of the window region read by the agent; Chrome showed a Translate bubble at the top right of the page area)"
+          "region": "22,55,1200,817"
+        }
       }
     },
     "H20-5": {
-      "status": "PASS",
-      "reason": "no renderer of the closed window 5 s after the close, no page targets, nothing of the profile 5 s after Browser.close",
+      "status": "FAIL",
+      "reason": "a renderer of the closed window was alive 5 s after the close (exited after 5087 ms)",
       "metrics": {
         "rendererPidsAtOpen": 4,
-        "rendererAliveAfterClose5s": false,
-        "rendererExitAfterCloseMs": 2829,
+        "rendererAliveAfterClose5s": true,
+        "rendererExitAfterCloseMs": 5087,
         "pagesAfterClose": 0,
         "processesOfProfile": {
           "beforeLaunch": 0,
@@ -164,7 +164,7 @@
           "appQuit5s": 0
         },
         "browserSurvivedLastWindowClose": true,
-        "quitMs": 47
+        "quitMs": 40
       }
     },
     "H20-6": {
@@ -173,7 +173,7 @@
     },
     "H20": {
       "status": "REPORTED",
-      "reason": "Chrome 155.0.8059.85 --app with one --user-data-dir per game: isolation PASS, persistence PASS, window chrome reported, CDP PASS, cleanup PASS, frame time not run; progress-lab hash survived restart: true; no restore path via CDP"
+      "reason": "Chrome 155.0.8059.85 --app with one --user-data-dir per game: isolation PASS, persistence PASS, window chrome reported, CDP PASS, cleanup FAIL, frame time not run; progress-lab hash survived restart: true; no restore path via CDP"
     }
   },
   "checks": {
@@ -182,11 +182,11 @@
     "versionString": "Chrome/155.0.8059.85",
     "storageQuit": {
       "A": {
-        "quitMs": 364,
+        "quitMs": 486,
         "remaining": 0
       },
       "B": {
-        "quitMs": 286,
+        "quitMs": 298,
         "remaining": 0
       }
     },
@@ -201,9 +201,9 @@
         "statusbar": true,
         "personalbar": true,
         "outerWidth": 1200,
-        "outerHeight": 814,
+        "outerHeight": 817,
         "innerWidth": 1200,
-        "innerHeight": 782,
+        "innerHeight": 785,
         "screenX": 22,
         "screenY": 55,
         "devicePixelRatio": 2,
@@ -212,14 +212,14 @@
           "left": 22,
           "top": 55,
           "width": 1200,
-          "height": 814,
+          "height": 817,
           "windowState": "normal"
         },
         "titleBarAndBorderHeight": 32
       },
       "screenshot": {
         "captured": true,
-        "region": "22,55,1200,814",
+        "region": "22,55,1200,817",
         "reason": null,
         "file": "<tmp>/app-window.png"
       },
@@ -246,7 +246,7 @@
       "hashAfterRestart": "893799c178c004e81b1dcc6f28743c3f7bccaa464710b8a53846676f4d8b54df",
       "persistedAcrossRestart": true,
       "afterRestartQuit": {
-        "quitMs": 296,
+        "quitMs": 317,
         "remaining": 0
       }
     }

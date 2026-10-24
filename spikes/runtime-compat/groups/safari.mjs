@@ -1,4 +1,4 @@
-// THROWAWAY spike (runtime-compat, Task 6). Safari as a cheap WebKit proxy for WKWebView (R27: the
+// THROWAWAY spike (runtime-compat, Task 6). Safari as a cheap WebKit proxy for WKWebView (owner-approved scope change: the
 // Tauri build was dropped). This is Safari, NOT WKWebView and NOT Tauri: capability results only,
 // no frame time. The probe page is served by the spike server itself, so its POST is same-origin.
 
