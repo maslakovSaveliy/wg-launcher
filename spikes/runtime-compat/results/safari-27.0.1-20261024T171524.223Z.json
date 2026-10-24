@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "kind": "probe",
+  "createdAt": "2026-10-24T17:15:24.216Z",
+  "runtime": {
+    "name": "safari",
+    "version": "27.0.1",
+    "chromium": null,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Safari/605.1.15"
+  },
+  "label": "safari-probe-full",
+  "page": {
+    "url": "http://localhost:4418/coi/?mode=probe&runtime=safari&version=27.0.1&label=safari-probe-full",
+    "devicePixelRatio": 2,
+    "hardwareConcurrency": 8,
+    "visibility": {
+      "log": [
+        {
+          "t": 128,
+          "event": "load",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 2260,
+          "event": "done",
+          "visibilityState": "visible",
+          "hasFocus": true
+        }
+      ],
+      "everHidden": false,
+      "everUnfocused": false
+    }
+  },
+  "data": {
+    "checks": {
+      "webgl2": {
+        "available": true,
+        "vendor": "Apple Inc.",
+        "renderer": "Apple GPU",
+        "version": "WebGL 2.0",
+        "shadingLanguageVersion": "WebGL GLSL ES 3.00",
+        "maxTextureSize": 16384,
+        "extensionCount": 36,
+        "timerQuery": false,
+        "softwareRenderer": false
+      },
+      "webgpu": {
+        "available": true,
+        "adapter": {
+          "vendor": "apple",
+          "architecture": "apple",
+          "device": "apple",
+          "description": "apple",
+          "isFallbackAdapter": false
+        },
+        "features": [
+          "bgra8unorm-storage",
+          "clip-distances",
+          "core-features-and-limits",
+          "depth-clip-control",
+          "depth32float-stencil8",
+          "float16-renderable",
+          "float32-blendable",
+          "float32-filterable",
+          "float32-renderable",
+          "indirect-first-instance",
+          "primitive-index",
+          "rg11b10ufloat-renderable",
+          "shader-f16",
+          "texture-compression-astc",
+          "texture-compression-astc-sliced-3d",
+          "texture-compression-bc",
+          "texture-compression-bc-sliced-3d",
+          "texture-compression-etc2",
+          "texture-formats-tier1",
+          "texture-formats-tier2",
+          "timestamp-query"
+        ],
+        "featureCount": 21,
+        "limits": {
+          "maxTextureDimension1D": 16384,
+          "maxTextureDimension2D": 16384,
+          "maxTextureDimension3D": 2048,
+          "maxTextureArrayLayers": 2048,
+          "maxBindGroups": 11,
+          "maxBindGroupsPlusVertexBuffers": 30,
+          "maxBindingsPerBindGroup": 65535,
+          "maxDynamicUniformBuffersPerPipelineLayout": 65535,
+          "maxDynamicStorageBuffersPerPipelineLayout": 65535,
+          "maxSampledTexturesPerShaderStage": 44,
+          "maxSamplersPerShaderStage": 22,
+          "maxStorageBuffersPerShaderStage": 44,
+          "maxStorageTexturesPerShaderStage": 44,
+          "maxUniformBuffersPerShaderStage": 44,
+          "maxUniformBufferBindingSize": 2147483644,
+          "maxStorageBufferBindingSize": 2147483644,
+          "minUniformBufferOffsetAlignment": 32,
+          "minStorageBufferOffsetAlignment": 32,
+          "maxVertexBuffers": 12,
+          "maxBufferSize": 2147483644,
+          "maxVertexAttributes": 30,
+          "maxVertexBufferArrayStride": 65532,
+          "maxInterStageShaderVariables": 31,
+          "maxColorAttachments": 8,
+          "maxColorAttachmentBytesPerSample": 64,
+          "maxComputeWorkgroupStorageSize": 32768,
+          "maxComputeInvocationsPerWorkgroup": 1024,
+          "maxComputeWorkgroupSizeX": 1024,
+          "maxComputeWorkgroupSizeY": 1024,
+          "maxComputeWorkgroupSizeZ": 1024,
+          "maxComputeWorkgroupsPerDimension": 65535,
+          "maxStorageBuffersInFragmentStage": 44,
+          "maxStorageTexturesInFragmentStage": 44,
+          "maxStorageBuffersInVertexStage": 44,
+          "maxStorageTexturesInVertexStage": 44
+        },
+        "preferredCanvasFormat": "bgra8unorm",
+        "wgslLanguageFeatures": [
+          "packed_4x8_integer_dot_product",
+          "pointer_composite_access",
+          "readonly_and_readwrite_storage_textures",
+          "texture_formats_tier1",
+          "unrestricted_pointer_parameters"
+        ],
+        "device": true,
+        "computeReadbackCorrect": true,
+        "computeSample": [
+          7,
+          10,
+          13,
+          16
+        ]
+      },
+      "coi": {
+        "crossOriginIsolated": true,
+        "sharedArrayBufferDefined": true,
+        "roundTrip": true,
+        "waitAsync": "not-equal",
+        "workerMessages": [
+          {
+            "type": "ready"
+          }
+        ]
+      },
+      "wasm": {
+        "library": "wasm-feature-detect",
+        "features": {
+          "bigInt": true,
+          "bulkMemory": true,
+          "exceptions": true,
+          "exceptionsFinal": true,
+          "extendedConst": true,
+          "gc": true,
+          "jsStringBuiltins": true,
+          "jspi": true,
+          "memory64": false,
+          "multiMemory": false,
+          "multiValue": true,
+          "mutableGlobals": true,
+          "referenceTypes": true,
+          "relaxedSimd": false,
+          "saturatedFloatToInt": true,
+          "signExtensions": true,
+          "simd": true,
+          "streamingCompilation": true,
+          "tailCall": true,
+          "threads": true,
+          "typeReflection": false,
+          "typedFunctionReferences": true,
+          "wideArithmetic": false
+        }
+      },
+      "storage": {
+        "quota": 82463372084,
+        "usage": 0,
+        "persistedBefore": false,
+        "persist": false,
+        "persistedAfter": false
+      },
+      "opfs": {
+        "getDirectory": true,
+        "createWritable": true,
+        "roundTrip": true
+      },
+      "idb": {
+        "blobType": "application/x-probe",
+        "dateType": true,
+        "roundTrip": true
+      },
+      "audio": {
+        "available": true,
+        "initialState": "suspended",
+        "sampleRate": 44100,
+        "baseLatency": 0.0029024943310657597,
+        "resume": {
+          "error": "Error: resume timed out after 2000 ms"
+        },
+        "stateAfterResume": "suspended"
+      }
+    }
+  }
+}

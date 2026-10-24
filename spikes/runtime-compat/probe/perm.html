@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>permissions and trusted input (THROWAWAY)</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; font: 16px/1.4 system-ui, sans-serif; }
+      button { position: fixed; width: 240px; height: 80px; font-size: 18px; }
+      #gesture { left: 40px; top: 40px; }
+      #display { left: 320px; top: 40px; }
+      #only-fullscreen { left: 600px; top: 40px; }
+      #only-pointerLock { left: 880px; top: 40px; }
+      #only-keyboardLock { left: 600px; top: 140px; }
+      #pointer-first { left: 880px; top: 140px; }
+      #target { position: fixed; left: 40px; top: 160px; width: 520px; height: 200px; background: #dde; }
+    </style>
+  </head>
+  <body>
+    <button id="gesture" type="button">fullscreen + pointer lock + keyboard lock</button>
+    <button id="display" type="button">getDisplayMedia</button>
+    <button id="only-fullscreen" type="button">fullscreen only</button>
+    <button id="only-pointerLock" type="button">pointer lock only</button>
+    <button id="only-keyboardLock" type="button">keyboard lock only</button>
+    <button id="pointer-first" type="button">pointer lock, then fullscreen, then keyboard lock</button>
+    <div id="target">pointer lock target</div>
+    <p id="status">loading</p>
+    <script type="module" src="perm.js"></script>
+  </body>
+</html>

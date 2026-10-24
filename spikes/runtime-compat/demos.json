@@ -1,0 +1,16 @@
+{
+  "comment": "THROWAWAY spike (runtime-compat, Task 6). The public demos of hypothesis H21, fixed before any demo run: three webgpu-samples pages and three three.js examples. External sites: an unreachable one is 'not tested (unreachable)', never a compatibility verdict. Pages are not calibrated, so their frame times are indicative only.",
+  "fixedOn": "2026-10-25",
+  "viewport": { "width": 1280, "height": 720 },
+  "settleMs": 6000,
+  "warmupMs": 2000,
+  "durationMs": 20000,
+  "demos": [
+    { "id": "webgpu-hello-triangle", "suite": "webgpu-samples", "kind": "webgpu", "url": "https://webgpu.github.io/webgpu-samples/sample/helloTriangle/" },
+    { "id": "webgpu-cubemap", "suite": "webgpu-samples", "kind": "webgpu", "url": "https://webgpu.github.io/webgpu-samples/sample/cubemap/" },
+    { "id": "webgpu-compute-boids", "suite": "webgpu-samples", "kind": "webgpu", "url": "https://webgpu.github.io/webgpu-samples/sample/computeBoids/" },
+    { "id": "three-animation-keyframes", "suite": "three.js examples", "kind": "webgl", "url": "https://threejs.org/examples/webgl_animation_keyframes.html" },
+    { "id": "three-shadowmap", "suite": "three.js examples", "kind": "webgl", "url": "https://threejs.org/examples/webgl_shadowmap.html" },
+    { "id": "three-webgpu-compute-birds", "suite": "three.js examples", "kind": "webgpu", "url": "https://threejs.org/examples/webgpu_compute_birds.html" }
+  ]
+}

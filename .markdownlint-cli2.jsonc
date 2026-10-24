@@ -1,0 +1,33 @@
+{
+  // Gitignored paths (node_modules, .superpowers, ...) are skipped through the `gitignore` option.
+  "gitignore": true,
+  "ignores": [
+    // Original concept document, Russian, kept verbatim (AGENTS.md).
+    "docs/product/sources/**",
+    // Upstream Contributor Covenant 3.0 text, kept verbatim.
+    "CODE_OF_CONDUCT.md"
+  ],
+  "config": {
+    "default": true,
+    // Prose is wrapped at about 120 columns by hand, but tables, links and plans are legitimately
+    // longer, and a hard line-length check is not worth the noise.
+    "MD013": false,
+    // Repeated headings such as "Verification" or "Concerns" are fine under different parents.
+    "MD024": { "siblings_only": true }
+  },
+  "overrides": [
+    {
+      // Starts with a second-level heading on purpose: GitHub shows it inside the new pull request form.
+      "filter": [".github/pull_request_template.md"],
+      "combine": "merge",
+      "config": { "MD041": false }
+    },
+    {
+      // The plan is a compact working document (no blank lines around headings and lists). Reflowing it
+      // would only churn the diff, so its layout rules are relaxed; everything else still applies.
+      "filter": ["docs/plans/**"],
+      "combine": "merge",
+      "config": { "MD004": false, "MD022": false, "MD032": false }
+    }
+  ]
+}

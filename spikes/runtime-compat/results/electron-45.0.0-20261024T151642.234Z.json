@@ -1,0 +1,483 @@
+{
+  "schemaVersion": 1,
+  "kind": "run",
+  "createdAt": "2026-10-24T15:16:42.233Z",
+  "runtime": {
+    "name": "electron",
+    "version": "45.0.0",
+    "chromium": "156.0.8078.48",
+    "node": "24.22.0"
+  },
+  "label": "node run.mjs --runtime=electron --only=memory --load=512",
+  "machine": {
+    "osVersion": "macOS 27.0.1 (26A434)",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "gpu": "Apple M3 (10 cores, spdisplays_metal4)",
+    "display": {
+      "name": "Color LCD",
+      "resolution": "1470 x 956 @ 60.00Hz"
+    },
+    "displayRefreshHz": 60.00239944458008,
+    "power": "Now drawing from 'AC Power'",
+    "screenLockedAtStart": false,
+    "runnerNode": "v24.13.0"
+  },
+  "startedAt": "2026-10-24T15:15:39.209Z",
+  "finishedAt": "2026-10-24T15:16:42.233Z",
+  "groups": [
+    "memory"
+  ],
+  "fatal": null,
+  "environment": {
+    "versions": {
+      "electron": "45.0.0",
+      "chrome": "156.0.8078.48",
+      "node": "24.22.0",
+      "v8": "15.6.75.19-electron.0"
+    },
+    "os": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "systemVersion": "27.0.1"
+    },
+    "display": {
+      "displayFrequency": 60.00239944458008,
+      "size": {
+        "width": 1470,
+        "height": 956
+      },
+      "scaleFactor": 2,
+      "colorDepth": 30,
+      "count": 1
+    },
+    "gpu": {
+      "devices": [
+        {
+          "active": true,
+          "deviceId": 0,
+          "gpuPreference": 0,
+          "vendorId": 4203
+        }
+      ],
+      "machineModelName": "Mac",
+      "machineModelVersion": "15.12"
+    },
+    "gpuFeatureStatus": {
+      "2d_canvas": "enabled",
+      "direct_rendering_display_compositor": "disabled_off_ok",
+      "gpu_compositing": "enabled",
+      "multiple_raster_threads": "enabled_on",
+      "opengl": "enabled_on",
+      "rasterization": "enabled",
+      "raw_draw": "disabled_off_ok",
+      "skia_graphite": "enabled_on",
+      "trees_in_viz": "disabled_off",
+      "video_decode": "enabled",
+      "video_encode": "enabled",
+      "webgl": "enabled",
+      "webgpu": "enabled",
+      "webnn": "disabled_off"
+    },
+    "switches": {
+      "disableFeaturesAtStart": null,
+      "disableFeatures": null,
+      "restorePartitioning": false,
+      "enableFeatures": null,
+      "uncapped": false,
+      "unsafeWebgpu": false
+    }
+  },
+  "hypotheses": {
+    "H1": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H2": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H3": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H4": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H5": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H6": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H7": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H8": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H9": {
+      "status": "INVALID",
+      "reason": "page was hidden or unfocused during the 60 s",
+      "metrics": {
+        "workingSetSumMiB": 323.328125,
+        "peakWorkingSetSumMiB": 373.671875,
+        "memoryFieldNames": [
+          "peakWorkingSetSize",
+          "workingSetSize"
+        ],
+        "processes": [
+          {
+            "type": "Browser",
+            "name": null,
+            "serviceName": null,
+            "workingSetMiB": 129.8125,
+            "peakWorkingSetMiB": 152.375
+          },
+          {
+            "type": "GPU",
+            "name": null,
+            "serviceName": "GPU",
+            "workingSetMiB": 63.625,
+            "peakWorkingSetMiB": 79.40625
+          },
+          {
+            "type": "Utility",
+            "name": "Network Service",
+            "serviceName": "network.mojom.NetworkService",
+            "workingSetMiB": 44.828125,
+            "peakWorkingSetMiB": 48.28125
+          },
+          {
+            "type": "Tab",
+            "name": null,
+            "serviceName": null,
+            "workingSetMiB": 85.0625,
+            "peakWorkingSetMiB": 93.609375
+          }
+        ],
+        "frames": 312
+      }
+    },
+    "H10": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H11": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H12": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H13": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H14": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H15": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    },
+    "H16": {
+      "status": "NOT_RUN",
+      "reason": "group not selected in this invocation"
+    }
+  },
+  "launches": [
+    {
+      "seq": 1,
+      "mode": "env",
+      "extra": [],
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "durationMs": 541,
+      "error": null
+    },
+    {
+      "seq": 2,
+      "mode": "memory",
+      "extra": [
+        "--seconds=60",
+        "--load=512"
+      ],
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "durationMs": 61349,
+      "error": null
+    }
+  ],
+  "checks": {
+    "env": {
+      "mode": "env",
+      "extra": [],
+      "spawnMs": 1792854939612,
+      "durationMs": 541,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "bundleProcessesBefore": 0,
+      "events": [
+        {
+          "type": "done",
+          "mode": "env",
+          "t": 1792854940131,
+          "error": null
+        }
+      ],
+      "stderrTail": null,
+      "output": {
+        "mode": "env",
+        "startedAt": "2026-10-24T15:15:40.089Z",
+        "finishedAt": "2026-10-24T15:15:40.130Z",
+        "pid": 77141,
+        "environment": {
+          "versions": {
+            "electron": "45.0.0",
+            "chrome": "156.0.8078.48",
+            "node": "24.22.0",
+            "v8": "15.6.75.19-electron.0"
+          },
+          "os": {
+            "platform": "darwin",
+            "arch": "arm64",
+            "systemVersion": "27.0.1"
+          },
+          "display": {
+            "displayFrequency": 60.00239944458008,
+            "size": {
+              "width": 1470,
+              "height": 956
+            },
+            "scaleFactor": 2,
+            "colorDepth": 30,
+            "count": 1
+          },
+          "gpu": {
+            "devices": [
+              {
+                "active": true,
+                "deviceId": 0,
+                "gpuPreference": 0,
+                "vendorId": 4203
+              }
+            ],
+            "machineModelName": "Mac",
+            "machineModelVersion": "15.12"
+          },
+          "gpuFeatureStatus": {
+            "2d_canvas": "enabled",
+            "direct_rendering_display_compositor": "disabled_off_ok",
+            "gpu_compositing": "enabled",
+            "multiple_raster_threads": "enabled_on",
+            "opengl": "enabled_on",
+            "rasterization": "enabled",
+            "raw_draw": "disabled_off_ok",
+            "skia_graphite": "enabled_on",
+            "trees_in_viz": "disabled_off",
+            "video_decode": "enabled",
+            "video_encode": "enabled",
+            "webgl": "enabled",
+            "webgpu": "enabled",
+            "webnn": "disabled_off"
+          },
+          "switches": {
+            "disableFeaturesAtStart": null,
+            "disableFeatures": null,
+            "restorePartitioning": false,
+            "enableFeatures": null,
+            "uncapped": false,
+            "unsafeWebgpu": false
+          }
+        },
+        "processWarnings": [],
+        "error": null,
+        "result": {
+          "gpuFeatureStatusBeforeGpuInfo": {
+            "2d_canvas": "disabled_software",
+            "direct_rendering_display_compositor": "disabled_off_ok",
+            "gpu_compositing": "disabled_software",
+            "multiple_raster_threads": "enabled_on",
+            "opengl": "disabled_off",
+            "rasterization": "disabled_software",
+            "raw_draw": "disabled_off_ok",
+            "skia_graphite": "disabled_off",
+            "trees_in_viz": "disabled_off",
+            "video_decode": "disabled_software",
+            "video_encode": "disabled_software",
+            "webgl": "disabled_off",
+            "webgpu": "disabled_off",
+            "webnn": "disabled_off"
+          }
+        }
+      }
+    },
+    "memory": {
+      "mode": "memory",
+      "extra": [
+        "--seconds=60",
+        "--load=512"
+      ],
+      "spawnMs": 1792854940200,
+      "durationMs": 61349,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "bundleProcessesBefore": 0,
+      "events": [
+        {
+          "type": "done",
+          "mode": "memory",
+          "t": 1792855001488,
+          "error": null
+        }
+      ],
+      "stderrTail": null,
+      "output": {
+        "mode": "memory",
+        "startedAt": "2026-10-24T15:15:40.332Z",
+        "finishedAt": "2026-10-24T15:16:41.484Z",
+        "pid": 77165,
+        "environment": {
+          "versions": {
+            "electron": "45.0.0",
+            "chrome": "156.0.8078.48",
+            "node": "24.22.0",
+            "v8": "15.6.75.19-electron.0"
+          },
+          "switches": {
+            "disableFeaturesAtStart": null,
+            "disableFeatures": null,
+            "restorePartitioning": false,
+            "enableFeatures": null,
+            "uncapped": false,
+            "unsafeWebgpu": false
+          },
+          "displayFrequency": 60.00239944458008,
+          "gpuFeatureStatus": {
+            "webgl": "enabled",
+            "webgpu": "enabled",
+            "gpu_compositing": "enabled"
+          }
+        },
+        "processWarnings": [],
+        "error": null,
+        "result": {
+          "seconds": 60,
+          "page": {
+            "frames": 312,
+            "visibility": {
+              "log": [
+                {
+                  "t": 748,
+                  "event": "load",
+                  "visibilityState": "visible",
+                  "hasFocus": true
+                },
+                {
+                  "t": 881,
+                  "event": "start",
+                  "visibilityState": "visible",
+                  "hasFocus": true
+                },
+                {
+                  "t": 6063,
+                  "event": "visibilitychange",
+                  "visibilityState": "hidden",
+                  "hasFocus": true
+                },
+                {
+                  "t": 6063,
+                  "event": "document-visibilitychange",
+                  "visibilityState": "hidden",
+                  "hasFocus": true
+                },
+                {
+                  "t": 6396,
+                  "event": "blur",
+                  "visibilityState": "hidden",
+                  "hasFocus": false
+                }
+              ],
+              "everHidden": true,
+              "everUnfocused": true
+            },
+            "scene": {
+              "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+              "softwareRenderer": false,
+              "load": 512,
+              "instances": 1024,
+              "seed": 1592594996,
+              "devicePixelRatio": 2,
+              "cssWidth": 1280,
+              "cssHeight": 720,
+              "drawingBufferWidth": 2560,
+              "drawingBufferHeight": 1440
+            },
+            "hidden": "hidden",
+            "focus": false
+          },
+          "memoryFieldNames": [
+            "peakWorkingSetSize",
+            "workingSetSize"
+          ],
+          "workingSetSumMiB": 323.328125,
+          "peakWorkingSetSumMiB": 373.671875,
+          "processes": [
+            {
+              "type": "Browser",
+              "name": null,
+              "serviceName": null,
+              "workingSetMiB": 129.8125,
+              "peakWorkingSetMiB": 152.375
+            },
+            {
+              "type": "GPU",
+              "name": null,
+              "serviceName": "GPU",
+              "workingSetMiB": 63.625,
+              "peakWorkingSetMiB": 79.40625
+            },
+            {
+              "type": "Utility",
+              "name": "Network Service",
+              "serviceName": "network.mojom.NetworkService",
+              "workingSetMiB": 44.828125,
+              "peakWorkingSetMiB": 48.28125
+            },
+            {
+              "type": "Tab",
+              "name": null,
+              "serviceName": null,
+              "workingSetMiB": 85.0625,
+              "peakWorkingSetMiB": 93.609375
+            }
+          ],
+          "note": "MemoryInfo values are in KiB (Electron docs); summed over app.getAppMetrics() processes"
+        }
+      }
+    }
+  },
+  "probeFiles": [],
+  "leftoverProcesses": {
+    "bundle": [],
+    "pgrepElectronSpike": [],
+    "pgrepElectronOtherAppsCount": 1,
+    "pgrepWgspike": []
+  }
+}

@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "kind": "run",
+  "createdAt": "2026-10-24T17:15:21.052Z",
+  "runtime": {
+    "name": "chromium",
+    "version": "156.0.8078.4",
+    "chromium": "156.0.8078.4"
+  },
+  "label": "Playwright bundled Chromium 156.0.8078.4, headed: same-engine reference, NOT the Chrome baseline",
+  "machine": {
+    "osVersion": "macOS 27.0.1 (26A434)",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "gpu": "Apple M3 (10 cores, spdisplays_metal4)",
+    "display": {
+      "name": "Color LCD",
+      "resolution": "1470 x 956 @ 60.00Hz"
+    },
+    "displayLine": "1470 x 956 @ 60.00Hz",
+    "displayRefreshHz": 60.00239944458008,
+    "power": "Now drawing from 'Battery Power'",
+    "screenLockedAtStart": false,
+    "runnerNode": "v24.13.0"
+  },
+  "startedAt": "2026-10-24T17:15:13.769Z",
+  "finishedAt": "2026-10-24T17:15:21.052Z",
+  "groups": [
+    "chromium"
+  ],
+  "hypotheses": {
+    "H6": {
+      "status": "PASS",
+      "reason": "hardware renderer: ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+      "metrics": {
+        "renderers": [
+          "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)"
+        ]
+      }
+    },
+    "H3": {
+      "status": "REPORTED",
+      "reason": "/coi/: crossOriginIsolated true, SharedArrayBuffer round trip true; control false (no PASS or FAIL for the baseline)",
+      "metrics": {
+        "crossOriginIsolated": true,
+        "roundTrip": true,
+        "waitAsync": "not-equal",
+        "controlCrossOriginIsolated": false
+      }
+    },
+    "H5": {
+      "status": "REPORTED",
+      "reason": "adapter apple/metal-3, 23 features, device true, compute readback true; Electron 45 had 24 features",
+      "metrics": {
+        "adapter": {
+          "vendor": "apple",
+          "architecture": "metal-3",
+          "device": "",
+          "description": "",
+          "isFallbackAdapter": false
+        },
+        "featureCount": 23,
+        "device": true,
+        "computeReadbackCorrect": true,
+        "electronReferenceFile": "electron-45.0.0-20261024T151511.707Z.json",
+        "electronFeatureCount": 24,
+        "featuresOnlyInChrome": [],
+        "featuresOnlyInElectron": [
+          "texture-compression-unaligned"
+        ]
+      }
+    }
+  },
+  "checks": {
+    "fullProbeAttempts": [
+      {
+        "label": "chromium-probe-full-1",
+        "file": "results/chromium-156.0.8078.4-20261024T171519.594Z.json",
+        "state": {
+          "state": "posted",
+          "file": "results/chromium-156.0.8078.4-20261024T171519.594Z.json",
+          "error": null
+        },
+        "launchedMs": 1558,
+        "sizing": {
+          "ok": true,
+          "windowWidth": 1280,
+          "windowHeight": 807,
+          "w": 1280,
+          "h": 720,
+          "ow": 1280,
+          "oh": 807
+        },
+        "page": {
+          "visibility": "visible",
+          "focus": true,
+          "innerWidth": 1280,
+          "innerHeight": 720,
+          "dpr": 2,
+          "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+        }
+      }
+    ],
+    "control": {
+      "label": "chromium-h3-control",
+      "file": "results/chromium-156.0.8078.4-20261024T171520.891Z.json",
+      "state": {
+        "state": "posted",
+        "file": "results/chromium-156.0.8078.4-20261024T171520.891Z.json",
+        "error": null
+      }
+    },
+    "electronReference": {
+      "file": "electron-45.0.0-20261024T151511.707Z.json",
+      "electronVersion": "45.0.0",
+      "chromium": "156.0.8078.48",
+      "webgpu": {
+        "available": true,
+        "adapter": {
+          "vendor": "apple",
+          "architecture": "metal-3",
+          "device": "",
+          "description": "",
+          "isFallbackAdapter": false
+        },
+        "features": [
+          "bgra8unorm-storage",
+          "clip-distances",
+          "core-features-and-limits",
+          "depth-clip-control",
+          "depth32float-stencil8",
+          "dual-source-blending",
+          "float32-blendable",
+          "float32-filterable",
+          "indirect-first-instance",
+          "primitive-index",
+          "rg11b10ufloat-renderable",
+          "shader-f16",
+          "subgroup-size-control",
+          "subgroups",
+          "texture-component-swizzle",
+          "texture-compression-astc",
+          "texture-compression-astc-sliced-3d",
+          "texture-compression-bc",
+          "texture-compression-bc-sliced-3d",
+          "texture-compression-etc2",
+          "texture-compression-unaligned",
+          "texture-formats-tier1",
+          "texture-formats-tier2",
+          "timestamp-query"
+        ],
+        "featureCount": 24,
+        "limits": {
+          "maxTextureDimension1D": 16384,
+          "maxTextureDimension2D": 16384,
+          "maxTextureDimension3D": 2048,
+          "maxTextureArrayLayers": 2048,
+          "maxBindGroups": 4,
+          "maxBindGroupsPlusVertexBuffers": 24,
+          "maxBindingsPerBindGroup": 1000,
+          "maxDynamicUniformBuffersPerPipelineLayout": 10,
+          "maxDynamicStorageBuffersPerPipelineLayout": 8,
+          "maxSampledTexturesPerShaderStage": 48,
+          "maxSamplersPerShaderStage": 16,
+          "maxStorageBuffersPerShaderStage": 10,
+          "maxStorageTexturesPerShaderStage": 8,
+          "maxUniformBuffersPerShaderStage": 12,
+          "maxUniformBufferBindingSize": 65536,
+          "maxStorageBufferBindingSize": 4294967292,
+          "minUniformBufferOffsetAlignment": 256,
+          "minStorageBufferOffsetAlignment": 256,
+          "maxVertexBuffers": 8,
+          "maxBufferSize": 4294967292,
+          "maxVertexAttributes": 30,
+          "maxVertexBufferArrayStride": 2048,
+          "maxInterStageShaderVariables": 28,
+          "maxColorAttachments": 8,
+          "maxColorAttachmentBytesPerSample": 128,
+          "maxComputeWorkgroupStorageSize": 32768,
+          "maxComputeInvocationsPerWorkgroup": 1024,
+          "maxComputeWorkgroupSizeX": 1024,
+          "maxComputeWorkgroupSizeY": 1024,
+          "maxComputeWorkgroupSizeZ": 64,
+          "maxComputeWorkgroupsPerDimension": 65535,
+          "maxImmediateSize": 64,
+          "maxStorageBuffersInFragmentStage": 10,
+          "maxStorageTexturesInFragmentStage": 8,
+          "maxStorageBuffersInVertexStage": 10,
+          "maxStorageTexturesInVertexStage": 8
+        },
+        "preferredCanvasFormat": "bgra8unorm",
+        "wgslLanguageFeatures": [
+          "buffer_view",
+          "immediate_address_space",
+          "linear_indexing",
+          "packed_4x8_integer_dot_product",
+          "pointer_composite_access",
+          "readonly_and_readwrite_storage_textures",
+          "subgroup_id",
+          "subgroup_uniformity",
+          "swizzle_assignment",
+          "texture_and_sampler_let",
+          "texture_formats_tier1",
+          "uniform_buffer_standard_layout",
+          "unrestricted_pointer_parameters"
+        ],
+        "device": true,
+        "computeReadbackCorrect": true,
+        "computeSample": [
+          7,
+          10,
+          13,
+          16
+        ]
+      },
+      "webgl2": {
+        "available": true,
+        "vendor": "Google Inc. (Apple)",
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+        "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "shadingLanguageVersion": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+        "maxTextureSize": 16384,
+        "extensionCount": 36,
+        "timerQuery": true,
+        "softwareRenderer": false
+      },
+      "displayRefreshHz": 60.00239944458008
+    }
+  },
+  "probeFiles": [
+    "results/chromium-156.0.8078.4-20261024T171519.594Z.json",
+    "results/chromium-156.0.8078.4-20261024T171520.891Z.json"
+  ],
+  "leftoverProcesses": {
+    "processesWithTempDirInCommand": 0
+  }
+}

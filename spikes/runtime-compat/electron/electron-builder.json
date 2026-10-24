@@ -1,0 +1,16 @@
+{
+  "appId": "dev.wglauncher.spike.throwaway",
+  "productName": "wgspike",
+  "electronVersion": "45.0.0",
+  "directories": { "output": "dist" },
+  "files": ["deeplink.mjs", "package.json"],
+  "extraMetadata": { "main": "deeplink.mjs" },
+  "asar": true,
+  "protocols": [{ "name": "wgspike deep link", "schemes": ["wgspike"] }],
+  "mac": {
+    "target": [{ "target": "dir", "arch": ["arm64"] }],
+    "identity": null,
+    "hardenedRuntime": false,
+    "notarize": false
+  }
+}

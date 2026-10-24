@@ -1,0 +1,20 @@
+{
+  "name": "wg-spike-electron",
+  "productName": "wgspike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "THROWAWAY Electron runtime-compatibility spike. Not product code.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "playwright-core": "1.64.1",
+    "wasm-feature-detect": "1.9.0"
+  }
+}

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>progress-lab</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 40rem; }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+      dt { font-weight: 600; }
+      dd { margin: 0; }
+      code { word-break: break-all; }
+      #error { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <h1>progress-lab</h1>
+    <p>Test fixture, not a real game. It keeps verifiable progress in browser storage.</p>
+    <dl>
+      <dt>Level</dt>
+      <dd id="level"></dd>
+      <dt>Coins</dt>
+      <dd id="coins"></dd>
+      <dt>Inventory</dt>
+      <dd id="inventory"></dd>
+      <dt>Progress hash</dt>
+      <dd><code id="progress-hash" data-ready="false"></code></dd>
+    </dl>
+    <p>
+      <button id="play-step" type="button" disabled>Play step</button>
+      <button id="reset" type="button" disabled>Reset</button>
+    </p>
+    <p id="error" role="alert" hidden></p>
+    <script type="module" src="game.js"></script>
+  </body>
+</html>

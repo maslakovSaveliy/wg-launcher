@@ -1,0 +1,8 @@
+# pnpm 11+ reads only auth/registry settings from .npmrc; everything else lives here (camelCase).
+packages:
+  - "fixtures/test-games/*"
+engineStrict: true
+saveExact: true
+# Dependency build scripts are blocked by default; allow only what is needed, deliberately.
+allowBuilds:
+  lefthook: true

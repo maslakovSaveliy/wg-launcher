@@ -1,0 +1,99 @@
+name: Compatibility report
+description: Report how a specific web game behaves in wg-launcher. Report only what you actually ran.
+title: "compat: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A compatibility report is a record of one real run. Use "Not tested" for anything you did not try. Do not guess.
+        An operating system the maintainers have not run is never listed as verified, so your report is valuable.
+  - type: input
+    id: game
+    attributes:
+      label: Game title
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Game URL or build and version
+      description: The exact URL, or the build name and version, that you ran.
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date tested
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      placeholder: Windows 11 23H2 x64
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: CPU and GPU
+      placeholder: Apple M3 / integrated GPU
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: wg-launcher version, and the Chrome version you compared against if you did.
+    validations:
+      required: true
+  - type: dropdown
+    id: launch
+    attributes:
+      label: Launch result
+      options:
+        - Launches and is playable
+        - Launches with problems (describe in notes)
+        - Does not launch
+    validations:
+      required: true
+  - type: checkboxes
+    id: input
+    attributes:
+      label: Input that worked
+      description: Tick only what you tested and saw working. Mention failures in the notes.
+      options:
+        - label: Keyboard
+        - label: Mouse
+        - label: Gamepad
+        - label: Pointer lock
+        - label: Fullscreen
+  - type: dropdown
+    id: save
+    attributes:
+      label: Does progress persist after restarting wg-launcher?
+      options:
+        - "Yes"
+        - "No"
+        - Not applicable (the game has no local progress)
+        - Not tested
+    validations:
+      required: true
+  - type: dropdown
+    id: export
+    attributes:
+      label: Export and restore result
+      options:
+        - Export and restore worked, same progress afterwards
+        - Export worked, restore failed
+        - Export failed
+        - Export is not supported for this game
+        - Not tested
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Errors, frame-rate impressions (say how you measured), workarounds, anything surprising.
