@@ -27,6 +27,13 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   separate `test:e2e` script added with the test game. License gate: production dependencies strict against the
   AGENTS.md allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
 - Execution style: subagent-driven development; test-first where code exists.
+- Controlled test game (Task 4): `fixtures/test-games/progress-lab`, a pnpm workspace package
+  (`@wg-launcher/fixture-progress-lab`, private) with its own Playwright suite. The interface the spike depends on
+  (server, element ids, `?ephemeral=1`, `/coi/`, `iframe-host.html`, `sw.js`, storage shapes, hash) is in its
+  `README.md`. All timestamps and binary values are synthetic and deterministic, so the hash depends only on the number
+  of steps. `pnpm test:e2e` is separate from `pnpm test` and `pnpm check`; CI runs it on Ubuntu and macOS in bundled
+  Chromium only, the `chrome` project is local only. The server logs each request to stdout because hypothesis H14
+  (variant b) reads a request log.
 - Spike hypotheses are frozen: `spikes/runtime-compat/HYPOTHESES.md` (H1 to H21, thresholds, decision rules) was written
   on 2026-10-24 before any spike ran. After the first run it changes only through its dated "Amendments" section.
   Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5 (no adapter even with the switch), a persistent H6 failure
@@ -172,6 +179,21 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   (`.mjs` config), secretlint 13.0.7 and markdownlint-cli2 0.24.0 run on Node 24.13. TS 7 ships as a native binary (an
   optional `@typescript/typescript-<platform>` package). (2026-10-24, run locally)
 
+### Test fixture (progress-lab, 2026-10-24, run locally)
+
+- [V] Playwright 1.64.1 launches Chromium with `ThirdPartyStoragePartitioning` in `--disable-features`
+  (`chromiumSwitches`, linked to playwright issue 32230; the Electron loader lists it too), so a cross-site iframe
+  shares storage with the top-level page. Bundled Chromium 156.0.8078.4 and installed Chrome 155.0.8059.85, both
+  driven by Playwright, showed exactly that: the iframe on `127.0.0.1` inside a `localhost` page saw the top-level
+  progress. Adding `--enable-features=ThirdPartyStoragePartitioning` changed nothing (disable wins); a later
+  `--disable-features=Translate` argument replaces Playwright's list (last switch wins) and partitions storage in both
+  browsers. [U] Whether `_electron.launch` has the same effect: the spike must check before it trusts H14 variant c.
+- [V] `localhost` and `127.0.0.1` count as different sites for storage partitioning in Chromium 156 and Chrome 155.
+- [V] IndexedDB `clear()` on an `autoIncrement` store does not reset its key generator (keys 1, 2, clear, next add is 3 in
+  Chromium 156); deleting the database does. A snapshot format has to say how it handles the generator.
+- [V] The 14 fixture tests pass three times in a row in both Playwright projects (84 runs): bundled Chromium 156.0.8078.4
+  and the installed Google Chrome 155.0.8059.85 (`channel: "chrome"`).
+
 ### Licensing precedent
 
 - [V] bitwarden/server uses AGPL-3.0 as the default license and a separate source-available license only for the
@@ -211,7 +233,16 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - `.gitattributes` forces LF so format checks behave the same on Windows checkouts.
 - Contributor Covenant 3.0 is CC BY-SA 4.0, not CC BY 4.0; `CODE_OF_CONDUCT.md` keeps that attribution.
 - The `packages` glob `fixtures/*` matches only one directory level; a package at `fixtures/test-games/<name>` needs
-  `fixtures/*/*`. [V, 2026-10-24, tested with pnpm 12.15.0; change the glob when the first fixture package is added]
+  `fixtures/*/*` or the explicit `fixtures/test-games/*`, which `pnpm-workspace.yaml` now uses. [V, 2026-10-24, tested
+  with pnpm 12.15.0]
+- `tsc -b` with `references` needs `composite: true` and refuses `noEmit` (TS6306, TS6310), which the base config sets.
+  The root `typecheck` script therefore lists the projects instead: `tsc -b . fixtures/test-games/progress-lab`; a new
+  `tsconfig.json` outside the root one must be added there. [V, 2026-10-24, TypeScript 7.0.2]
+- Biome 2.6's `usePlaywrightValidDescribeCallback` flags any call to a function named `describe`, even a local helper.
+  [V, 2026-10-24]
+- `@playwright/test` `webServer.port` is deprecated; use `url`. `pnpm test:e2e --project=chromium` forwards the
+  arguments to Playwright. `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so
+  traversal tests use `node:http`. [V, 2026-10-24]
 - `spike` is not a Conventional Commits type in `@commitlint/config-conventional`; `commitlint.config.mjs` adds it to
   the preset's list. [V, 2026-10-24: `spike: ...` accepted, `wip: ...` and `Spike: ...` rejected]
 - `allowBuilds: {lefthook: true}` in `pnpm-workspace.yaml` is the working build-allowlist key in pnpm 12.15.0. Without

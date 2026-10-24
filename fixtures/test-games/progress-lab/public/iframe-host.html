@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>progress-lab iframe host</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; }
+      iframe { width: 100%; max-width: 40rem; height: 24rem; border: 1px solid #888; }
+      #host-error { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <h1>progress-lab iframe host</h1>
+    <p>Embeds the page in <code>?src=</code> (http or https only). Test fixture.</p>
+    <p id="host-error" role="alert" hidden></p>
+    <iframe id="game-frame" title="Embedded game"></iframe>
+    <script type="module">
+      const frame = document.querySelector("#game-frame");
+      const error = document.querySelector("#host-error");
+      try {
+        const src = new URL(new URLSearchParams(location.search).get("src") ?? "");
+        if (src.protocol !== "http:" && src.protocol !== "https:") {
+          throw new Error(`unsupported scheme ${src.protocol}`);
+        }
+        frame.src = src.href;
+      } catch (cause) {
+        error.textContent = `Not embedding: ${cause.message}`;
+        error.hidden = false;
+      }
+    </script>
+  </body>
+</html>

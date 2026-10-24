@@ -39,11 +39,12 @@ Exists now:
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
 | `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy (with its tests) |
+| `fixtures/test-games/progress-lab/` | Controlled test game with verifiable persisted progress and its Playwright suite; see its `README.md`. Not a real game |
 
 Reserved, **not created yet**. Do not create a directory until the work that needs it exists:
 
 - `apps/desktop` (Electron client), `packages/shared`, `packages/snapshot`, `packages/exporters`.
-- `fixtures/test-games/` (controlled test game); spike code with its own lockfiles under `spikes/`.
+- Spike code with its own lockfiles under `spikes/`, beyond `spikes/runtime-compat/HYPOTHESES.md`.
 - `crates/` (Rust, only if and when the local-packages stage needs it).
 
 ## Commands
@@ -55,11 +56,12 @@ version by itself inside the repo. `pnpm install` also installs the git hooks (t
 | --- | --- |
 | `pnpm lint` | Biome lint, format check and import order for JS, TS, JSON and CSS (not Markdown) |
 | `pnpm format` | Biome formatter, writing changes |
-| `pnpm typecheck` | `tsc -b` with the strict base config |
+| `pnpm typecheck` | `tsc -b` with the strict base config, for the root project and the fixture's TypeScript (config and tests) |
 | `pnpm test` | Vitest unit tests (fast; also run by the pre-push hook) |
+| `pnpm test:e2e` | Playwright suite of the `progress-lab` fixture in bundled Chromium and, locally, installed Chrome (`--project=chromium` for Chromium only, as CI does). Needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once. Not part of `pnpm test` or `pnpm check` |
 | `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
-| `pnpm check` | Runs all of the above |
+| `pnpm check` | Runs lint, typecheck, test, licenses:check and docs:lint (not `test:e2e`) |
 
 Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed copy.
 
