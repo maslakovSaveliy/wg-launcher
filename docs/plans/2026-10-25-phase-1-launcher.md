@@ -128,18 +128,18 @@ historical text plus a one-line note), `MEMORY.md` (dated decision).
 specs, as `const` arrays plus types); `prodDepsGuard(pkgJson): VitePlugin` failing the build when a module resolved
 from `node_modules` belongs to a package not in that package.json's `dependencies` (name parsed from the resolved id,
 scoped names included); `workspacePackageNames(): Set<string>` used by the license gate.
-- [ ] Test: `uuidv7` gives version nibble 7, variant `8..b`, increasing 48-bit time prefix, passes `isUuidV7`; `isUuidV7`
+- [x] Test: `uuidv7` gives version nibble 7, variant `8..b`, increasing 48-bit time prefix, passes `isUuidV7`; `isUuidV7`
   rejects upper case, v4, wrong length.
-- [ ] Test (gate): a report containing `@wg-launcher/shared` with `AGPL-3.0-or-later` passes when it is a workspace
+- [x] Test (gate): a report containing `@wg-launcher/shared` with `AGPL-3.0-or-later` passes when it is a workspace
   member and fails when it is not; a GPL dependency *of* a workspace package still fails.
-- [ ] Test (guard): `node_modules/react/index.js` with `react` only in `devDependencies` → build error naming `react`;
+- [x] Test (guard): `node_modules/react/index.js` with `react` only in `devDependencies` → build error naming `react`;
   `node_modules/@scope/x/y.js` handled; a workspace package resolved through its symlink is allowed when listed.
-- [ ] Run each failing, implement, run passing.
-- [ ] Real check: `pnpm install`, then `pnpm licenses list --prod --recursive --json` (read without printing paths):
+- [x] Run each failing, implement, run passing.
+- [x] Real check: `pnpm install`, then `pnpm licenses list --prod --recursive --json` (read without printing paths):
   record in MEMORY.md how our AGPL workspace packages and their deps appear [V, date, command]; `pnpm licenses:check`
   passes; `pnpm check` passes.
-- [ ] Docs: ADR-0004 action item checked with the result; AGENTS.md repository map lists `packages/shared`.
-- [ ] Commit `build: add workspace packages and enforce the dependency rule`.
+- [x] Docs: ADR-0004 action item checked with the result; AGENTS.md repository map lists `packages/shared`.
+- [x] Commit `build: add workspace packages and enforce the dependency rule`.
 
 ### Task 2: `packages/snapshot` record layer: CBOR profile and value model (M)
 **Files:** create `packages/snapshot/{package.json,tsconfig.json}`, `src/record/{cbor.ts,value.ts,idb-key.ts,data-files.ts}`,

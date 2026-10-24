@@ -20,7 +20,7 @@
     "prepare": "lefthook install",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "typecheck": "tsc -b . fixtures/test-games/progress-lab",
+    "typecheck": "tsc -b . fixtures/test-games/progress-lab packages/shared",
     "test": "vitest run",
     "test:e2e": "pnpm --filter @wg-launcher/fixture-progress-lab run test:e2e",
     "licenses:check": "node scripts/check-licenses.mjs",

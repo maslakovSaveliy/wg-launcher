@@ -58,7 +58,9 @@ documentation recommends installing renderer-only packages as `devDependencies` 
 libraries outside the license gate. The rule is: everything bundled into or packaged with the app MUST be declared in
 `dependencies` (prod); `devDependencies` hold build and test tooling only. The Phase 1 desktop package config must
 follow this, with the electron-vite externalization and bundling settings checked accordingly (the price is a larger
-package unless the packager leaves out the bundled copies). `Assumed` (the rule is in AGENTS.md)
+package unless the packager leaves out the bundled copies). `Assumed` (the rule is in AGENTS.md). Enforcement: the
+build-time guard `scripts/prod-deps-guard.mjs` fails a build that bundles a `node_modules` package missing from
+`dependencies`; unit-tested with fake module ids, not yet run inside a real build. Verified (2026-10-25, `pnpm test`).
 
 ### Repository layout
 
@@ -157,5 +159,13 @@ the only native dependency the MVP would have had. Assumed
 - [ ] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
   (security.md S-14; agent).
 - [ ] Phase 1: make the desktop package config follow the dependency declaration rule above (electron-vite
-  externalization and bundling settings), and confirm how `pnpm licenses list` treats our own AGPL workspace packages
-  (they must neither trip the production gate nor hide a dependency of theirs) (agent).
+  externalization and bundling settings). The build-time guard exists (`scripts/prod-deps-guard.mjs`, Phase 1 Task 1)
+  and is wired into the electron-vite config when `apps/desktop` is created (agent).
+- [x] Phase 1: confirm how `pnpm licenses list` treats our own AGPL workspace packages. Done in Phase 1 Task 1. In a
+  scratch workspace (package A depends on package B through `workspace:*`, both private and `AGPL-3.0-or-later`, B
+  depends on `ms@2.1.3`), `pnpm licenses list --prod --recursive --json` printed only `ms@2.1.3` (MIT): neither A nor B
+  was listed, so they cannot trip the production gate, and B's own dependency is not hidden. Verified (2026-10-25,
+  pnpm 12.15.0, run locally; recorded in `MEMORY.md`). The gate also takes the workspace package names from
+  `pnpm ls -r --depth -1 --json` and exempts a listed workspace package only while its license is
+  `AGPL-3.0-or-later`, in case a later pnpm lists them; the unit tests pin that, including that a GPL dependency of a
+  workspace package still fails (agent).

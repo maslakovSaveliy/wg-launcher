@@ -3,7 +3,10 @@
 // Production dependencies must be permissive: every one has to match the allowlist below.
 // Development-only dependencies never fail the check; outside-allowlist ones are reported as warnings.
 // The data source is `pnpm licenses list --recursive --json`, run once for --prod and once for --dev.
-// --recursive matters: without it pnpm reports only the root package, never the workspace members.
+// --recursive matters: without it pnpm reports only the root package, never the workspace members' dependencies.
+// pnpm 12.15.0 does not list the workspace packages themselves (see MEMORY.md). Our own packages are AGPL-3.0-or-later,
+// which is not on the allowlist, so a pnpm version that did list them would trip the gate: `workspaceNames` exempts
+// exactly the packages of this workspace, and only while they carry our own license.
 
 import { execSync } from "node:child_process";
 import { realpathSync } from "node:fs";
@@ -29,6 +32,9 @@ import { pathToFileURL } from "node:url";
  * @property {string} version
  * @property {string} license
  */
+
+/** The license of every package of this repository (see LICENSING.md). */
+export const OWN_LICENSE = "AGPL-3.0-or-later";
 
 /** SPDX identifiers allowed for production dependencies. Keep in sync with AGENTS.md. */
 export const ALLOWED_LICENSES = Object.freeze([
@@ -154,18 +160,49 @@ const compare = (a, b) => (a < b ? -1 : Number(a > b));
 const byNameThenVersion = (a, b) => compare(a.name, b.name) || compare(a.version, b.version);
 
 /**
+ * Names of the packages of this workspace, read from `pnpm ls -r --depth -1 --json`. Only names are kept:
+ * the output also holds absolute paths, which are machine-specific and never printed.
+ * @param {string} output
+ * @returns {Set<string>}
+ */
+export function parseWorkspaceNames(output) {
+  const projects = JSON.parse(output);
+  if (!Array.isArray(projects)) {
+    throw new TypeError("Expected a JSON array of workspace projects from pnpm.");
+  }
+  return new Set(
+    projects.flatMap((project) => (typeof project?.name === "string" ? [project.name] : [])),
+  );
+}
+
+/**
+ * A finding for one of our own workspace packages. Anything else, including a workspace package whose license
+ * is not our own, is judged by the allowlist like every other package.
+ * @param {Finding} finding
+ * @param {ReadonlySet<string>} workspaceNames
+ */
+const isOwnPackage = (finding, workspaceNames) =>
+  workspaceNames.has(finding.name) && finding.license === OWN_LICENSE;
+
+/**
  * @param {{ prod: PnpmLicenseReport, dev: PnpmLicenseReport }} reports
  * @param {readonly string[]} [allowed]
+ * @param {ReadonlySet<string>} [workspaceNames] packages of this workspace, exempt while licensed `OWN_LICENSE`
  * @returns {{ violations: Finding[], warnings: Finding[] }}
  */
-export function evaluateLicenses({ prod, dev }, allowed = ALLOWED_LICENSES) {
-  const prodFindings = flatten(prod);
+export function evaluateLicenses(
+  { prod, dev },
+  allowed = ALLOWED_LICENSES,
+  workspaceNames = new Set(),
+) {
+  const prodFindings = flatten(prod).filter((finding) => !isOwnPackage(finding, workspaceNames));
   const prodKeys = new Set(prodFindings.map((finding) => `${finding.name}@${finding.version}`));
 
   const violations = prodFindings.filter((finding) => !isLicenseAllowed(finding.license, allowed));
   // A package that is also needed in production is judged as production, never as dev-only.
   const warnings = flatten(dev).filter(
     (finding) =>
+      !isOwnPackage(finding, workspaceNames) &&
       !prodKeys.has(`${finding.name}@${finding.version}`) &&
       !isLicenseAllowed(finding.license, allowed),
   );
@@ -187,6 +224,17 @@ function readPnpmReport(scope) {
   return JSON.parse(output);
 }
 
+/** @returns {Set<string>} */
+export function workspacePackageNames() {
+  // The command is a constant string: nothing user-controlled reaches the shell.
+  const output = execSync("pnpm ls -r --depth -1 --json", {
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  return parseWorkspaceNames(output);
+}
+
 /** @param {PnpmLicenseReport} report */
 const countPackages = (report) => flatten(report).length;
 
@@ -200,9 +248,11 @@ const printFindings = (findings, log) => {
 function main() {
   let prod;
   let dev;
+  let workspaceNames;
   try {
     prod = readPnpmReport("prod");
     dev = readPnpmReport("dev");
+    workspaceNames = workspacePackageNames();
   } catch (error) {
     console.error("Could not read dependency licenses from pnpm (is `pnpm install` done?).");
     console.error(error instanceof Error ? error.message : String(error));
@@ -210,7 +260,11 @@ function main() {
     return;
   }
 
-  const { violations, warnings } = evaluateLicenses({ prod, dev });
+  const { violations, warnings } = evaluateLicenses(
+    { prod, dev },
+    ALLOWED_LICENSES,
+    workspaceNames,
+  );
   console.log(`Production license allowlist: ${ALLOWED_LICENSES.join(", ")}`);
   console.log(
     `Checked ${countPackages(prod)} production and ${countPackages(dev)} development package versions.`,

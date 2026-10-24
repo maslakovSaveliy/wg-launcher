@@ -293,6 +293,18 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   webgpu_compute_birds) load in Electron 45 and Chrome 155 with WebGPU used where the page uses it and no Electron-only failure;
   the only console-error difference is Chrome's `/favicon.ico` 404.
 
+### Workspace packages and the license gate (Phase 1 Task 1, 2026-10-25)
+
+- [V, 2026-10-25, scratch workspace outside the repo, pnpm 12.15.0: package A depends on package B through
+  `workspace:*`, both private and `AGPL-3.0-or-later`, B depends on `ms@2.1.3`;
+  `pnpm licenses list --prod --recursive --json`] pnpm lists only `ms` (group `MIT`, entry keys `name`, `versions`,
+  `paths`, `license`, `homepage`, `description`). Neither A nor B appears, in `--prod` or `--dev`, and the dependency of
+  the workspace package is not hidden. Without `--recursive` the same call printed `{}`. The repository itself behaves the
+  same: after adding `packages/shared` (and with the AGPL fixture package) no `@wg-launcher/*` or `wg-launcher` entry is
+  listed and `pnpm licenses:check` passes. [A] A later pnpm may list workspace members, so the gate also reads their
+  names (`pnpm ls -r --depth -1 --json`, names only) and exempts a member only while its license is exactly
+  `AGPL-3.0-or-later`; a GPL dependency of a member and a member with another license still fail (unit-tested).
+
 ### Licensing precedent
 
 - [V] bitwarden/server uses AGPL-3.0 as the default license and a separate source-available license only for the
@@ -388,9 +400,16 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   bundles renderer `dependencies` and its docs recommend renderer-only packages as `devDependencies`, so a bundled
   library kept there would escape the gate. Rule (AGENTS.md): everything bundled into or packaged with the app is in
   `dependencies`; `devDependencies` are build and test tooling only. [V, 2026-10-25, electron-vite docs "Dependency
-  Handling" read through Context7 for the bundling statements; the script header for the gate] Phase 1 checks: the
-  electron-vite externalization and bundling settings follow the rule, and `pnpm licenses list` handles our own AGPL
-  workspace packages without tripping the gate or hiding their dependencies (ADR-0004); that it does is [A], not run.
+  Handling" read through Context7 for the bundling statements; the script header for the gate] Phase 1 check still open:
+  the electron-vite externalization and bundling settings follow the rule (ADR-0004). Enforced since 2026-10-25 by
+  `scripts/prod-deps-guard.mjs` (a plugin for the desktop build, wired in with `apps/desktop`; unit-tested with fake
+  ids only, [A] that the `load` hook sees every bundled module in a real electron-vite build until Task 5 runs it).
+- `pnpm ls -r --depth -1 --json` lists the root project too (name `wg-launcher`) and prints absolute `path`s: read only
+  `name`. A workspace package without dependencies adds nothing to `pnpm-lock.yaml`, so `pnpm install` reports "Already up
+  to date" when it is created. [V, 2026-10-25, pnpm 12.15.0]
+- `packages/shared` is consumed as TypeScript source (`exports` points at `src/index.ts`, no build). Under `NodeNext`
+  relative imports need the `.js` extension (`./ids.js`); Vitest and Vite map it to the `.ts` file. [V, 2026-10-25,
+  `pnpm typecheck` and `pnpm test`]
 
 ## Open questions
 
