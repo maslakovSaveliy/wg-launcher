@@ -29,10 +29,20 @@ license: "Security" becomes the protection the license gives against closed or h
   template (CC BY 3.0, Verified (2026-10-24, <https://www.harmonyagreements.org/>)). Counterparty: Savelii Maslakov
   (passport spelling), the project owner, as an individual; governing law: the Russian Federation. `Owner` (confirmed
   2026-10-25). The CLA stays inactive, and no outside code is accepted, until a lawyer has reviewed it and the signing
-  app is set up. `Owner`. These values go into the placeholders of [CLA.md](../../CLA.md) in a later Phase 0 task; on
-  2026-10-25 its party (line 21) and jurisdiction (line 135) were still placeholders. Verified (2026-10-25, CLA.md)
-- **Future paid features** live only in one dedicated top-level directory under a source-available license whose text is
-  stored there; everything else stays AGPL; the directory is announced before it is created, and none exists. `Owner`
+  app is set up. `Owner`. Both values are written into [CLA.md](../../CLA.md): the party in its preamble (line 21) and
+  the governing law in section 6.1 (lines 135 and 136); the file is marked a draft that is not in effect. Verified
+  (2026-10-25, CLA.md lines 3 to 6, 21 and 135 to 136)
+
+  *Correction (2026-10-25):* the first draft of this ADR said the party and the law were still placeholders in CLA.md;
+  they were filled in by the commit `docs: fill in the CLA party and governing law`.
+- **Future paid features** live only in a dedicated directory under a source-available license whose text is stored
+  there; everything else stays AGPL; no such directory exists. `Owner` (Phase 0 plan, "Owner decisions"). That the
+  directory is top-level, that its name and license text are fixed later, and that the change is announced before the
+  directory is created are not owner decisions: [LICENSING.md](../../LICENSING.md) says "one clearly named directory",
+  "will be announced" and leaves the details to a future ADR, and LICENSING.md wins over this ADR. `Assumed`
+
+  *Correction (2026-10-25):* the first draft tagged "one dedicated top-level directory" and "announced before it is
+  created" as `Owner`; the owner decided only "a dedicated directory".
 - **Core always free:** the game library, launching games, local saves and snapshots (export and restore), progress
   tracking. `Owner`
 - **Trademark policy:** the AGPL grants no right to the name or logo; forks use their own name. `Owner`
@@ -109,12 +119,12 @@ commercial options; its costs are the CLA process and companies' AGPL reluctance
 ## Facts versus assumptions
 
 - **Facts** (tagged where they appear above): the license text and its sections 7(e) and 13; the Bitwarden structure;
-  the Harmony template license; the CLA placeholders; the FSL authors' description.
+  the Harmony template license; the CLA party and governing law as written in CLA.md; the FSL authors' description.
 - **Assumptions** (Assumed): that copyleft dependencies would block relicensing; how companies and contributors react;
   the GPL and MPL properties stated from general knowledge. None of this is legal advice.
 
 ## Action items
 
-- [ ] Write the owner-confirmed party (Savelii Maslakov, individual) and governing law (Russian Federation) into the
-  `CLA.md` placeholders (agent, in a later Phase 0 task).
+- [x] Write the owner-confirmed party (Savelii Maslakov, individual) and governing law (Russian Federation) into the
+  `CLA.md` placeholders (agent; done 2026-10-25).
 - [ ] Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md`, then set up the CLA signing app (owner).

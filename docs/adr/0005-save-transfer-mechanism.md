@@ -35,9 +35,17 @@ Details are in save-transfer.md; each item names who decided it.
    hidden window on the game's own partition. `ses.protocol.handle` serves an empty stub at the game origin
    (`/__wg_quiescent__?job=<nonce>`) and answers everything else with 403, with no network passthrough (QW-1, QW-10).
    `Owner` for "closed window, browser APIs" (AGENTS.md data-safety invariant 1), `Assumed` for the rest.
-2. **Service workers out, in this order:** stop the session's workers and wait until none runs; load `about:blank`;
-   attach `webContents.debugger`; `Network.enable` and `Network.setBypassServiceWorker {bypass: true}` (also on
-   auto-attached child targets); only then navigate to the stub. `Assumed`
+2. **Service workers out, in this order** (normative: [save-transfer.md](../specs/save-transfer.md#5-quiescent-window)
+   steps 4 to 6): load `about:blank`; attach `webContents.debugger`; through it send `ServiceWorker.enable` and
+   `ServiceWorker.stopAllWorkers` and wait until `ses.serviceWorkers.getAllRunning()` is empty; then `Network.enable` and
+   `Network.setBypassServiceWorker {bypass: true}` (also on auto-attached child targets); only then navigate to the
+   stub. `Assumed`
+
+   *Correction (2026-10-25):* the first draft of this decision stopped the workers before `about:blank` and the
+   debugger. That order cannot be carried out: Electron 45 has no API that stops a service worker outside CDP
+   (`ServiceWorkers` can list, query and start workers; `ServiceWorkerMain` can neither stop nor unregister one).
+   Verified (2026-10-25, `electron.d.ts` of `electron@45.0.0` in the spike's `node_modules`). The stop therefore goes
+   through the attached debugger, as in save-transfer.md.
 3. **Canary.** For the whole job every parsed script must be ours, and any other script, service-worker target or worker
    start aborts with `EXP_QUIESCENCE_VIOLATION` or `IMP_QUIESCENCE_VIOLATION`. The canary is the proof that no game code
    ran. `Assumed`

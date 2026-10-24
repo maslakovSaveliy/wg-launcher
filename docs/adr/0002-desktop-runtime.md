@@ -105,7 +105,7 @@ could be accepted only once every fatal criterion passed (rule 2), and a criteri
 | Compatibility | Isolation and persistence PASS in 5 of 5 runs, no tab strip or address bar, CDP reads work; Chrome 155 here. Verified (2026-10-24, RESULTS.md H20) |
 | Security | A DevTools port reachable by local processes. Assumed |
 | Team familiarity, reversibility | Spike code exists (Verified (2026-10-24, `spikes/runtime-compat/groups/app.mjs`)); high. Assumed |
-| Pros | Real Chrome engine; renderer exited 2.8 to 5.2 s after close (Electron 27.8 s, H16). Verified (2026-10-24, RESULTS.md H16 and H20) |
+| Pros | Real Chrome engine; renderer exited 3.1 to 5.9 s after close (Electron 27.8 s, H16). Verified (2026-10-24, RESULTS.md H16 and H20); *correction (2026-10-25):* the first draft said 2.8 to 5.2 s, the range of an earlier set of runs that was not kept; the committed runs give 3.1 to 5.9 s |
 | Cons | Chrome keeps running after its last window; CDP IndexedDB cannot write, so restore was not tested in this mode. Verified (2026-10-24, RESULTS.md H20) |
 
 ## Trade-off analysis

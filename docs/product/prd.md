@@ -139,13 +139,15 @@ Three distinct actions with different consequences. Each has its own confirmatio
 | --- | --- | --- | --- |
 | Remove from library | The card and its metadata | Snapshots and backups | The game's live session storage stays as orphaned data until the user deletes it (OQ-2, decided in [architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics)) |
 | Clear cache | Cache, shader cache and service workers (asset cache, never game data) | Game data, snapshots, backups | None needed |
-| Delete local saves | The game's local data (localStorage, IndexedDB and similar) | Snapshots and backups | A backup is made and verified first |
+| Delete local saves | The game's localStorage and IndexedDB data | Snapshots, backups, and OPFS and other file-system data (v1 cannot back those up, so it does not delete them; the dialog says so) | A backup is made and verified first |
 
 Backups are never deleted automatically or as a side effect of another action. A way to prune them by hand is not part
-of the MVP. `Owner` for "backups are never auto-deleted silently" (the owner decisions of 2026-10-24 in the
-[Phase 0 plan](../plans/2026-10-24-phase-0-foundation.md)); `Concept` for "deleting a game must not silently destroy
-backups" (concept section 11); `Assumed` for the wider wording above and for the missing manual pruning, as in
-[architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics).
+of the MVP. `Assumed` for "backups are never auto-deleted silently" (it is in the plan's "Design decisions the specs
+must encode", approved with the [Phase 0 plan](../plans/2026-10-24-phase-0-foundation.md), and tagged the same in
+[architecture.md](../specs/architecture.md#12-library-entries-and-delete-semantics)); `Concept` for "deleting a game must
+not silently destroy backups" (concept section 11); `Assumed` for the wider wording above, for the missing manual
+pruning, and for keeping OPFS data ([save-transfer.md](../specs/save-transfer.md#1-data-versus-cache): a delete without
+a backup is forbidden, and OPFS cannot be backed up in v1).
 
 ## 10. Saves and snapshots
 

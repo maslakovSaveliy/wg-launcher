@@ -349,7 +349,7 @@ Installed Chrome 155.0.8059.85 started directly: `--app=<url> --user-data-dir=<d
    `IndexedDB.requestData` read the three `stepLog` records. CDP IndexedDB has no write method (Verified in `MEMORY.md`), so
    restore is not available in this mode. Gotcha found: `IndexedDB.requestData` fails with "Could not get index" when
    `indexName` is an empty string; omit the parameter to read the object store itself (Chrome 155).
-5. **Process cleanup (mixed: PASS 3, FAIL 2 of 5).** After the window of the progress-lab game was closed
+5. **Process cleanup (mixed: PASS 2, FAIL 3 of 5).** After the window of the progress-lab game was closed
    (`Target.closeTarget`), its renderer exited after 5.09, 3.16, 3.10, 5.91 and 5.03 s. The Assumed 5 s threshold falls inside
    that spread, so the verdict flips between runs (PASS in 2, FAIL in 3); no run was discarded. An earlier set of five runs
    (not kept: the code was reworked afterwards) showed the same spread, 2.8 to 5.2 s. After `Browser.close` no process of the profile

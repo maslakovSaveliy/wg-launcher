@@ -48,9 +48,9 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   block Electron 45.0.0. Fallback if it misbehaves later: `pnpm@11.7.0`. [V, 2026-10-24, run locally]
 - Quality toolchain (Task 2): Biome for JS, TS, JSON and CSS only; markdownlint-cli2 for Markdown with no line-length
   rule; secretlint on staged files; commitlint with Conventional Commits plus `spike`; lefthook hooks (pre-commit,
-  commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, and the Playwright suite will be a
-  separate `test:e2e` script added with the test game. License gate: production dependencies strict against the
-  AGENTS.md allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
+  commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, and the Playwright suite is the separate
+  `pnpm test:e2e` script of the test game. License gate: production dependencies strict against the AGENTS.md
+  allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
 - Execution style: subagent-driven development; test-first where code exists.
 - 2026-10-25 Phase 0 close-out (Task 9): `README.md`, `CONTRIBUTING.md` and the docs index `docs/README.md` exist, and
   the branch `phase-0-foundation` waits for the owner's review before any merge to `main`.
@@ -63,11 +63,11 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   (variant b) reads a request log.
 - Spike hypotheses are frozen: `spikes/runtime-compat/HYPOTHESES.md` (H1 to H21, thresholds, decision rules) was written
   on 2026-10-24 before any spike ran. After the first run it changes only through its dated "Amendments" section.
-  Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5 (no adapter even with the switch), a persistent H6 failure
-  (software renderer) and H7 (p95 > Chrome x 1.15); Tauri must beat a criterion Electron fails; Electron failing a GPU
-  or performance comparison against a valid Chrome baseline means reconsidering Chrome `--app` + CDP. H1 to H6 were
-  measured on Electron 45.0.0; H7 was not, and ADR-0002 was accepted on 2026-10-25 with H7 as a Phase 1 condition (see
-  above).
+  Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5 (no adapter where Chrome has one, also with the switch), a
+  persistent H6 failure (software renderer) and H7 (p95 > Chrome x 1.15); Tauri must beat a criterion Electron fails;
+  Electron failing a GPU or performance comparison against a valid Chrome baseline means reconsidering Chrome `--app` +
+  CDP. H1 to H6 were measured on Electron 45.0.0; H7 was not, and ADR-0002 was accepted on 2026-10-25 with H7 as a
+  Phase 1 condition (see above).
 - PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; acceptance criteria AC-1 to AC-25
   each name a test type.
 - Public GitHub repo: <https://github.com/maslakovSaveliy/wg-launcher>. Work happens on branches; merge to `main` only
@@ -121,8 +121,9 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - [V] Packaging: Electron Forge 8.0.1, electron-builder 26.18.0, electron-vite 6.0.0 (peer vite 6, 7 or 8).
   <https://www.electronjs.org/docs/latest/tutorial/tutorial-packaging>
 - [V] Playwright's Electron support is experimental. <https://playwright.dev/docs/api/class-electron>
-- [U] WebGPU is on by default in Electron: no Electron doc says so (Chromium ships it on Windows x64 and macOS since
-  113).
+- [V] WebGPU works without any switch in Electron 45.0.0 on this Mac (spike H5 PASS: adapter `apple`/`metal-3`, device
+  created, compute readback correct; 2026-10-24, [RESULTS.md](spikes/runtime-compat/RESULTS.md) H5). [U] Whether it is on
+  by default on other OSes and GPUs: no Electron doc says so (Chromium ships it on Windows x64 and macOS since 113).
 - [V] Known issues: Electron 41 on macOS broke COOP/COEP cross-origin isolation (#50242), fix merged in PR #50789 on
   2026-04-30; [U] which versions got the backport. Pointer lock on Wayland #49754 fixed 2026-02. Gamepad with Steam
   Input #45989 closed. <https://github.com/electron/electron/issues>
@@ -373,6 +374,13 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Playwright launches Chrome headed but `viewport: null` plus `Browser.setWindowBounds` over CDP is needed to get an exact
   1280 x 720 CSS-pixel viewport at the native scale factor; `Page.bringToFront` is enough to get focus. [V, 2026-10-24]
 - In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
+- License gate versus bundling: `scripts/check-licenses.mjs` fails only on production dependencies, while electron-vite
+  bundles renderer `dependencies` and its docs recommend renderer-only packages as `devDependencies`, so a bundled
+  library kept there would escape the gate. Rule (AGENTS.md): everything bundled into or packaged with the app is in
+  `dependencies`; `devDependencies` are build and test tooling only. [V, 2026-10-25, electron-vite docs "Dependency
+  Handling" read through Context7 for the bundling statements; the script header for the gate] Phase 1 checks: the
+  electron-vite externalization and bundling settings follow the rule, and `pnpm licenses list` handles our own AGPL
+  workspace packages without tripping the gate or hiding their dependencies (ADR-0004); that it does is [A], not run.
 
 ## Open questions
 

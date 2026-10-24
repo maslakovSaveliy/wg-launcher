@@ -45,6 +45,21 @@ marked.
 | Packaging | `electron-builder` 26.18.0, fuses through its `electronFuses` setting | Option P1 below |
 | End-to-end tests | `@playwright/test` 1.64.1, `_electron.launch`, with the partitioning switch re-appended | H11 PASS. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H11) |
 
+### Dependency declaration
+
+`scripts/check-licenses.mjs` fails only on production dependencies and never on `devDependencies`. Verified
+(2026-10-25, header of `scripts/check-licenses.mjs`). electron-vite bundles a renderer's `dependencies`, and its
+documentation recommends installing renderer-only packages as `devDependencies` to keep the package smaller;
+`dependencies` of the main process and preload scripts stay external and are packaged with the app. Verified
+(2026-10-25, electron-vite documentation, "Dependency Handling", read through Context7,
+<https://github.com/alex8088/electron-vite-docs/blob/master/packages/en-US/docs/guide/dependency-handling.md>).
+
+*Correction (2026-10-25), added in the final review of Phase 0:* following that recommendation would put bundled
+libraries outside the license gate. The rule is: everything bundled into or packaged with the app MUST be declared in
+`dependencies` (prod); `devDependencies` hold build and test tooling only. The Phase 1 desktop package config must
+follow this, with the electron-vite externalization and bundling settings checked accordingly (the price is a larger
+package unless the packager leaves out the bundled copies). `Assumed` (the rule is in AGENTS.md)
+
 ### Repository layout
 
 | Path | Content | When it is created |
@@ -141,3 +156,6 @@ the only native dependency the MVP would have had. Assumed
 - [ ] Before the first Windows release, check the license of everything the installer ships (agent).
 - [ ] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
   (security.md S-14; agent).
+- [ ] Phase 1: make the desktop package config follow the dependency declaration rule above (electron-vite
+  externalization and bundling settings), and confirm how `pnpm licenses list` treats our own AGPL workspace packages
+  (they must neither trip the production gate nor hide a dependency of theirs) (agent).

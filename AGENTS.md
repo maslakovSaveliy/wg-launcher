@@ -168,7 +168,10 @@ paths, game isolation).
 - The Electron and Chromium runtime brings its own bundled components and notices (for example FFmpeg, which Chromium
   bundles under the LGPL; Assumed, not checked here). They are not covered by the gate above and are handled when the
   app is packaged (third-party notices).
-- Dev-only dependencies are reported, not blocking.
+- Dev-only dependencies are reported, not blocking. The gate trusts the split in `package.json`, so everything bundled
+  into or packaged with the app MUST be declared in `dependencies` (prod); `devDependencies` hold build and test
+  tooling only. The Phase 1 desktop package config must follow this (electron-vite externalization and bundling
+  settings checked accordingly); see [ADR-0004](docs/adr/0004-toolchain-and-repo-layout.md#dependency-declaration).
 - GPL games are used only as external test URLs and are never vendored. Never copy code from GPL projects; other open
   projects are a source of ideas only.
 - Before adding a dependency check its license, maintenance, size and whether it is needed at all. Install exact
