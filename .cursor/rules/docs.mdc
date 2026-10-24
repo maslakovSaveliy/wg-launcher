@@ -1,0 +1,18 @@
+---
+description: Rules for writing documentation under docs/ - claim tags, ADR format, facts versus assumptions, English.
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+- Write in English. The only exception is `docs/product/sources/concept-v1.0.ru.md`, which stays verbatim.
+- Tag every factual claim: `Verified (YYYY-MM-DD, source)` with a URL, command or commit as the source, `Assumed`, or
+  `Unverified`. Keep facts and assumptions visibly separate. An untested OS is never "verified".
+- Cite sources as full URLs with the date you read them.
+- No `TODO` or `TBD` outside a section named "Open questions".
+- ADRs live in `docs/adr/NNNN-title.md`. Sections: Status (Proposed, Accepted, Superseded by NNNN), Context, Options (a
+  table with pros, cons and the evidence tag for each), Decision, Consequences, Facts versus assumptions, Revisit
+  triggers.
+- Specs state exact values and limits (formats, sizes, field names) so another agent can implement them without
+  guessing.
+- No machine-specific paths, usernames or secrets; the repository is public.
+- Use relative links between documents and keep the Markdown lint-clean.

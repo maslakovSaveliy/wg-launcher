@@ -1,0 +1,19 @@
+---
+description: Core wg-launcher rules. AGENTS.md is the source of truth.
+alwaysApply: true
+---
+
+`AGENTS.md` is the source of truth for all rules; read it, and `MEMORY.md`, before working. The five most critical
+rules:
+
+1. **Games are untrusted.** Game windows get sandbox, contextIsolation, no nodeIntegration, no preload and no IPC;
+   `webSecurity` stays on; permissions and navigation are deny-by-default; IPC from the launcher UI validates sender and
+   arguments.
+2. **Saves are sacred.** Never copy a live Chromium profile; back up before every import; a failure must never destroy
+   existing saves; treat archives as hostile.
+3. **Be honest.** No fake install, sync, FPS or download indicators; every doc claim is tagged
+   `Verified (date, source)`, `Assumed` or `Unverified`; an untested OS is never "verified".
+4. **Keep the repo clean.** English only; no secrets, personal data or machine paths (the repo is public); no fake or
+   empty artifacts; Phase 0 contains no client code.
+5. **Verify, then claim.** Never push, publish, or change external accounts/settings unless the owner approved it (an
+   approved plan counts); run the checks and read the output before saying something works; use Conventional Commits.

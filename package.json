@@ -1,0 +1,19 @@
+{
+  "name": "wg-launcher",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open-source desktop library and launcher for web games",
+  "license": "AGPL-3.0-or-later",
+  "author": "maslakovSaveliy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maslakovSaveliy/wg-launcher.git"
+  },
+  "bugs": "https://github.com/maslakovSaveliy/wg-launcher/issues",
+  "homepage": "https://github.com/maslakovSaveliy/wg-launcher#readme",
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,5 @@
+# pnpm 11+ reads only auth/registry settings from .npmrc; everything else lives here (camelCase).
+packages:
+  - "fixtures/*"
+engineStrict: true
+saveExact: true

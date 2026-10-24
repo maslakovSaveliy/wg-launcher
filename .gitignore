@@ -30,3 +30,7 @@ lancedb/
 .env
 .env.*
 !.env.example
+
+# Per-developer agent settings
+.claude/settings.local.json
+CLAUDE.local.md
