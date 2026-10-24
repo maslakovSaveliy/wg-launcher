@@ -67,7 +67,8 @@ Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed co
 
 Git hooks (lefthook) run for you: pre-commit formats staged files with Biome (and re-stages them), scans them with
 secretlint and lints staged Markdown; commit-msg enforces Conventional Commits; pre-push runs `pnpm typecheck` and
-`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks on every pull request.
+`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks on every pull request and also runs the fixture's
+Playwright suite (`pnpm test:e2e --project=chromium`) on Ubuntu and macOS.
 
 ## Hard rules
 
