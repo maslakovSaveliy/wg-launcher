@@ -1,7 +1,9 @@
 # ADR-0005: Save transfer mechanism
 
-**Status:** Accepted for the Electron runtime of ADR-0002 (Proposed only on H7, a frame-time criterion that does not
-touch this mechanism).
+**Status:** Accepted, together with ADR-0002 and under its Phase 1 H7 condition. This ADR's own evidence (H14, variants
+a to d) is complete; but a Phase 1 H7 FAIL reopens ADR-0002 and this ADR, because the alternative it points to (Chrome
+`--app` with CDP) offers no preload, `ses.protocol.handle` or `webContents.debugger` on a `BrowserWindow`, so decisions
+1, 2, 4 and 6 below would not hold there. Assumed (reasoning; the H20 checks did not test a save mechanism)
 
 **Date:** 2026-10-24
 
@@ -18,8 +20,10 @@ Conventions: [ADR-0000](0000-template.md#conventions). Exact procedures are norm
   ([AGENTS.md](../../AGENTS.md#data-safety-invariants) invariants 1 to 5; [PRD](../product/prd.md) section 10)
 - CDP's IndexedDB domain can read and delete but has no put or add, so it cannot restore. Verified (2026-10-24,
   [runtime-and-storage.md](../research/runtime-and-storage.md) section 5.1)
-- Storage calls from an isolated world reach the page's own storage with structured clone (Chrome documentation;
-  Verified (2026-10-24, runtime-and-storage.md section 5.2)); the spike showed it in Electron 45 (H14 below).
+- Storage calls from an isolated world reach the page's own storage. Verified (2026-10-24, runtime-and-storage.md
+  section 5.2, Chrome documentation). In Electron 45 such an exporter read and restored Date, ArrayBuffer, typed-array
+  and Blob values through the real IndexedDB API. Verified (2026-10-24,
+  [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H14)
 - Since Chrome 115 a cross-site iframe's storage is keyed by its origin plus the top-level site. Verified (2026-10-24,
   runtime-and-storage.md section 5.5)
 
@@ -120,9 +124,9 @@ Assumed
 
 ### Revisit triggers
 
-- ADR-0002 ends without Electron; Chromium or Electron removes `Network.setBypassServiceWorker`, isolated worlds or
-  `Storage.clearDataForStorageKey`; a real game keeps saves in OPFS or another store; the generator probe proves
-  unstable. Assumed
+- ADR-0002 is reopened (a Phase 1 H7 FAIL) or ends without Electron; Chromium or Electron removes
+  `Network.setBypassServiceWorker`, isolated worlds or `Storage.clearDataForStorageKey`; a real game keeps saves in OPFS
+  or another store; the generator probe proves unstable. Assumed
 
 ## Evidence
 

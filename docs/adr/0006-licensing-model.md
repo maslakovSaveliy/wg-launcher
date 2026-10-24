@@ -26,11 +26,11 @@ license: "Security" becomes the protection the license gives against closed or h
 - **Dual licensing:** any use on other terms only under a separate written agreement with the copyright holder; no
   standard commercial offer exists. `Owner` ([LICENSING.md](../../LICENSING.md))
 - **CLA** for outside contributors, so the owner can relicense: an individual CLA adapted from the Harmony HA-CLA-I
-  template (CC BY 3.0, Verified (2026-10-24, <https://www.harmonyagreements.org/>)). Counterparty: the project owner as
-  an individual; governing law: the Russian Federation; both owner-confirmed. The CLA stays inactive, and no outside
-  code is accepted, until a lawyer has reviewed it and the signing app is set up. `Owner`. `CLA.md` still carries the
-  placeholders for the owner's legal name and the jurisdiction. Verified (2026-10-25, [CLA.md](../../CLA.md) lines 21
-  and 135)
+  template (CC BY 3.0, Verified (2026-10-24, <https://www.harmonyagreements.org/>)). Counterparty: Savelii Maslakov
+  (passport spelling), the project owner, as an individual; governing law: the Russian Federation. `Owner` (confirmed
+  2026-10-25). The CLA stays inactive, and no outside code is accepted, until a lawyer has reviewed it and the signing
+  app is set up. `Owner`. These values go into the placeholders of [CLA.md](../../CLA.md) in a later Phase 0 task; on
+  2026-10-25 its party (line 21) and jurisdiction (line 135) were still placeholders. Verified (2026-10-25, CLA.md)
 - **Future paid features** live only in one dedicated top-level directory under a source-available license whose text is
   stored there; everything else stays AGPL; the directory is announced before it is created, and none exists. `Owner`
 - **Core always free:** the game library, launching games, local saves and snapshots (export and restore), progress
@@ -115,5 +115,6 @@ commercial options; its costs are the CLA process and companies' AGPL reluctance
 
 ## Action items
 
-- [ ] Fill the CLA party and jurisdiction placeholders with the owner-confirmed values (agent, in a later Phase 0 task).
+- [ ] Write the owner-confirmed party (Savelii Maslakov, individual) and governing law (Russian Federation) into the
+  `CLA.md` placeholders (agent, in a later Phase 0 task).
 - [ ] Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md`, then set up the CLA signing app (owner).

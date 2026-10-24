@@ -21,7 +21,8 @@ Conventions: [ADR-0000](0000-template.md#conventions).
 ## Decision
 
 - Write a small own client. Fork none of itchio/itch, FlashpointProject/launcher, arhitekt86/pixens-launcher or
-  lutris/web-runner. `Owner` (Phase 0 plan approved by the owner; [MEMORY.md](../../MEMORY.md) Decisions)
+  lutris/web-runner. Assumed (approved with the Phase 0 plan, which lists it among the calls the owner can override;
+  [MEMORY.md](../../MEMORY.md) Decisions)
 - Copy no code from any of them; other projects are a source of ideas only. Ideas taken: one persistent partition per
   game (itch's `persist:gamesession_${game.id}`, Ferdium's `persist:service-${id}`), which becomes
   `persist:game:<gameId>` with a URL-independent UUIDv7; and a custom protocol handled per session (itch's

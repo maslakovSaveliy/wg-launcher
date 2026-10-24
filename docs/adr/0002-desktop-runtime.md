@@ -1,6 +1,6 @@
 # ADR-0002: Desktop runtime
 
-**Status:** Proposed. Electron 45 provisionally; pending H7 (frame time against Chrome) from the hands-off runs.
+**Status:** Accepted, by owner decision of 2026-10-25, under the Phase 1 H7 condition in "Decision".
 
 **Date:** 2026-10-24
 
@@ -27,32 +27,37 @@ Conventions: [ADR-0000](0000-template.md#conventions). `H<n>` is a hypothesis in
 | H3 | `crossOriginIsolated` with COOP and COEP | PASS on 45.0.0, so no 44.9.x retry | Verified (2026-10-24, RESULTS.md H3) |
 | H5 | WebGPU adapter where Chrome has one | PASS: adapter, device and compute without a switch; 24 features, Chrome 23 | Verified (2026-10-24, RESULTS.md H5 and H19) |
 | H6 | Hardware WebGL2 renderer | PASS: ANGLE Metal in Electron and in Chrome | Verified (2026-10-24, RESULTS.md H6 and H19) |
-| H7 | p95 frame time at most Chrome's p95 x 1.15 | **Not measured**: Electron-only numbers exist, the calibrated Chrome runs do not | Verified (2026-10-24, RESULTS.md summary, H7 "pending") |
+| H7 | p95 frame time at most Chrome's p95 x 1.15 | **Not measured**: Electron-only numbers exist, the calibrated Chrome runs do not; deferred to Phase 1 | Verified (2026-10-24, RESULTS.md summary, H7 "pending"); the deferral is `Owner` (2026-10-25) |
 
-H4 (injected headers) also passed; it is not fatal. Verified (2026-10-24, RESULTS.md H4). INVALID, INCONCLUSIVE, N/A and
-not-run results never count as PASS (decision rule 7), so H7 blocks acceptance.
+H4 (injected headers) also passed; it is not fatal. Verified (2026-10-24, RESULTS.md H4). By the frozen rules this ADR
+could be accepted only once every fatal criterion passed (rule 2), and a criterion that was not run never counts as PASS
+(rule 7). Verified (2026-10-24, HYPOTHESES.md section 4)
 
 ## Decision
 
-- **Electron 45.0.0** (Chromium 156.0.8078.48, Node 24.22.0) is the provisional runtime: the exact version every spike
-  result was measured on. Verified (2026-10-24, RESULTS.md "Run") for the version; the choice is `Assumed` until H7
-  closes. Fallback line 44.9.x (44.9.3 published 2026-10-21) only for a 45-specific blocker. Verified (2026-10-24,
+- **Electron 45.0.0** (Chromium 156.0.8078.48, Node 24.22.0) is the runtime: the exact version every spike result was
+  measured on. Verified (2026-10-24, RESULTS.md "Run") for the version. Fallback line 44.9.x (44.9.3 published
+  2026-10-21) only for a 45-specific blocker. Verified (2026-10-24,
   [runtime-and-storage.md](../research/runtime-and-storage.md) section 2.1) for the release.
-- **What closes H7** (decision rules 2, 4, 5, applied as frozen). A run counts only if Chrome's uncapped p50 lies within
-  60 to 120% of the vsync interval at the fixed load, H6 is hardware in both, the window stayed visible and focused, and
-  Electron and Chrome alternate three times each at 1280 x 720. Then:
-  - **Accept:** median Electron p95 at most median Chrome p95 x 1.15, with Chrome's p95 spread below 15% in the 3 runs,
-    or in the 5-run rerun that a larger spread triggers. Every fatal criterion has then passed: this ADR becomes
-    Accepted with Electron 45.0.0.
-  - **Reject:** Electron p95 above Chrome p95 x 1.15. This ADR is not accepted as is: the architecture is reconsidered
-    around Chrome `--app` with CDP using the H20 evidence, and the owner decides.
-  - **No verdict:** spread still 15% or more after 5 runs (INCONCLUSIVE), calibration impossible (N/A) or persistently
-    INVALID runs. Electron cannot be accepted on H7 alone; the owner decides.
-- **Upgrade policy, once accepted:** stay on a supported major; move to a newer major before the current one leaves
-  support; re-run H1 to H7 (with H4) on every major upgrade, and on the exact version before acceptance if Phase 1
-  starts on a version other than 45.0.0 (decision rule 2). Electron supports the latest 3 majors, ships one every 8
-  weeks, and 45 is supported until 2027-04-27 (tentative). Verified (2026-10-24, runtime-and-storage.md section 2.1);
-  the policy is `Assumed`.
+- **Owner override.** The owner deferred the hands-off timing runs (H7, H8, H9 and the demo frame samples) to Phase 1,
+  to be measured on the real launcher against Chrome, and chose to proceed with Electron now. This overrides waiting for
+  H7 under rules 2 and 7: H7 has not passed, it is a condition of this acceptance. `Owner` (2026-10-25)
+- **Condition: Phase 1 MUST re-run H7** on the launcher with the frozen method (Chrome calibrated to an uncapped p50 of
+  60 to 120% of the vsync interval at a fixed load, hardware WebGL2 in both, window visible and focused, three
+  alternating runs per runtime at 1280 x 720). `Owner` for the re-run; the outcomes follow HYPOTHESES sections 2 and 4:
+  - **PASS:** median Electron p95 at most median Chrome p95 x 1.15. Measured against the installed Chrome 155 it is
+    labeled "version mismatch, re-check when Chrome 156 is installed".
+  - **FAIL,** only after the noise rule is satisfied (Chrome's p95 spread below 15% in 3 runs, or in the 5-run rerun of
+    both runtimes that a larger spread triggers): Electron p95 above Chrome p95 x 1.15. A persistent Electron-side
+    INVALID while Chrome's runs are valid also counts as FAIL (HYPOTHESES section 2).
+  - **No verdict, the owner decides (rule 5):** spread still 15% or more after 5 runs (INCONCLUSIVE), calibration
+    impossible (N/A), or a persistent Chrome-side INVALID (no valid baseline). Never counted as PASS.
+  - **A FAIL reopens this ADR and ADR-0005.** Rule 4 then points to Chrome `--app` with CDP (H20 evidence). Tauri stays
+    N/A (H17 and H18 were not run), so rule 6 cannot select it unless they are run first.
+- **Upgrade policy:** stay on a supported major and move before it leaves support; re-run H1 to H7 (with H4) on every
+  major upgrade, and on the exact version Phase 1 ships if it is not 45.0.0 (rule 2). Electron supports the latest 3
+  majors, ships one every 8 weeks, and 45 is supported until 2027-04-27 (tentative). Verified (2026-10-24,
+  runtime-and-storage.md section 2.1); the policy is `Assumed`.
 - PRD OQ-7 does not arise on this machine: H5 passed without `enable-unsafe-webgpu`, and the switch is not shipped (the
   OQ-7 default). `Assumed`
 
@@ -64,7 +69,7 @@ not-run results never count as PASS (decision rule 7), so H7 blocks acceptance.
 | --- | --- |
 | Complexity | Medium: one pinned Chromium on every OS, CDP and isolated worlds available (H14 used both). Verified (2026-10-24, RESULTS.md H14) |
 | Cost and size | Ships its own Chromium; app size not measured. Unverified |
-| Compatibility | H1 to H6 PASS on macOS arm64, H7 pending; builds only for x64 and arm64. Verified (2026-10-24, RESULTS.md; runtime-and-storage.md section 2.2) |
+| Compatibility | H1 to H6 PASS on macOS arm64, H7 deferred to Phase 1; builds only for x64 and arm64. Verified (2026-10-24, RESULTS.md; runtime-and-storage.md section 2.2) |
 | Security | Sandbox, context isolation, permission handlers and fuses; Electron grants every permission unless denied, so handlers are mandatory. Verified (2026-10-24, runtime-and-storage.md sections 2.3 and 2.4) |
 | Team familiarity | TypeScript and Node; the spike app exists. Verified (2026-10-24, `spikes/runtime-compat/electron/`) |
 | Reversibility | Medium: main-process code is Electron-specific; the snapshot format is engine-independent ([snapshot-format.md](../specs/snapshot-format.md) section 1). Assumed |
@@ -79,8 +84,7 @@ not-run results never count as PASS (decision rule 7), so H7 blocks acceptance.
 | Cost and size | Smaller app without a bundled engine. Assumed (not measured) |
 | Compatibility | Per-webview data stores (`data_store_identifier`) need macOS 14 or iOS 17 and are unsupported on Windows, Linux and Android. Verified (2026-10-24, runtime-and-storage.md section 3). Not built: H17 and H18 are N/A, owner-approved, because Tauri can only win by passing a criterion Electron fails. Verified (2026-10-24, RESULTS.md H17) |
 | Security | Engine updates come from the OS; we could not pin the engine. Assumed |
-| Team familiarity | Needs Rust for the shell. Assumed |
-| Reversibility | Medium. Assumed |
+| Team familiarity, reversibility | Needs Rust for the shell; medium. Assumed |
 | Pros | Safari 27.0.1, used as a WebKit proxy, showed WebGPU and cross-origin isolation on this Mac. Verified (2026-10-24, RESULTS.md "Safari as a WebKit proxy"); that WKWebView behaves alike is Assumed |
 | Cons | WKWebView has no CDP, so ADR-0005's mechanism is unavailable. Assumed (runtime-and-storage.md section 3) |
 
@@ -89,11 +93,8 @@ not-run results never count as PASS (decision rule 7), so H7 blocks acceptance.
 | Dimension | Assessment |
 | --- | --- |
 | Complexity | Tauri 3 with CEF is alpha only (`tauri-v3.0.0-alpha.5`, `tauri-runtime-cef-v3.0.0-alpha.6`, 2026-10-14) with open Linux keyboard, focus and WebGPU-fallback bugs. Verified (2026-10-24, runtime-and-storage.md section 3). An own shell means owning the browser shell, its Chromium updates and the build and signing matrix. Assumed (not researched) |
-| Cost and size | Bundles Chromium like Electron. Assumed |
-| Compatibility, security | Not measured; unknown without a spike. Unverified |
-| Team familiarity, reversibility | Low; low. Assumed |
-| Pros | Would pin Chromium like Electron. Assumed |
-| Cons | Not usable now (alpha) or far beyond the MVP's cost (own shell). Assumed |
+| Cost, compatibility, security | Bundles Chromium like Electron; nothing measured, unknown without a spike. Unverified |
+| Familiarity, reversibility, pros and cons | Low, low; would pin Chromium, but is not usable now (alpha) or costs far beyond the MVP (own shell). Assumed |
 
 ### Option E: system Chrome `--app` with CDP (fallback architecture)
 
@@ -103,8 +104,7 @@ not-run results never count as PASS (decision rule 7), so H7 blocks acceptance.
 | Cost and size | No bundled engine, but depends on the user's installed Chrome version and policies. Assumed |
 | Compatibility | Isolation and persistence PASS in 5 of 5 runs, no tab strip or address bar, CDP reads work; Chrome 155 here. Verified (2026-10-24, RESULTS.md H20) |
 | Security | A DevTools port reachable by local processes. Assumed |
-| Team familiarity | Spike code exists. Verified (2026-10-24, `spikes/runtime-compat/groups/app.mjs`) |
-| Reversibility | High. Assumed |
+| Team familiarity, reversibility | Spike code exists (Verified (2026-10-24, `spikes/runtime-compat/groups/app.mjs`)); high. Assumed |
 | Pros | Real Chrome engine; renderer exited 2.8 to 5.2 s after close (Electron 27.8 s, H16). Verified (2026-10-24, RESULTS.md H16 and H20) |
 | Cons | Chrome keeps running after its last window; CDP IndexedDB cannot write, so restore was not tested in this mode. Verified (2026-10-24, RESULTS.md H20) |
 
@@ -112,7 +112,8 @@ not-run results never count as PASS (decision rule 7), so H7 blocks acceptance.
 
 Electron is the only option with a pinned engine, CDP and a measured save mechanism, and it passed every fatal criterion
 measured so far. Tauri cannot pin the engine, lacks per-game data stores outside Apple platforms and lacks CDP; equal
-results would not justify a switch (decision rule 6). Chrome `--app` stays the documented fallback if H7 fails. Assumed
+results would not justify a switch (decision rule 6). Chrome `--app` stays the documented fallback if the Phase 1 H7
+fails. Assumed
 
 ## Consequences
 
@@ -141,31 +142,27 @@ results would not justify a switch (decision rule 6). Chrome `--app` stays the d
 
 ### Revisit triggers
 
-- H7 FAIL or no verdict (above); a fatal criterion fails on a later Electron version; a game class needs something only
-  another engine offers; a mobile client is started. Assumed
+- The Phase 1 H7 fails or gives no verdict; an H7 PASS against Chrome 155 fails its re-check against Chrome 156; a fatal
+  criterion fails on a later Electron version; a game class needs something only another engine offers; a mobile client
+  is started. Assumed
 
 ## Evidence
 
-- [HYPOTHESES.md](../../spikes/runtime-compat/HYPOTHESES.md) section 4 (decision rules);
+- [HYPOTHESES.md](../../spikes/runtime-compat/HYPOTHESES.md) sections 2 and 4;
   [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) (aggregate `electron-45.0.0-20261024T151511.707Z.json`, Chrome
-  baseline `chrome-155.0.8059.85-20261024T171517.695Z.json`, five `chrome-app-155.0.8059.85-…` aggregates);
-  [matrix.md](../compat/matrix.md) and [methodology.md](../compat/methodology.md);
+  baseline `chrome-155.0.8059.85-20261024T171517.695Z.json`, the H20 aggregates); [matrix.md](../compat/matrix.md);
   [runtime-and-storage.md](../research/runtime-and-storage.md) sections 2 to 4 and 8.
 
 ## Facts versus assumptions
 
 - **Facts** (tagged where they appear above): the results table above, H20, the Safari proxy run, the platform and CI
-  coverage. One machine; nothing is extrapolated.
-- **Assumptions** (Assumed): WKWebView has no CDP; Tauri would behave like Safari; the upgrade policy is affordable;
-  Chrome `--app` is a workable fallback beyond the checks H20 ran.
+  coverage. One machine; nothing is extrapolated. H7 is unmeasured; the acceptance rests on the owner's decision.
+- **Assumptions** (Assumed): Electron will pass H7 on the launcher; WKWebView has no CDP; Tauri would behave like
+  Safari; the upgrade policy is affordable; Chrome `--app` is a workable fallback beyond the checks H20 ran.
 
 ## Action items
 
-- [ ] Run the hands-off measurements (H7 calibration and runs, H8, H9, H20-6, H21 frame samples) when the owner agrees;
-  apply the rules above and set this ADR to Accepted or reopen it (agent; RESULTS.md, then this file).
-- [ ] If Phase 1 pins another Electron version, re-run H1 to H7 with H4 on it first (agent).
-
-## Open questions
-
-- May a PASS of H7 labeled "version mismatch" (Chrome 155 against Chromium 156) accept this ADR, or must Chrome be
-  updated to 156 first? Default: the labeled PASS counts, as HYPOTHESES section 2 allows the label (owner).
+- [ ] Phase 1: re-run H7 on the launcher against Chrome under the condition above, with H8, H9 and the demo frame
+  samples; record the runs in `docs/compat/` and the outcome here (agent).
+- [ ] When Chrome 156 is installed on the measuring machine, re-check H7 and drop the "version mismatch" label (agent).
+- [ ] If Phase 1 ships an Electron version other than 45.0.0, re-run H1 to H7 with H4 on it first (agent).

@@ -1,6 +1,7 @@
 # ADR-0004: Toolchain and repository layout
 
-**Status:** Accepted. The Electron version itself follows ADR-0002 (Proposed).
+**Status:** Accepted. The Electron-specific rows (`electron`, `electron-vite`, `electron-builder`, Playwright
+`_electron.launch`) follow ADR-0002 and are reopened with it.
 
 **Date:** 2026-10-24
 
@@ -29,7 +30,8 @@ Conventions: [ADR-0000](0000-template.md#conventions).
 
 ## Decision
 
-Phase 1 adds these, each installed at an exact version and checked with `pnpm licenses:check`. All are MIT.
+Phase 1 adds these, each package installed at an exact version and checked with `pnpm licenses:check`. The npm
+packages are MIT except `@playwright/test` 1.64.1 (Apache-2.0); `node:sqlite` is built into Node, not a package.
 Verified (2026-10-25, `npm view <package> version license`) for versions and licenses; the choices are `Assumed` unless
 marked.
 
@@ -37,11 +39,11 @@ marked.
 | --- | --- | --- |
 | Runtime | `electron` 45.0.0 (ADR-0002); needs an `allowBuilds` entry for its binary download | MEMORY.md gotcha, Verified (2026-10-24) |
 | Dev server and bundling | `electron-vite` 6.0.0 with `vite` 8.3.5; entries for main, the snapshot worker, two preloads and the renderer | Peer range `vite` ^6, ^7 or ^8. Verified (2026-10-24, [runtime-and-storage.md](../research/runtime-and-storage.md) section 2.3) |
-| UI | `react` 19.3.1 | Planned stack. `Owner` (Phase 0 plan) |
+| UI | `react` 19.3.1 | Planned stack. Assumed (approved with the Phase 0 plan) |
 | Validation | `zod` 4.6.7 for IPC payloads, the snapshot manifest and adapters | architecture.md section 6 |
 | Database | `node:sqlite` in the main process (no dependency) | Option S1 below |
 | Packaging | `electron-builder` 26.18.0, fuses through its `electronFuses` setting | Option P1 below |
-| End-to-end tests | Playwright `_electron.launch`, with the partitioning switch re-appended | H11 PASS. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H11) |
+| End-to-end tests | `@playwright/test` 1.64.1, `_electron.launch`, with the partitioning switch re-appended | H11 PASS. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H11) |
 
 ### Repository layout
 

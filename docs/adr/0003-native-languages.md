@@ -105,7 +105,7 @@ cancel    {"id":"<new id>","method":"cancel","params":{"target":"<request_id>"}}
 
 | Dimension | Assessment |
 | --- | --- |
-| Complexity | Medium: butler (Go, MIT) already does downloads and patching for itch. Verified (2026-10-24, [foundations.md](../research/foundations.md) section 2.3) |
+| Complexity | Medium: butler (Go, MIT) is the helper itch depends on. Verified (2026-10-24, [foundations.md](../research/foundations.md) section 2.3). That butler and wharf would cover downloads and delta patching is Assumed (foundations.md section 4) |
 | Cost and size | A Go binary per target, plus Go dependencies to vet (`klauspost/compress` license terms Unverified). Unverified |
 | Compatibility | Sidecar only; no in-process or Tauri reuse. Assumed |
 | Security | Memory-safe, separate process. Assumed |
