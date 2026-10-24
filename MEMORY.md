@@ -38,8 +38,14 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   Routine decision, Assumed.
 - Rust is deferred to the local-packages stage. The MVP snapshot codec is TypeScript; a language-neutral spec with
   golden vectors lets a later Rust version pass the same vectors. Go is not adopted in the MVP.
-- English everywhere in the repo. Product name **WGLauncher** (owner decision,
+- English everywhere in the repo, with no exception. Product name **WGLauncher** (owner decision,
   2026-10-25); codename and repo `wg-launcher`, deep-link scheme `wglauncher`.
+- 2026-10-25 Owner: the Russian concept document was replaced by its English translation
+  `docs/product/sources/concept-v1.0.md`; the language exception and its lint ignores are gone.
+- 2026-10-25 Owner: the Phase 1 plan [docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md)
+  is approved; each task starts only on the owner's word. Phase 1 UI is functional only (design and UX come later).
+  Final-review rulings recorded there: M5 (a launch cancels a background storage check, user tasks still give
+  `GAME_BUSY`), M6, M7 (manifest top level not strict, IPC strict), M8, M11, M13.
 - License model: `AGPL-3.0-or-later` by default, commercial use by separate agreement, CLA for outside contributors,
   future paid features only in one named source-available directory (none exists), trademark policy, core features
   always free. See `LICENSING.md`. Not legal advice; a lawyer should review before outside contributions.
@@ -375,6 +381,9 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Playwright launches Chrome headed but `viewport: null` plus `Browser.setWindowBounds` over CDP is needed to get an exact
   1280 x 720 CSS-pixel viewport at the native scale factor; `Page.bringToFront` is enough to get focus. [V, 2026-10-24]
 - In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
+- Node's zstd does not report a truncated frame: a checksummed frame cut by 6 bytes decompressed without an error through
+  `zlib.zstdDecompressSync` and through `zlib.createZstdDecompress` (the stream just ended). So the `.wgsnap` reader
+  detects truncation itself (Phase 1 plan, M6). [V, 2026-10-25, Node 24.13.0, `node -e` run locally]
 - License gate versus bundling: `scripts/check-licenses.mjs` fails only on production dependencies, while electron-vite
   bundles renderer `dependencies` and its docs recommend renderer-only packages as `devDependencies`, so a bundled
   library kept there would escape the gate. Rule (AGENTS.md): everything bundled into or packaged with the app is in
