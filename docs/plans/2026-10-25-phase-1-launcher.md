@@ -189,7 +189,8 @@ pass re-checking hashes (R6); `writeSnapshot(input: SnapshotInput, out: Writable
   manifest with extra whitespace gives `SNAP_UNSUPPORTED_VERSION`); unknown top-level field ignored and not hashed,
   unknown nested member rejected (M7); ratio check only past `ratioFloorBytes`; writer output validates; nothing is
   written by the validator (it has no sink).
-- [x] Run failing, implement, run passing; `pnpm check`.
+- [x] Run failing, implement, run passing; `pnpm check`. (`manifest.ts` had no RED run before it was written;
+  some suites passed at once and were mutation-checked after the fact; see the Task 3 report.)
 - [x] MEMORY.md: Node zstd truncation gotcha [V, 2026-10-25]; snapshot-format §2 and §8 state that truncation is detected
   by the frame walker (M6).
 - [x] Commit `feat(snapshot): add the wgsnap container reader and writer`.

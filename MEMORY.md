@@ -65,7 +65,10 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   `@wg-launcher/snapshot/container` (Ruling R10), never re-exported from `src/index.ts` (a test walks its import graph).
   zod 4.6.7 (MIT) is a production dependency of `packages/snapshot`. A container verdict found on the compressed bytes
   is deferred until the bytes before it are decompressed and checked, so the error code does not depend on chunking
-  (snapshot-format.md section 2). Count limits above the manifest's are `SNAP_RECORD_INVALID`, `storageKeys` above
+  (snapshot-format.md section 2). Owner ruling R11 (fix round 1): the reader takes the exact compressed size
+  (`validateSnapshot(source, {compressedSize, limits})`), checks it against `maxFileBytes` first, and the ratio limit
+  is max(`ratioFloorBytes`, `maxRatio` × `compressedSize`) tar bytes; a source longer than declared is
+  `SNAP_FILE_TOO_LARGE`, shorter `SNAP_TRUNCATED`. A decompressor error is always `SNAP_ZSTD_INVALID` (R12). Count limits above the manifest's are `SNAP_RECORD_INVALID`, `storageKeys` above
   `maxStorageKeys` is `SNAP_MANIFEST_INVALID` (section 8). Manifest numbers are safe integers only, so JCS needs no
   float formatting (section 4).
 - Controlled test game (Task 4): `fixtures/test-games/progress-lab`, a pnpm workspace package

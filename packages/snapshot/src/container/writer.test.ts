@@ -1,9 +1,10 @@
 import { Writable } from "node:stream";
 import { zstdDecompressSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { ascii, chunks, codeOfAsync, FIRST_PARTY, sha256 } from "../../test/wgsnap.js";
+import { ascii, chunks, codeOfAsync, FIRST_PARTY, sha256, snapshot } from "../../test/wgsnap.js";
 import type { CborItem } from "../record/cbor.js";
 import { encodeLocalStorage, encodeSchema, encodeStoreRecords } from "../record/data-files.js";
+import type { Limits } from "./limits.js";
 import { readEntries, validateSnapshot } from "./reader.js";
 import { parseHeader } from "./ustar.js";
 import { type SnapshotInput, writeSnapshot } from "./writer.js";
@@ -94,7 +95,7 @@ describe("writeSnapshot", () => {
     const result = await writeSnapshot(input(), out.stream);
     const bytes = out.bytes();
     expect(result.sizeBytes).toBe(bytes.length);
-    const validated = await validateSnapshot(chunks(bytes));
+    const validated = await validateSnapshot(chunks(bytes), { compressedSize: bytes.length });
     expect(validated.manifest.contentHash).toBe(result.contentHash);
     expect(validated.manifest.storageKeys).toEqual([FIRST_PARTY]);
     expect(validated.storageKeys).toEqual([
@@ -142,16 +143,19 @@ describe("writeSnapshot", () => {
   it("writes an empty snapshot", async () => {
     const out = sink();
     const result = await writeSnapshot({ ...input([]), storageKeys: [] }, out.stream);
-    const validated = await validateSnapshot(chunks(out.bytes()));
+    const validated = await validateSnapshot(chunks(out.bytes()), {
+      compressedSize: out.bytes().length,
+    });
     expect(validated.manifest.contentHash).toBe(result.contentHash);
   });
 
   it("round-trips through readEntries", async () => {
     const out = sink();
     await writeSnapshot(input(), out.stream);
-    const { manifest } = await validateSnapshot(chunks(out.bytes()));
+    const size = { compressedSize: out.bytes().length };
+    const { manifest } = await validateSnapshot(chunks(out.bytes()), size);
     const read: string[] = [];
-    for await (const entry of readEntries(chunks(out.bytes()), manifest)) {
+    for await (const entry of readEntries(chunks(out.bytes()), manifest, size)) {
       read.push(entry.path);
     }
     expect(read).toHaveLength(4);
@@ -210,5 +214,91 @@ describe("writeSnapshot", () => {
     await writeSnapshot(extended, out.stream);
     const archive = new TextDecoder().decode(zstdDecompressSync(out.bytes()));
     expect(archive).not.toContain("not in the format");
+  });
+});
+
+describe("writeSnapshot refuses before writing whatever the reader would refuse (fix round 1)", () => {
+  const schemaWith = (stores: number, indexes = 0) =>
+    encodeSchema({
+      name: "db",
+      version: 1,
+      stores: Array.from({ length: stores }, (_, s) => ({
+        name: `s${String(s).padStart(3, "0")}`,
+        keyPath: null,
+        autoIncrement: false,
+        keyGenerator: null,
+        indexes: Array.from({ length: indexes }, (_, i) => ({
+          name: `i${String(i).padStart(3, "0")}`,
+          keyPath: "k",
+          unique: false,
+          multiEntry: false,
+        })),
+        records: 0,
+      })),
+    });
+  const emptyStores = (n: number) =>
+    Array.from({ length: n }, (_, s) => ({
+      path: `data/0/idb/0/store-${s}.cbor`,
+      bytes: new Uint8Array(0),
+    }));
+
+  /** The writer refuses with `code` and writes nothing; the reader gives the same code for the same files. */
+  async function refusedLikeReader(
+    files: SnapshotInput["files"],
+    code: string,
+    limits: Partial<Limits> = {},
+  ): Promise<void> {
+    const out = sink();
+    expect(await codeOfAsync(() => writeSnapshot(input([...files]), out.stream, limits))).toBe(
+      code,
+    );
+    expect(out.parts).toHaveLength(0);
+    const same = snapshot(files.map((f) => ({ path: f.path, data: f.bytes })));
+    expect(
+      await codeOfAsync(() =>
+        validateSnapshot(chunks(same), { compressedSize: same.length, limits }),
+      ),
+    ).toBe(code);
+  }
+
+  it("a store index at or above maxStoresPerDatabase", async () => {
+    await refusedLikeReader(
+      [
+        { path: "data/0/idb/0/schema.cbor", bytes: schemaWith(0) },
+        { path: "data/0/idb/0/store-300.cbor", bytes: new Uint8Array(0) },
+      ],
+      "SNAP_RECORD_INVALID",
+    );
+  });
+
+  it("a database index at or above maxDatabasesPerKey, even one too long for the name field", async () => {
+    await refusedLikeReader(
+      [{ path: "data/0/idb/300/schema.cbor", bytes: schemaWith(0) }],
+      "SNAP_RECORD_INVALID",
+    );
+    const out = sink();
+    const long = [{ path: `data/0/idb/${"9".repeat(95)}/schema.cbor`, bytes: schemaWith(0) }];
+    expect(await codeOfAsync(() => writeSnapshot(input(long), out.stream))).toBe(
+      "SNAP_RECORD_INVALID",
+    );
+    expect(out.parts).toHaveLength(0);
+  });
+
+  it("more stores or indexes than the limits", async () => {
+    const three = [{ path: "data/0/idb/0/schema.cbor", bytes: schemaWith(3) }, ...emptyStores(3)];
+    await refusedLikeReader(three, "SNAP_RECORD_INVALID", { maxStoresPerDatabase: 2 });
+    const indexed = [
+      { path: "data/0/idb/0/schema.cbor", bytes: schemaWith(1, 3) },
+      ...emptyStores(1),
+    ];
+    await refusedLikeReader(indexed, "SNAP_RECORD_INVALID", { maxIndexesPerStore: 2 });
+  });
+
+  it("the entry, manifest and total size limits and the entry count", async () => {
+    const files = defaultFiles();
+    await refusedLikeReader(files, "SNAP_TOO_MANY_ENTRIES", { maxEntries: files.length });
+    await refusedLikeReader(files, "SNAP_ENTRY_TOO_LARGE", { maxEntryBytes: 10 });
+    await refusedLikeReader(files, "SNAP_MANIFEST_TOO_LARGE", { maxManifestBytes: 100 });
+    await refusedLikeReader(files, "SNAP_TOTAL_TOO_LARGE", { maxTotalBytes: 2048 });
   });
 });

@@ -50,12 +50,15 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   size above 128 KiB are `SNAP_ZSTD_INVALID`; an RLE block carries one byte) and the 4-byte checksum. Input that ends
   before the last block and the checksum is `SNAP_TRUNCATED`. The decompressor still checks block contents and the
   checksum value. `Assumed` (Phase 1 plan, M6)
-- A container defect found on the compressed bytes (a walker code above or `SNAP_FILE_TOO_LARGE`) stops reading at the
-  bad byte; the bytes before it are still decompressed and checked, and the container code is reported only if they
-  pass. So the code does not depend on chunking or read-ahead, and a cut file is `SNAP_TRUNCATED` unless the data before
-  the cut is itself invalid. On a complete frame a decompressor error (corrupt data, checksum mismatch) is
-  `SNAP_ZSTD_INVALID`; how much a corrupt block emits before that error depends on the zstd library, so a corrupt file
-  may instead fail with a code of the content it decoded to. `Assumed`
+- Every verdict is tied to a byte position, so the code does not depend on chunking or read-ahead. A container defect
+  found on the compressed bytes (a walker code above, or a source longer or shorter than its declared size, section 8)
+  stops reading at the bad byte; the bytes before it are still decompressed and checked, and the container code is
+  reported only if they pass. So a cut file is `SNAP_TRUNCATED` unless the data before the cut is itself invalid. A
+  decompressor error (corrupt data, checksum mismatch) is always `SNAP_ZSTD_INVALID`: the decompressor does not fail on
+  a prefix of a valid frame, so its error means corrupt bytes before any deferred verdict. How much a corrupt block
+  emits before that error depends on the zstd library, so a corrupt file may instead fail with a code of the content it
+  decoded to. The uncompressed limits (`SNAP_RATIO_EXCEEDED`, `SNAP_TOTAL_TOO_LARGE`) fail at the exact tar byte that
+  crosses them, after the bytes before it were checked. `Assumed`
 - Tar: ustar headers (magic `ustar\0`, version `00`), sizes in octal only. Writers emit only regular files with mode
   0644, uid and gid 0, empty user and group names, mtime 0, the whole path in the `name` field and an empty `prefix`,
   then two zero blocks. Readers join `prefix` and `name` with `/` when `prefix` is set, accept zero padding after the
@@ -377,17 +380,28 @@ them; production uses these values, and a unit test pins them.
 | `maxEntries` | 100 000 |
 | `maxEntryBytes` | 512 MiB |
 | `maxTotalBytes` (uncompressed tar stream) | 2 GiB |
-| `maxRatio` | 200, enforced once the uncompressed stream passes `ratioFloorBytes` |
+| `maxRatio` | 200, against the declared compressed size, once the uncompressed stream passes `ratioFloorBytes` |
 | `ratioFloorBytes` | 64 MiB |
 | `maxManifestBytes` | 1 MiB |
 | `maxStorageKeys`, `maxDatabasesPerKey`, `maxStoresPerDatabase`, `maxIndexesPerStore` | 32, 256, 256, 64 |
 | `maxDepth` (value nesting) | 256 |
 
+A reader is given the exact compressed size of the file (`compressedSize`; the worker validates a private copy in
+`tmp/` and takes it from `stat`). `Assumed` (owner ruling R11, 2026-10-25)
+
+- `SNAP_FILE_TOO_LARGE` is checked first, from `compressedSize` against `maxFileBytes`, before any byte is read.
+- The ratio rule: once the uncompressed bytes so far pass `ratioFloorBytes` and exceed `maxRatio` × `compressedSize`,
+  the file is `SNAP_RATIO_EXCEEDED`; equivalently, the tar stream may hold at most max(`ratioFloorBytes`, `maxRatio` ×
+  `compressedSize`) bytes. When this bound and `maxTotalBytes` fall on the same byte, `SNAP_RATIO_EXCEEDED` wins.
+- The reader counts the compressed bytes it reads. A source that yields more than `compressedSize` bytes is
+  `SNAP_FILE_TOO_LARGE` at the first extra byte; one that ends below it is `SNAP_TRUNCATED`. Both are verdicts on the
+  compressed bytes (section 2): the frame walker's verdict on the bytes within `compressedSize` and the checks of the
+  data before the extra or missing byte come first.
+
 Container-level codes, checked continuously while streaming: `SNAP_FILE_TOO_LARGE`; `SNAP_ZSTD_INVALID` (not a zstd
 frame, a skippable frame first, corrupt data, a content checksum mismatch, a window above 2^27, a dictionary id);
 `SNAP_ZSTD_NO_CHECKSUM`; `SNAP_TRUNCATED` (input ends early, detected by the frame walker of section 2, since the
-decompressor does not report it); `SNAP_RATIO_EXCEEDED` (uncompressed bytes so far divided by compressed bytes read so
-far); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
+decompressor does not report it); `SNAP_RATIO_EXCEEDED` (the ratio rule above); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
 frame included, or non-zero bytes after the tar end blocks). Entry codes are in section 3.1, manifest and
 hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FORMAT`, `SNAP_UNSUPPORTED_VERSION`,
 `SNAP_CONTENT_HASH_MISMATCH`, `SNAP_SIZE_MISMATCH`, `SNAP_ENTRY_HASH_MISMATCH`, `SNAP_MISSING_ENTRY`) in sections 4 and
@@ -408,7 +422,9 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
 
 - `formatVersion` is an integer. It changes whenever a v1 reader would restore something differently: new tags, new
   entry kinds, new required fields, changed canonicalization or hash coverage. Optional informational manifest fields
-  can be added without a change because readers ignore them. `Assumed`
+  can be added without a change because readers ignore them. Such fields use the same JSON subset as the rest of the
+  manifest (strings, safe integers, booleans, `null`, arrays and objects; section 4), or a v1 reader refuses the file.
+  `Assumed`
 - A reader refuses an unknown `formatVersion` with `SNAP_UNSUPPORTED_VERSION` and writes nothing (AGENTS.md
   data-safety invariant 5). `Owner`
 - Snapshots are immutable. A reader keeps supporting every version it ever shipped; there is no in-place migration.

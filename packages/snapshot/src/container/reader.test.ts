@@ -80,7 +80,7 @@ const files = (): SnapFile[] => [
 ];
 
 const validate = (bytes: Uint8Array, limits: Partial<Limits> = {}, size?: number) =>
-  validateSnapshot(chunks(bytes, size), limits);
+  validateSnapshot(chunks(bytes, size), { compressedSize: bytes.length, limits });
 const codeOf = (bytes: Uint8Array, limits: Partial<Limits> = {}) =>
   codeOfAsync(() => validate(bytes, limits));
 /** A snapshot whose tar has `extra` inserted right after the manifest. */
@@ -143,7 +143,7 @@ describe("validateSnapshot: valid snapshots", () => {
       yield bytes.subarray(0, 20);
       throw disk;
     }
-    await expect(validateSnapshot(failing())).rejects.toBe(disk);
+    await expect(validateSnapshot(failing(), { compressedSize: bytes.length })).rejects.toBe(disk);
   });
 
   it("stops reading the source after the first failure", async () => {
@@ -165,7 +165,9 @@ describe("validateSnapshot: valid snapshots", () => {
         closed = true;
       }
     }
-    expect(await codeOfAsync(() => validateSnapshot(source()))).toBe("SNAP_PATH_TRAVERSAL");
+    expect(
+      await codeOfAsync(() => validateSnapshot(source(), { compressedSize: bytes.length })),
+    ).toBe("SNAP_PATH_TRAVERSAL");
     expect(closed).toBe(true);
     expect(pulled).toBeLessThan(bytes.length / 64 / 2);
   });
@@ -179,14 +181,16 @@ describe("validateSnapshot: valid snapshots", () => {
       expect(await codeOfAsync(() => validate(bad.subarray(0, bad.length - 1), {}, size))).toBe(
         "SNAP_PATH_TRAVERSAL",
       );
-      expect(await codeOfAsync(() => validate(bad, { maxFileBytes: bad.length - 1 }, size))).toBe(
+      // Declared one byte shorter than the source: the extra byte is SNAP_FILE_TOO_LARGE, after the data before it.
+      const declaredShort = { compressedSize: bad.length - 1 };
+      expect(await codeOfAsync(() => validateSnapshot(chunks(bad, size), declaredShort))).toBe(
         "SNAP_PATH_TRAVERSAL",
       );
     },
   );
 
-  it("validates without a sink: it takes only the source and limits, and imports no file system", () => {
-    expect(validateSnapshot.length).toBe(1);
+  it("validates without a sink: it takes only the source and read options, and imports no file system", () => {
+    expect(validateSnapshot.length).toBe(2);
     const source = readFileSync(new URL("./reader.ts", import.meta.url), "utf8");
     expect(source).not.toMatch(/node:fs|node:path|createWriteStream/);
   });
@@ -195,10 +199,44 @@ describe("validateSnapshot: valid snapshots", () => {
 // --- container -----------------------------------------------------------------------------------------------------
 
 describe("validateSnapshot: container codes (snapshot-format.md section 8)", () => {
-  it("SNAP_FILE_TOO_LARGE above maxFileBytes compressed bytes", async () => {
+  it("SNAP_FILE_TOO_LARGE above maxFileBytes, from the declared size, before anything is read", async () => {
     const bytes = snapshot(files());
-    expect(await codeOf(bytes, { maxFileBytes: bytes.length - 1 })).toBe("SNAP_FILE_TOO_LARGE");
+    let pulled = false;
+    async function* untouched() {
+      pulled = true;
+      yield bytes;
+    }
+    const limits = { maxFileBytes: bytes.length - 1 };
+    expect(
+      await codeOfAsync(() =>
+        validateSnapshot(untouched(), { compressedSize: bytes.length, limits }),
+      ),
+    ).toBe("SNAP_FILE_TOO_LARGE");
+    expect(pulled).toBe(false);
     expect(await codeOf(bytes, { maxFileBytes: bytes.length })).toBeUndefined();
+  });
+
+  it("refuses a source that is longer or shorter than its declared size", async () => {
+    const bytes = snapshot(files());
+    for (const size of [64, Number.MAX_SAFE_INTEGER]) {
+      // The declared bytes end inside the checksum; the byte beyond them decides, not the cut frame.
+      const longer = { compressedSize: bytes.length - 1 };
+      expect(await codeOfAsync(() => validateSnapshot(chunks(bytes, size), longer))).toBe(
+        "SNAP_FILE_TOO_LARGE",
+      );
+      const extra = concat(bytes, Uint8Array.of(0));
+      const declared = { compressedSize: bytes.length };
+      expect(await codeOfAsync(() => validateSnapshot(chunks(extra, size), declared))).toBe(
+        "SNAP_FILE_TOO_LARGE",
+      );
+      const shorter = { compressedSize: bytes.length + 10 };
+      expect(await codeOfAsync(() => validateSnapshot(chunks(bytes, size), shorter))).toBe(
+        "SNAP_TRUNCATED",
+      );
+    }
+    await expect(validateSnapshot(chunks(bytes), { compressedSize: -1 })).rejects.toThrow(
+      TypeError,
+    );
   });
 
   it("SNAP_ZSTD_INVALID for bytes that are not zstd and for a skippable frame first", async () => {
@@ -549,7 +587,9 @@ describe("readEntries: the restore's second pass (R6)", () => {
     manifest: Awaited<ReturnType<typeof validate>>["manifest"],
   ) {
     const out: { path: string; bytes: Uint8Array }[] = [];
-    for await (const entry of readEntries(chunks(bytes), manifest)) {
+    for await (const entry of readEntries(chunks(bytes), manifest, {
+      compressedSize: bytes.length,
+    })) {
       out.push(entry);
     }
     return out;
@@ -580,7 +620,9 @@ describe("readEntries: the restore's second pass (R6)", () => {
     });
     const yielded: string[] = [];
     const error = await errorOf(async () => {
-      for await (const entry of readEntries(chunks(changed), manifest)) {
+      for await (const entry of readEntries(chunks(changed), manifest, {
+        compressedSize: changed.length,
+      })) {
         yielded.push(entry.path);
       }
     });
@@ -596,5 +638,118 @@ describe("readEntries: the restore's second pass (R6)", () => {
     expect(await codeOfAsync(() => collect(cut.subarray(0, cut.length - 1), manifest))).toBe(
       "SNAP_TRUNCATED",
     );
+  });
+});
+
+// --- fix round 1: limits and codes independent of chunking ---------------------------------------------------------
+
+const header3 = (n: number) => Uint8Array.of(n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff);
+/** Raw blocks of at most 128 KiB; `last` marks the final one. */
+function rawBlocks(data: Uint8Array, last: boolean): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  for (let at = 0; at < data.length; at += 2 ** 17) {
+    const part = data.subarray(at, at + 2 ** 17);
+    const isLast = last && at + 2 ** 17 >= data.length;
+    out.push(concat(header3((part.length << 3) | (isLast ? 1 : 0)), part));
+  }
+  return out;
+}
+const rleBlock = (count: number, last: boolean) =>
+  concat(header3((count << 3) | (1 << 1) | (last ? 1 : 0)), Uint8Array.of(0));
+/** A compressed last block whose 4 content bytes are not valid zstd. */
+const garbageBlock = () =>
+  concat(header3((4 << 3) | (2 << 1) | 1), Uint8Array.of(0xff, 0xff, 0xff, 0xff));
+/** A frame with window 2^21 and the checksum flag; the checksum value is not computed. */
+const handFrame = (blocks: Uint8Array[], checksum = Uint8Array.of(1, 2, 3, 4)) =>
+  concat(Uint8Array.from([0x28, 0xb5, 0x2f, 0xfd, 0x04, 0x58]), ...blocks, checksum);
+
+describe("validateSnapshot: limits and codes do not depend on chunking", () => {
+  const SIZES = [256, 4096, 65_536, Number.MAX_SAFE_INTEGER];
+
+  it("accepts the reviewer's probe (zeros, then random bytes, overall ratio far below maxRatio) at every chunk size", async () => {
+    // The review's probe (66 MiB of zeros, then 2 MiB of random bytes) at half size, with ratioFloorBytes lowered to
+    // 1 MiB: 32 MiB of zeros come out of a few hundred compressed bytes, far above 200 times any read-ahead, while the
+    // whole file is far below a ratio of 200.
+    const zeros = new Uint8Array(32 * 2 ** 20);
+    const noise = new Uint8Array(randomBytes(2 ** 20));
+    const [zSha, nSha] = [sha256(zeros), sha256(noise)];
+    const probe: SnapFile[] = [
+      { path: "data/0/idb/0/schema.cbor", data: schema([{ name: "s", records: 2 }]) },
+      {
+        path: "data/0/idb/0/store-0.cbor",
+        data: records(2, (i) =>
+          i === 0 ? blobItem(zSha, zeros.length) : blobItem(nSha, noise.length),
+        ),
+      },
+      { path: `blobs/${zSha}`, data: zeros },
+      { path: `blobs/${nSha}`, data: noise },
+    ];
+    const bytes = snapshot(probe, {
+      layout: (m, rest) => {
+        const blobs = rest.filter((f) => f.path.startsWith("blobs/"));
+        blobs.sort((a) => (a.path === `blobs/${zSha}` ? -1 : 1));
+        return [m, ...blobs, ...rest.filter((f) => !f.path.startsWith("blobs/"))];
+      },
+    });
+    expect(snapshotTar(probe).length / bytes.length).toBeLessThan(200);
+    for (const size of SIZES) {
+      expect(
+        await codeOfAsync(() => validate(bytes, { ratioFloorBytes: 2 ** 20 }, size)),
+      ).toBeUndefined();
+    }
+  });
+
+  it("rejects a real bomb early, before its wrong checksum or the total limit is reached", async () => {
+    // A valid snapshot tar, then 20 000 RLE blocks of 128 KiB zeros (2.5 GiB of tar padding) from about 80 KB.
+    const blocks = [...rawBlocks(snapshotTar(files()), false)];
+    for (let i = 0; i < 20_000; i++) {
+      blocks.push(rleBlock(2 ** 17, i === 19_999));
+    }
+    const bomb = handFrame(blocks);
+    for (const size of [4096, Number.MAX_SAFE_INTEGER]) {
+      expect(await codeOfAsync(() => validate(bomb, {}, size))).toBe("SNAP_RATIO_EXCEEDED");
+    }
+  });
+
+  it("reports a decompressor error as SNAP_ZSTD_INVALID even when the frame is also cut or followed by bytes", async () => {
+    const corrupt = handFrame([...rawBlocks(snapshotTar(files()), false), garbageBlock()]);
+    for (const size of [64, 4096, Number.MAX_SAFE_INTEGER]) {
+      expect(await codeOfAsync(() => validate(corrupt, {}, size))).toBe("SNAP_ZSTD_INVALID");
+      expect(
+        await codeOfAsync(() => validate(corrupt.subarray(0, corrupt.length - 2), {}, size)),
+      ).toBe("SNAP_ZSTD_INVALID");
+      expect(await codeOfAsync(() => validate(concat(corrupt, Uint8Array.of(7)), {}, size))).toBe(
+        "SNAP_ZSTD_INVALID",
+      );
+    }
+  });
+
+  it("reports a tar defect before the byte where maxTotalBytes is crossed, at every chunk size", async () => {
+    const bad = withExtra([{ path: "../escape.txt" }]);
+    for (const size of SIZES) {
+      expect(await codeOfAsync(() => validate(bad, { maxTotalBytes: 4096 }, size))).toBe(
+        "SNAP_PATH_TRAVERSAL",
+      );
+    }
+    expect(await codeOfAsync(() => validate(snapshot(files()), { maxTotalBytes: 4096 }))).toBe(
+      "SNAP_TOTAL_TOO_LARGE",
+    );
+  });
+
+  it("reports a tar defect before the byte where maxRatio × compressedSize is crossed, at every chunk size", async () => {
+    const bad = withExtra([{ path: "../escape.txt" }]);
+    const good = snapshot(files());
+    // The ratio limit lands about 4 KiB into the tar: after the bad header, before the end of a clean archive.
+    const limits = (bytes: Uint8Array) => ({
+      ratioFloorBytes: 1,
+      maxRatio: Math.ceil(4096 / bytes.length),
+    });
+    for (const size of SIZES) {
+      expect(await codeOfAsync(() => validate(bad, limits(bad), size))).toBe("SNAP_PATH_TRAVERSAL");
+      expect(await codeOfAsync(() => validate(good, limits(good), size))).toBe(
+        "SNAP_RATIO_EXCEEDED",
+      );
+    }
+    expect(snapshotTar(files()).length).toBeGreaterThan(4096 + good.length);
   });
 });

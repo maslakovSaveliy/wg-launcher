@@ -16,6 +16,7 @@ export {
   storePath,
 } from "./paths.js";
 export {
+  type ReadOptions,
   readEntries,
   type StorageKeySummary,
   type ValidatedSnapshot,

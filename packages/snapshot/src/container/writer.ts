@@ -6,11 +6,12 @@ import type { Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { constants, createZstdCompress } from "node:zlib";
 import { SnapError } from "../errors.js";
+import { type DbSchema, decodeSchema } from "../record/data-files.js";
 import { computeContentHash } from "./content-hash.js";
 import { canonicalJson } from "./jcs.js";
-import { DEFAULT_LIMITS } from "./limits.js";
-import { type Manifest, ManifestSchema } from "./manifest.js";
-import { parseDataPath } from "./paths.js";
+import { type Limits, resolveLimits } from "./limits.js";
+import { type Manifest, manifestSchema } from "./manifest.js";
+import { type DataPath, parseDataPath } from "./paths.js";
 import { BLOCK, encodeHeader } from "./ustar.js";
 
 export interface SnapshotFile {
@@ -27,15 +28,51 @@ export type SnapshotInput = Omit<Manifest, "entries" | "contentHash"> & {
 const sha256Hex = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const padding = (size: number) => new Uint8Array((BLOCK - (size % BLOCK)) % BLOCK);
 
-/** Writes the snapshot to `out` and ends it. Resolves with the contentHash and the number of bytes written. */
+/** The record-level bounds the reader checks on a path or a schema (sections 7.2 and 8), with its code. */
+function checkRecordBounds(file: SnapshotFile, kind: DataPath, limits: Readonly<Limits>): void {
+  const invalid = (message: string) => {
+    throw new SnapError("SNAP_RECORD_INVALID", message, file.path);
+  };
+  if (kind.kind === "schema") {
+    if (kind.db >= limits.maxDatabasesPerKey) {
+      invalid("more databases than maxDatabasesPerKey");
+    }
+    let schema: DbSchema;
+    try {
+      schema = decodeSchema(file.bytes, { maxDepth: limits.maxDepth });
+    } catch (error) {
+      throw error instanceof SnapError
+        ? new SnapError(error.code, error.message, file.path)
+        : error;
+    }
+    if (schema.stores.length > limits.maxStoresPerDatabase) {
+      invalid("more stores than maxStoresPerDatabase");
+    }
+    if (schema.stores.some((store) => store.indexes.length > limits.maxIndexesPerStore)) {
+      invalid("more indexes than maxIndexesPerStore");
+    }
+  } else if (kind.kind === "store" && kind.store >= limits.maxStoresPerDatabase) {
+    invalid("more stores than maxStoresPerDatabase");
+  }
+}
+
+/**
+ * Writes the snapshot to `out` and ends it. Resolves with the contentHash and the number of bytes written. Every check
+ * runs before the first byte: path grammar, duplicates, the record bounds of section 8, the manifest schema, entry
+ * count, entry, manifest and total sizes, each refused with the code the reader would give, so `out` stays untouched.
+ * `limits` overrides DEFAULT_LIMITS (tests); the file must still validate with the reader's limits.
+ */
 export async function writeSnapshot(
   input: SnapshotInput,
   out: Writable,
+  limits: Partial<Limits> = {},
 ): Promise<{ contentHash: string; sizeBytes: number }> {
+  const resolved = resolveLimits(limits);
   const { files, ...fields } = input;
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   sorted.forEach((file, i) => {
-    if (parseDataPath(file.path, fields.storageKeys.length) === null) {
+    const kind = parseDataPath(file.path, fields.storageKeys.length);
+    if (kind === null) {
       throw new SnapError(
         "SNAP_UNEXPECTED_ENTRY",
         "not a data file path of formatVersion 1",
@@ -45,13 +82,8 @@ export async function writeSnapshot(
     if (sorted[i - 1]?.path === file.path) {
       throw new SnapError("SNAP_DUPLICATE_PATH", "the same path twice", file.path);
     }
-    if (file.bytes.length > DEFAULT_LIMITS.maxEntryBytes) {
-      throw new SnapError("SNAP_ENTRY_TOO_LARGE", "entry above maxEntryBytes", file.path);
-    }
+    checkRecordBounds(file, kind, resolved);
   });
-  if (sorted.length + 1 > DEFAULT_LIMITS.maxEntries) {
-    throw new SnapError("SNAP_TOO_MANY_ENTRIES", "too many entries");
-  }
 
   const entries = sorted.map((file) => ({
     path: file.path,
@@ -63,7 +95,7 @@ export async function writeSnapshot(
     entries,
     contentHash: computeContentHash({ entries, storageKeys: fields.storageKeys }),
   };
-  const parsed = ManifestSchema.safeParse(draft);
+  const parsed = manifestSchema(resolved).safeParse(draft);
   if (!parsed.success) {
     const where = parsed.error.issues[0]?.path.join(".") ?? "";
     throw new SnapError(
@@ -76,18 +108,35 @@ export async function writeSnapshot(
     Object.entries(parsed.data).filter(([, value]) => value !== undefined),
   );
   const manifestBytes = new TextEncoder().encode(canonicalJson(known));
-  if (manifestBytes.length > DEFAULT_LIMITS.maxManifestBytes) {
-    throw new SnapError("SNAP_MANIFEST_TOO_LARGE", "manifest.json is too large", "manifest.json");
-  }
 
-  function* archive(): Generator<Uint8Array> {
-    for (const file of [{ path: "manifest.json", bytes: manifestBytes }, ...sorted]) {
-      yield encodeHeader(file.path, file.bytes.length);
-      yield file.bytes;
-      yield padding(file.bytes.length);
+  // The archive as the reader will meet it: each header's entry rules, then the bytes up to maxTotalBytes.
+  const all = [{ path: "manifest.json", bytes: manifestBytes }, ...sorted];
+  const blocks: Uint8Array[] = [];
+  let tarBytes = 0;
+  const total = (bytes: number, path?: string) => {
+    tarBytes += bytes;
+    if (tarBytes > resolved.maxTotalBytes) {
+      throw new SnapError("SNAP_TOTAL_TOO_LARGE", "the uncompressed archive is too large", path);
     }
-    yield new Uint8Array(2 * BLOCK);
-  }
+  };
+  all.forEach((file, i) => {
+    total(BLOCK, file.path);
+    if (i + 1 > resolved.maxEntries) {
+      throw new SnapError("SNAP_TOO_MANY_ENTRIES", "too many entries", file.path);
+    }
+    if (file.bytes.length > resolved.maxEntryBytes) {
+      throw new SnapError("SNAP_ENTRY_TOO_LARGE", "entry above maxEntryBytes", file.path);
+    }
+    if (i === 0 && file.bytes.length > resolved.maxManifestBytes) {
+      throw new SnapError("SNAP_MANIFEST_TOO_LARGE", "manifest.json is too large", file.path);
+    }
+    total(file.bytes.length + padding(file.bytes.length).length, file.path);
+    // Bounded indexes keep every path far below the 100-byte name field; encoding here keeps any RangeError before
+    // the first byte is written.
+    blocks.push(encodeHeader(file.path, file.bytes.length), file.bytes, padding(file.bytes.length));
+  });
+  total(2 * BLOCK);
+  blocks.push(new Uint8Array(2 * BLOCK));
 
   let sizeBytes = 0;
   const compressor = createZstdCompress({ params: { [constants.ZSTD_c_checksumFlag]: 1 } });
@@ -106,7 +155,7 @@ export async function writeSnapshot(
   try {
     // Each chunk is processed before `end()`. Node's zlib gives a chunk that is still queued at `end()` the finish
     // flag, and its `_flush` then sends another finish, which zstd answers with a second, empty frame (MEMORY.md).
-    for (const chunk of archive()) {
+    for (const chunk of blocks) {
       if (chunk.length > 0) {
         await new Promise<void>((resolve, reject) =>
           compressor.write(chunk, (error) => (error ? reject(error) : resolve())),

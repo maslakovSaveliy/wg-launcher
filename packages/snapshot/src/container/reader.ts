@@ -36,6 +36,13 @@ export interface ValidatedSnapshot {
   blobs: { count: number; bytes: number };
 }
 
+/** How to read a source: its exact size in compressed bytes (from `stat` of the private copy) and limit overrides. */
+export interface ReadOptions {
+  compressedSize: number;
+  /** Overrides single values of DEFAULT_LIMITS (tests and golden vectors). */
+  limits?: Partial<Limits>;
+}
+
 const sha256Hex = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
 /** Rethrows a record-layer error with the entry path, which the record layer does not know. */
@@ -288,21 +295,34 @@ class RecordChecks {
   }
 }
 
+/** Resolves the limits and checks the declared size first: above `maxFileBytes` fails before anything is read. */
+function start(source: AsyncIterable<Uint8Array>, options: ReadOptions) {
+  const limits = resolveLimits(options.limits);
+  const { compressedSize } = options;
+  if (!Number.isSafeInteger(compressedSize) || compressedSize < 0) {
+    throw new TypeError("compressedSize must be a non-negative integer");
+  }
+  if (compressedSize > limits.maxFileBytes) {
+    throw new SnapError("SNAP_FILE_TOO_LARGE", "the snapshot file is too large");
+  }
+  const counters: Counters = { compressed: 0, uncompressed: 0 };
+  const pass = new EntryPass(limits);
+  const tar = readTar(inflate(source, limits, compressedSize, counters), limits, (header) =>
+    pass.onHeader(header),
+  );
+  return { limits, counters, pass, tar };
+}
+
 /**
- * Validates a whole `.wgsnap` (R1). Resolves with the manifest and counts, or rejects with the first SnapError.
- * `limits` overrides single values of DEFAULT_LIMITS (tests and golden vectors).
+ * Validates a whole `.wgsnap` (R1) of `options.compressedSize` bytes. Resolves with the manifest and counts, or rejects
+ * with the first SnapError; an error of the source itself is passed through unchanged.
  */
 export async function validateSnapshot(
   source: AsyncIterable<Uint8Array>,
-  limits: Partial<Limits> = {},
+  options: ReadOptions,
 ): Promise<ValidatedSnapshot> {
-  const resolved = resolveLimits(limits);
-  const counters: Counters = { compressed: 0, uncompressed: 0 };
-  const pass = new EntryPass(resolved);
+  const { limits: resolved, counters, pass, tar } = start(source, options);
   const checks = new RecordChecks(resolved);
-  const tar = readTar(inflate(source, resolved, counters), resolved, (header) =>
-    pass.onHeader(header),
-  );
   for await (const { header, data } of tar) {
     if (header.type === "directory") {
       continue;
@@ -331,14 +351,9 @@ export async function validateSnapshot(
 export async function* readEntries(
   source: AsyncIterable<Uint8Array>,
   manifest: Manifest,
-  limits: Partial<Limits> = {},
+  options: ReadOptions,
 ): AsyncGenerator<{ path: string; bytes: Uint8Array }> {
-  const resolved = resolveLimits(limits);
-  const counters: Counters = { compressed: 0, uncompressed: 0 };
-  const pass = new EntryPass(resolved);
-  const tar = readTar(inflate(source, resolved, counters), resolved, (header) =>
-    pass.onHeader(header),
-  );
+  const { limits: resolved, pass, tar } = start(source, options);
   for await (const { header, data } of tar) {
     if (header.type === "directory") {
       continue;
