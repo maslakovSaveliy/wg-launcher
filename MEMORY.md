@@ -326,6 +326,11 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   decoder refuses an empty file; `encodeStoreRecords` and `encodeLocalStorage` sort and throw `TypeError` on duplicate
   keys; `encodeSchema` re-decodes its own output and throws `TypeError` on a schema the reader would refuse;
   `keyGenerator` 2^53 is the float `fa 5a000000`; a view and its buffer reached twice is `EXP_SHARED_REFERENCE`.
+- 2026-10-25 Controller rulings R7 and R9 (Task 2 fix round): readers never compile or canonicalize a RegExp source
+  (only the flags are checked: ordered subset of `dgimsuvy`, not both `u` and `v`); `fromItem` turns a source that does
+  not compile into `SNAP_RECORD_INVALID`. A File with `lastModified` `-0` or above 2^53 − 1 is `EXP_UNSUPPORTED_VALUE`
+  at export, because the reader requires an integer. [V, 2026-10-25, Node 24.13.0] `new File(["x"], "a",
+  {lastModified: -0}).lastModified` stays `-0` and `2 ** 60` stays unsafe (value.test.ts).
 
 ### Licensing precedent
 

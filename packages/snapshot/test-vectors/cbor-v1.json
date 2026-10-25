@@ -535,8 +535,14 @@
     "error": "SNAP_RECORD_INVALID"
   },
   {
-    "id": "inv-regexp-source-not-canonical",
-    "hex": "d9524a8263612f6260",
+    "id": "inv-regexp-duplicate-flag",
+    "hex": "d9524a826161626767",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-regexp-flags-u-and-v",
+    "hex": "d9524a826161627576",
     "ok": false,
     "error": "SNAP_RECORD_INVALID"
   },

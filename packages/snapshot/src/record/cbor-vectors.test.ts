@@ -73,7 +73,8 @@
 //   inv-sparse-dense d9 814f 83 01 6130 01 (a dense [1]) | inv-sparse-index-out-of-range d9 814f 83 01 6131 01
 //   inv-sparse-length-key d9 814f 83 01 66 6c656e677468 01 | inv-set-neg-zero d9 8153 81 f9 8000 (a Set holds +0)
 //   inv-set-duplicate d9 8153 82 01 01 | inv-map-value-duplicate-key d9 8152 84 01 01 01 02 | inv-boxed-null d9 8154 81 f6
-//   inv-regexp-flag-order d9 524a 82 6161 62 6967 ("ig") | inv-regexp-source-not-canonical d9 524a 82 63 612f62 60 ("a/b")
+//   inv-regexp-flag-order d9 524a 82 6161 62 6967 ("ig") | inv-regexp-duplicate-flag d9 524a 82 6161 62 6767 ("gg")
+//   inv-regexp-flags-u-and-v d9 524a 82 6161 62 7576 ("uv"); the source is never checked (engine-neutral)
 //   inv-typed-array-misaligned d8 46 42 0100 (2 bytes of Uint32Array)
 //   inv-view-whole-as-partial d9 8156 84 1840 42 0102 00 02 | inv-view-out-of-range d9 8156 84 1840 42 0102 01 02
 //   inv-view-misaligned-offset d9 8156 84 1845 44 00000000 01 01 | inv-view-unknown-view-tag d9 8156 84 1841 42 0102 00 01

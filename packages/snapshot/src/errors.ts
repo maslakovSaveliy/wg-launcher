@@ -29,6 +29,8 @@ export interface ExportErrorDetail {
   path: PathSegment[];
   /** `Object.prototype.toString` of the offending value, for example `[object Error]`. */
   type: string;
+  /** Which part of an otherwise supported value is the problem, for example `lastModified`. */
+  reason?: string;
   storageKey?: { origin: string; topLevelSite: string | null };
   database?: string;
   store?: string;

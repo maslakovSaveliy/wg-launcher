@@ -239,12 +239,16 @@ and Blob came back through that path).
   before every other key); a sparse array whose keys are exactly the indexes 0 to length − 1 (that is a plain array), a
   key `length`, an index not below `length` or a `length` above 2^32 − 1; a Map key or Set item equal to an earlier
   one under SameValueZero among primitives, or `-0` (Map and Set store `+0`); a boxed content other than a boolean,
-  number, string or BigInt; RegExp flags or source that `new RegExp(source, flags)` does not give back unchanged (a
-  JavaScript-specific check; another language checks the flag order `dgimsuvy` and leaves the source to the importer);
+  number, string or BigInt; a RegExp content other than exactly `[source, flags]` with the source in the string
+  encoding and the flags a text string that is a strictly ordered subset of `dgimsuvy` without both `u` and `v`;
   typed-array bytes that are not a whole number of elements; a partial view whose offset is not a multiple of the
   element size, that leaves its buffer or that covers all of it; a Blob or File type outside lowercase printable ASCII
   (U+0020 to U+007E without `A` to `Z`, as the File API normalizes it), a `lastModified` that is not an integer, a hash
   that is not 64 lowercase hex digits, and one hash referenced with two sizes. `Assumed`
+- The RegExp source is stored as the exporting engine's `RegExp.prototype.source` and is not canonicalized by readers;
+  a source that does not compile is an import error. `Assumed`
+- A File whose `lastModified` is not a safe integer, or is `-0`, is `EXP_UNSUPPORTED_VALUE` (the detail names
+  `lastModified`), because the field is written as an integer; it is never normalized. `Assumed`
 - A typed array or DataView and its `ArrayBuffer`, or two views of one buffer, are the same object reached twice:
   `EXP_SHARED_REFERENCE`, because a decoder would rebuild separate buffers. `Assumed`
 - Typed-array bytes are copied as they are in memory. Electron 45 builds only for x64 and arm64, both little-endian.
@@ -406,8 +410,9 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
   "records": [[key, value]]}]}]}]}`. A value is a JSON string (well-formed only), `true`, `false`, `null`, a safe
   integer, a JSON array (a dense Array) or an object with a `"$"` member naming the type: `undefined`, `f64` (`hex`: the
   16 hex digits of the IEEE 754 bits), `str16` (`hex` of UTF-16LE), `bigint` (`v` decimal), `object`, `map` and
-  `sparse` (`entries` as pairs, `sparse` also `length`; `sparse` keys are JSON strings, indexes in decimal), `set` (`items`), `date` (`v` a value), `boxed` (`v`),
-  `regexp` (`source`, `flags`), `bytes` (`hex`), `view` (`type`, `hex`, optional `bufferHex`, `byteOffset`, `length`),
+  `sparse` (`entries` as pairs, `sparse` also `length`; `object` and `sparse` keys are JSON strings or `str16` objects,
+  indexes in decimal; `map` keys are values), `set` (`items`), `date` (`v` a value), `boxed` (`v`),
+  `regexp` (`source` a JSON string or `str16` object, `flags`), `bytes` (`hex`), `view` (`type`, `hex`, optional `bufferHex`, `byteOffset`, `length`),
   `blob` (`type`, `hex`) and `file` (`name`, `lastModified`, `type`, `hex`). `Assumed`
 
 | Vector | Content | Expected |

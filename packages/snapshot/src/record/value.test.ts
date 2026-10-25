@@ -247,6 +247,31 @@ describe("export errors (snapshot-format.md section 6.3)", () => {
     expect(error.detail.type).toBe(type);
   });
 
+  it.each([
+    ["-0", -0],
+    ["2^60", 2 ** 60],
+  ])(
+    "refuses a File whose lastModified is %s (not a safe integer)",
+    async (_name, lastModified) => {
+      const file = new File(["x"], "a", { lastModified });
+      expect(Object.is(file.lastModified, lastModified)).toBe(true);
+      const error = await exportError({ slots: [file] });
+      expect([error.code, error.detail.path, error.detail.type]).toEqual([
+        "EXP_UNSUPPORTED_VALUE",
+        ["slots", 0],
+        "[object File]",
+      ]);
+      expect(error.message).toMatch(/lastModified/);
+    },
+  );
+
+  it("writes only Files the value check accepts", async () => {
+    for (const lastModified of [0, -5, 1_700_000_000_000, 2 ** 53 - 1, -(2 ** 53 - 1)]) {
+      const { item } = await exportValue(new File(["x"], "a", { lastModified }));
+      expect(() => checkValueItem(item, new Map()), String(lastModified)).not.toThrow();
+    }
+  });
+
   it("refuses a shared reference and a cycle with EXP_SHARED_REFERENCE", async () => {
     const shared = { hp: 1 };
     const sharedError = await exportError({ a: shared, b: [shared] });
@@ -281,6 +306,41 @@ describe("export errors (snapshot-format.md section 6.3)", () => {
 });
 
 describe("checkValueItem and fromItem", () => {
+  const regexpItem = (source: string, flags: string): CborItem => ({
+    k: "tag",
+    tag: 21066,
+    v: {
+      k: "array",
+      v: [
+        { k: "text", v: source },
+        { k: "text", v: flags },
+      ],
+    },
+  });
+
+  it("checks RegExp flags only, never the source (engine-neutral)", () => {
+    // A source another engine may escape differently, and one that does not compile, both pass the check.
+    for (const source of ["a/b", "(", ""]) {
+      expect(() => checkValueItem(regexpItem(source, "dgimsuy"), new Map()), source).not.toThrow();
+    }
+    for (const flags of ["ig", "gg", "uv", "x", "G"]) {
+      expect(() => checkValueItem(regexpItem("a", flags), new Map()), flags).toThrow(SnapError);
+    }
+  });
+
+  it("refuses a RegExp that does not compile when building, with a named error", () => {
+    let error: unknown;
+    try {
+      fromItem(regexpItem("(", ""), () => new Blob([]));
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toBeInstanceOf(SnapError);
+    expect((error as SnapError).code).toBe("SNAP_RECORD_INVALID");
+    expect((error as SnapError).message).toMatch(/RegExp does not compile/);
+    expect((fromItem(regexpItem("a/b", "g"), () => new Blob([])) as RegExp).flags).toBe("g");
+  });
+
   it("refuses a map, which only envelopes may use", () => {
     const map: CborItem = { k: "map", v: [] };
     expect(() => checkValueItem({ k: "array", v: [map] }, new Map())).toThrow(SnapError);

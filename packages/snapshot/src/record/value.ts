@@ -100,12 +100,12 @@ class ValueExporter {
     code: "EXP_UNSUPPORTED_VALUE" | "EXP_SHARED_REFERENCE" | "EXP_TOO_DEEP",
     value: unknown,
     path: PathSegment[],
+    reason?: string,
   ): never {
     const type = Object.prototype.toString.call(value);
-    throw new ExportError(code, `${code} for ${type}`, {
-      path: [...path],
-      type,
-    });
+    const detail = { path: [...path], type, ...(reason === undefined ? {} : { reason }) };
+    const why = reason === undefined ? "" : ` (${reason})`;
+    throw new ExportError(code, `${code} for ${type}${why}`, detail);
   }
 
   /** Children of a fixed-shape array (RegExp, views, Blob, File, sparse length) sit one level deeper. */
@@ -303,6 +303,10 @@ class ValueExporter {
     path: PathSegment[],
   ): Promise<CborItem> {
     this.leaves(blob, depth, path);
+    // lastModified is written as an integer; -0 or an unsafe value would be a float, which the reader refuses.
+    if (isFile && !isIntegerNumber((blob as File).lastModified)) {
+      this.fail("EXP_UNSUPPORTED_VALUE", blob, path, "lastModified is not a safe integer");
+    }
     let content: Uint8Array<ArrayBuffer>;
     try {
       content = new Uint8Array(await blob.arrayBuffer());
@@ -455,19 +459,24 @@ function checkPairs(items: CborItem[], refs: BlobRefs): void {
   }
 }
 
+// Flags in the order of RegExp.prototype.flags, each at most once, never both u and v. The source is stored as the
+// exporting engine wrote it and is not canonicalized or compiled here: that would make validity engine-defined.
+const REGEXP_FLAGS = /^d?g?i?m?s?u?v?y?$/;
+
 function checkRegExp([source, flags, ...rest]: CborItem[]): void {
-  const s = stringOf(source);
-  if (s === undefined || flags?.k !== "text" || rest.length > 0) {
+  if (stringOf(source) === undefined || flags?.k !== "text" || rest.length > 0) {
     invalid("RegExp must be [source, flags]");
   }
-  let re: RegExp | undefined;
-  try {
-    re = new RegExp(s, flags.v);
-  } catch {
-    invalid("RegExp source or flags do not parse");
+  if (!REGEXP_FLAGS.test(flags.v) || (flags.v.includes("u") && flags.v.includes("v"))) {
+    invalid("RegExp flags must be an ordered subset of dgimsuvy without both u and v");
   }
-  if (re.source !== s || re.flags !== flags.v) {
-    invalid("RegExp source or flags are not in their canonical form");
+}
+
+function buildRegExp(source: string, flags: string): RegExp {
+  try {
+    return new RegExp(source, flags);
+  } catch {
+    throw new SnapError("SNAP_RECORD_INVALID", "RegExp does not compile in this engine");
   }
 }
 
@@ -697,7 +706,7 @@ function buildTag(tag: number, content: CborItem, blobs: (sha256: string) => Blo
     case TAG.boxed:
       return Object(build(items[0]));
     case TAG.regexp:
-      return new RegExp(stringOf(items[0]) as string, (items[1] as { v: string }).v);
+      return buildRegExp(stringOf(items[0]) as string, (items[1] as { v: string }).v);
     case TAG.partialView: {
       const [viewTag, , offset, length] = items.map((item) => (item as { v: number }).v);
       const PartialView = VIEW_CONSTRUCTORS.get(viewTag as number);
