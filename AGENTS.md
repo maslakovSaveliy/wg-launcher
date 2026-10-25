@@ -49,11 +49,12 @@ Exists now:
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
 | `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy, and `prod-deps-guard.mjs` is the build-time guard (a Vite/Rollup plugin) that fails a build bundling a package outside the production closure, i.e. `dependencies` and their transitives (both with tests; the guard is wired into the desktop build when it exists) |
 | `packages/shared/` | `@wg-launcher/shared`, consumed as TypeScript source: UUIDv7 ids, the `Result` type and every result error code named in the specs (no dependencies yet) |
+| `packages/snapshot/` | `@wg-launcher/snapshot`, TypeScript source: the `.wgsnap` record layer (`src/record/`: deterministic CBOR profile, value model, IndexedDB key order, data files; Web APIs only), its errors, the test notation (`test/notation.ts`, test-only) and the hand-written CBOR vectors `test-vectors/cbor-v1.json` |
 | `fixtures/test-games/progress-lab/` | Controlled test game with verifiable persisted progress and its Playwright suite; see its `README.md`. Not a real game |
 
 Reserved, **not created yet**. Do not create a directory until the work that needs it exists:
 
-- `apps/desktop` (Electron client), `packages/snapshot`, `packages/exporters`.
+- `apps/desktop` (Electron client), `packages/exporters`.
 - `crates/` (Rust, only if and when the local-packages stage needs it).
 
 ## Commands

@@ -156,19 +156,19 @@ profile break of snapshot-format §6.2; `checkValueItem(item, refs: BlobRefs): v
 `fromItem(item, blobs: (sha256: string) => Blob): unknown`; `compareIdbKeys(a, b): -1 | 0 | 1` (W3C order);
 `encodeLocalStorage`, `encodeSchema`, `encodeStoreRecords` and their decoders for §7.1–7.3. Web APIs only (no `node:`
 import; a test asserts the source has none).
-- [ ] Hand-written vectors (M11), `cbor-v1.json` as `[{id, value (test notation of §10), hex, ok}]`, at least: `-0` →
+- [x] Hand-written vectors (M11), `cbor-v1.json` as `[{id, value (test notation of §10), hex, ok}]`, at least: `-0` →
   `f98000`; `NaN` → `f97e00`; `1.5` → `f93e00`; `100000.5` → shortest exact float; `2**53-1` → `1b001fffffffffffff`;
   plain object `{a: 1}` → tag 33101 `d9814d82616101`; `Uint8Array [1,2]` → tag 64 `d84042 0102`; lone surrogate →
   tag 33102; invalid: `1817` (non-shortest head), `fa3fc00000` (float32 holding 1.5 that fits f16), `f93c00` (float
   holding the integer 1), `a2616201616101` (unsorted map), `d9 81af` + any (tag 33199). Hex is computed by hand in the
   test file's comments, never by running the encoder.
-- [ ] Tests: every hand vector both ways; value model round trip for each row of §6.3 (Date incl. invalid, Map/Set order,
+- [x] Tests: every hand vector both ways; value model round trip for each row of §6.3 (Date incl. invalid, Map/Set order,
   sparse array with extra props, boxed, RegExp, BigInt, every typed array, DataView, partial view, Blob, File); each
   unsupported type and a shared reference and a cycle give their code and path; `maxDepth` 256 enforced; IDB key order
   number < Date < string < binary < array.
-- [ ] Run failing, implement, run passing; `pnpm check`.
-- [ ] Docs: snapshot-format §10 gains the `cbor-v1.json` paragraph (hand-written, language-neutral, Rust must pass it).
-- [ ] Commit `feat(snapshot): add the deterministic CBOR record codec`.
+- [x] Run failing, implement, run passing; `pnpm check`.
+- [x] Docs: snapshot-format §10 gains the `cbor-v1.json` paragraph (hand-written, language-neutral, Rust must pass it).
+- [x] Commit `feat(snapshot): add the deterministic CBOR record codec`.
 
 ### Task 3: `packages/snapshot` container: zstd frame walker, ustar, manifest, content hash, validator, writer (L)
 **Files:** `src/container/{zstd-frame.ts,ustar.ts,jcs.ts,manifest.ts,content-hash.ts,limits.ts,reader.ts,writer.ts}`, tests.

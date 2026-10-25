@@ -305,6 +305,28 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   names (`pnpm ls -r --depth -1 --json`, names only) and exempts a member only while its license is exactly
   `AGPL-3.0-or-later`; a GPL dependency of a member and a member with another license still fail (unit-tested).
 
+### Snapshot record layer (Phase 1 Task 2, 2026-10-25)
+
+- [V, 2026-10-25, Node 24.13.0, `node -e` run locally] Node 24 has `DataView.prototype.setFloat16` and `getFloat16`,
+  `Float16Array`, `Math.f16round` (V8 flag `--js-float16array`, on by default) and `String.prototype.isWellFormed`;
+  `Blob`, `File` and `crypto.subtle` are globals. TypeScript 7.0.2 types Float16 only with the lib `ES2025.Float16`
+  (`lib.es2025.float16.d.ts`), which `packages/snapshot/tsconfig.json` adds to `ES2024`. [A] Chromium 156 (Electron 45)
+  has them too (Float16 shipped in Chrome 135; not run in Electron here).
+- [V, 2026-10-25, Node 24.13.0, `node -e`] V8 enumerates own keys of plain objects and arrays with array indexes
+  (canonical decimal up to 2^32 − 2, so `"4294967294"`) first in ascending order, then other keys in insertion order
+  (`"4294967295"` and `"01"` are ordinary keys); `new Map([[-0, 1]])` and `new Set([-0])` store `+0`;
+  `new RegExp("a/b").source` is `a\/b` and `new RegExp("").source` is `(?:)`; `/a/gimsuyd.flags` is `dgimsuy`.
+- [V, 2026-10-25, Node 24.13.0, `node -e`] Node's `Blob` lowercases `type` (`TEXT/Plain` becomes `text/plain`) and
+  empties a type with a character outside printable ASCII; `new File(["x"], "\ud800").name` is U+FFFD (the name is a
+  USVString). `Object.prototype.toString` of a class instance is `[object Object]`, so `EXP_UNSUPPORTED_VALUE` details
+  of class instances do not name the class.
+- Decisions (Assumed, recorded in snapshot-format.md sections 6.2, 6.3 and 7): depth counts arrays and maps, not tags,
+  and a tag's content is never a tag; record keys and values sit at depth 1; `toItem` calls `onBlob` once per Blob or
+  File value and the caller deduplicates hashes; `encodeLocalStorage` returns `null` for no items (no file) and the
+  decoder refuses an empty file; `encodeStoreRecords` and `encodeLocalStorage` sort and throw `TypeError` on duplicate
+  keys; `encodeSchema` re-decodes its own output and throws `TypeError` on a schema the reader would refuse;
+  `keyGenerator` 2^53 is the float `fa 5a000000`; a view and its buffer reached twice is `EXP_SHARED_REFERENCE`.
+
 ### Licensing precedent
 
 - [V] bitwarden/server uses AGPL-3.0 as the default license and a separate source-available license only for the
@@ -392,6 +414,11 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   it before relaunching Chrome with `--remote-debugging-port=0`. [V, 2026-10-24, Task 6 spike]
 - Playwright launches Chrome headed but `viewport: null` plus `Browser.setWindowBounds` over CDP is needed to get an exact
   1280 x 720 CSS-pixel viewport at the native scale factor; `Page.bringToFront` is enough to get focus. [V, 2026-10-24]
+- `TextDecoder` drops a leading U+FEFF unless it is built with `ignoreBOM: true`: decoding `ef bb bf 61` gave one
+  character by default and two with the option. The CBOR decoder uses `{fatal: true, ignoreBOM: true}`, because text
+  is never altered (snapshot-format.md section 6.2 rule 4). [V, 2026-10-25, Node 24.13.0, `node -e`]
+- `pnpm exec biome check --write` also reformats JSON test vectors (line breaks only); the hex strings stay as written.
+  [V, 2026-10-25, Biome 2.6.2]
 - In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
 - Node's zstd does not report a truncated frame: a checksummed frame cut by 6 bytes decompressed without an error through
   `zlib.zstdDecompressSync` and through `zlib.createZstdDecompress` (the stream just ended). So the `.wgsnap` reader

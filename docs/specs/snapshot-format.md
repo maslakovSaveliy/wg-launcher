@@ -193,7 +193,12 @@ quiescent preload and in the snapshot worker ([architecture.md](architecture.md#
 6. Simple values: only `false`, `true`, `null`, `undefined` (`f4` to `f7`).
 7. Tags: only those in section 6.3, with the content shapes given there.
 8. Decoders MUST reject anything that breaks 1 to 7 (`SNAP_RECORD_INVALID`), so the encoding of a value is unique.
-   Nesting depth is at most `maxDepth`.
+   Nesting depth is at most `maxDepth`: a top-level item of a sequence is at depth 0, the elements of an array and the
+   keys and values of a map are one level deeper than it, and the content of a tag is at the tag's own depth. A tag
+   whose content is a tag is rejected (no tag of section 6.3 has a tag as its content), so tags cannot nest without
+   bound. Inside a `[key, value]` record (sections 7.1 and 7.3) the key and the value are at depth 1, and the exporter
+   refuses a value that would produce a deeper item than `maxDepth` with `EXP_TOO_DEEP`, so an exported value always
+   decodes. `Assumed`
 
 ### 6.3 Value model
 
@@ -209,8 +214,8 @@ and Blob came back through that path).
 | string with a lone surrogate | Tag 33102, byte string of UTF-16LE code units |
 | BigInt | Tag 33105, text: decimal, `-` for negatives, no leading zeros |
 | Array whose own enumerable properties are exactly the indexes 0 to length − 1 | Array of encoded items |
-| Any other Array (holes or extra own properties) | Tag 33103, array `[length, key1, value1, …]`: `length` an integer, then every own enumerable string-keyed property except `length` in enumeration order (indexes ascending first), keys as text strings, indexes in canonical decimal (`"3"`); a hole is an absent key |
-| Plain object | Tag 33101, array `[key1, value1, key2, value2, …]` in enumeration order |
+| Any other Array (holes or extra own properties) | Tag 33103, array `[length, key1, value1, …]`: `length` an integer, then every own enumerable string-keyed property except `length` in enumeration order (indexes ascending first), keys in the string encoding (text, or tag 33102 for a key with a lone surrogate), indexes in canonical decimal (`"3"`); a hole is an absent key |
+| Plain object | Tag 33101, array `[key1, value1, key2, value2, …]` in enumeration order, keys in the string encoding |
 | Date | Tag 33104, number: time value in ms (`NaN` for an invalid Date) |
 | Map | Tag 33106, array `[key1, value1, …]` in insertion order |
 | Set | Tag 33107, array of items in insertion order |
@@ -227,6 +232,21 @@ and Blob came back through that path).
   First Served" range, listed as Unassigned. Verified (2026-10-25,
   <https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml>). They are not registered (Open questions). Inside a
   `.wgsnap` their meaning is fixed by `formatVersion`. `Assumed`
+- Decoders also reject the shapes a JavaScript value cannot have, so that decoding and re-encoding gives the same bytes
+  (rule 8): tag 33102 over a well-formed string or an odd number of bytes; a BigInt text other than `0` or
+  `-?[1-9][0-9]*`; a Date content other than `NaN` or an integer of magnitude at most 8.64e15; object or sparse-array
+  keys that are duplicated or out of enumeration order (array indexes, canonical decimal up to 2^32 − 2, ascending
+  before every other key); a sparse array whose keys are exactly the indexes 0 to length − 1 (that is a plain array), a
+  key `length`, an index not below `length` or a `length` above 2^32 − 1; a Map key or Set item equal to an earlier
+  one under SameValueZero among primitives, or `-0` (Map and Set store `+0`); a boxed content other than a boolean,
+  number, string or BigInt; RegExp flags or source that `new RegExp(source, flags)` does not give back unchanged (a
+  JavaScript-specific check; another language checks the flag order `dgimsuvy` and leaves the source to the importer);
+  typed-array bytes that are not a whole number of elements; a partial view whose offset is not a multiple of the
+  element size, that leaves its buffer or that covers all of it; a Blob or File type outside lowercase printable ASCII
+  (U+0020 to U+007E without `A` to `Z`, as the File API normalizes it), a `lastModified` that is not an integer, a hash
+  that is not 64 lowercase hex digits, and one hash referenced with two sizes. `Assumed`
+- A typed array or DataView and its `ArrayBuffer`, or two views of one buffer, are the same object reached twice:
+  `EXP_SHARED_REFERENCE`, because a decoder would rebuild separate buffers. `Assumed`
 - Typed-array bytes are copied as they are in memory. Electron 45 builds only for x64 and arm64, both little-endian.
   Verified (2026-10-24, <https://releases.electronjs.org/release/v45.0.0>) for the architectures; that both run
   little-endian is Assumed (general knowledge). A big-endian implementation would have to swap.
@@ -242,7 +262,8 @@ and Blob came back through that path).
 ### 7.1 `local-storage.cbor`
 
 A CBOR sequence of 2-element arrays `[key, value]`, both strings (text or tag 33102), strictly ascending by key in
-code-unit order. localStorage has no meaningful order, so sorting loses nothing. `Assumed`
+code-unit order. localStorage has no meaningful order, so sorting loses nothing. An empty localStorage has no file, so
+an empty `local-storage.cbor` is `SNAP_RECORD_INVALID`. `Assumed`
 
 ### 7.2 `schema.cbor`: IndexedDB schema capture
 
@@ -259,6 +280,11 @@ Store map members: `name`; `keyPath` (`null`, a string or an array of strings, a
 section 7.5); `indexes` (array sorted by name of maps with `name`, `keyPath`, `unique`, `multiEntry`); `records` (the
 record count). This captures what PRD section 10 requires (database version, key paths, auto-increment, indexes).
 `Owner` for the scope, `Assumed` for the layout.
+
+Every map has exactly these members. Names and key-path strings use the string encoding; an array key path is not
+empty, and an index with an array key path is not `multiEntry` (IndexedDB refuses both). Store and index names are
+strictly ascending in code-unit order. `keyGenerator` is an integer from 1 to 2^53 encoded as a number, so 2^53 (not a
+safe integer) is the float `fa 5a000000`. `Assumed`
 
 ### 7.3 `store-<s>.cbor`: records
 
@@ -342,6 +368,13 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
 
 ## 10. Golden vectors (manifest format frozen now)
 
+- Record-level hand vectors: `packages/snapshot/test-vectors/cbor-v1.json` is a language-neutral JSON array of
+  `{id, value, hex, ok}` (`value` in the notation below, absent for invalid vectors, which carry `error`). Every hex
+  string was written by hand from RFC 8949 and section 6, never produced by the encoder, and the byte-by-byte
+  explanation is in the comments of `src/record/cbor-vectors.test.ts`. A valid vector holds both ways: encoding
+  `value` gives `hex`, and decoding `hex` as a one-item sequence passes the value check and gives `value`. An invalid
+  vector fails the decoder or the value check with `SNAP_RECORD_INVALID`. A later Rust codec MUST pass the same file.
+  `Assumed`
 - Layout: `packages/snapshot/test-vectors/v1/index.json` (the ordered list of vector ids) and one directory per vector,
   `packages/snapshot/test-vectors/v1/<id>/`, holding `vector.json`, `input.wgsnap` and, for valid vectors,
   `content.json`. A runner fails on a listed directory that is missing and on an unlisted one. `Assumed`
