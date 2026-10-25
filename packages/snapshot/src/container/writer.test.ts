@@ -284,6 +284,22 @@ describe("writeSnapshot refuses before writing whatever the reader would refuse 
     expect(out.parts).toHaveLength(0);
   });
 
+  it("a store path whose database index is at or above maxDatabasesPerKey", async () => {
+    await refusedLikeReader(
+      [{ path: "data/0/idb/300/store-0.cbor", bytes: new Uint8Array(0) }],
+      "SNAP_RECORD_INVALID",
+    );
+  });
+
+  it("a store path whose database index is too long for the name field", async () => {
+    const out = sink();
+    const long = [{ path: `data/0/idb/${"9".repeat(95)}/store-0.cbor`, bytes: new Uint8Array(0) }];
+    expect(await codeOfAsync(() => writeSnapshot(input(long), out.stream))).toBe(
+      "SNAP_RECORD_INVALID",
+    );
+    expect(out.parts).toHaveLength(0);
+  });
+
   it("more stores or indexes than the limits", async () => {
     const three = [{ path: "data/0/idb/0/schema.cbor", bytes: schemaWith(3) }, ...emptyStores(3)];
     await refusedLikeReader(three, "SNAP_RECORD_INVALID", { maxStoresPerDatabase: 2 });

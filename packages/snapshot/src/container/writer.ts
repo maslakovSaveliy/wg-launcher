@@ -51,8 +51,14 @@ function checkRecordBounds(file: SnapshotFile, kind: DataPath, limits: Readonly<
     if (schema.stores.some((store) => store.indexes.length > limits.maxIndexesPerStore)) {
       invalid("more indexes than maxIndexesPerStore");
     }
-  } else if (kind.kind === "store" && kind.store >= limits.maxStoresPerDatabase) {
-    invalid("more stores than maxStoresPerDatabase");
+  } else if (kind.kind === "store") {
+    // Both indexes are bounded, which also keeps every store path far below the 100-byte name field.
+    if (kind.db >= limits.maxDatabasesPerKey) {
+      invalid("more databases than maxDatabasesPerKey");
+    }
+    if (kind.store >= limits.maxStoresPerDatabase) {
+      invalid("more stores than maxStoresPerDatabase");
+    }
   }
 }
 

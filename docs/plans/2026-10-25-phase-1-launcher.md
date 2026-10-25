@@ -179,10 +179,16 @@ reports `SNAP_ZSTD_INVALID` (bad magic, skippable frame, dictionary id, window a
 `SNAP_TRUNCATED` (input ends before the last block and checksum) and `SNAP_TRAILING_DATA` (any byte after the frame),
 in front of `zlib.createZstdDecompress({params: {ZSTD_d_windowLogMax: 27}})`; `canonicalJson(value): string` (JCS for the
 ASCII/integer/null subset); `ManifestSchema` (zod: top level `z.object`, nested `z.strictObject`, M7);
-`computeContentHash(manifest): string`; `validateSnapshot(source: AsyncIterable<Uint8Array>, limits?): Promise<ValidatedSnapshot>`
-(order: container → per-header rules 1–14 → manifest checks in §4 order → hash → per-entry size/sha256 while streaming →
-records decoded and checked with Task 2 → blob references; first failure wins); `readEntries(source, manifest)`: second
-pass re-checking hashes (R6); `writeSnapshot(input: SnapshotInput, out: Writable): Promise<{contentHash: string; sizeBytes: number}>`.
+`computeContentHash(manifest): string`; all exported from the package entry `@wg-launcher/snapshot/container` (R10).
+`validateSnapshot(source: AsyncIterable<Uint8Array>, options: {compressedSize: number; limits?: Partial<Limits>}):
+Promise<ValidatedSnapshot>` (`ReadOptions`; the caller gives `compressedSize`, the exact byte size of the file, which the
+worker takes from `stat` of its private copy in `tmp/`; `SNAP_FILE_TOO_LARGE` is checked from it first and the ratio
+limit is max(`ratioFloorBytes`, `maxRatio` × `compressedSize`), R11. Order: container → per-header rules 1–14 →
+manifest checks in §4 order → hash → per-entry size/sha256 while streaming → records decoded and checked with Task 2 →
+blob references; first failure wins); `readEntries(source, manifest: Manifest, options: {compressedSize: number;
+limits?: Partial<Limits>}): AsyncGenerator<{path: string; bytes: Uint8Array}>`: second pass re-checking hashes (R6),
+same options; `writeSnapshot(input: SnapshotInput, out: Writable, limits?: Partial<Limits>): Promise<{contentHash:
+string; sizeBytes: number}>` (`limits` for tests only; refused input writes nothing).
 - [x] Tests: frame walker on real `zstdCompressSync` output with and without checksum, cut at 1, half and length−1 bytes
   (all `SNAP_TRUNCATED`), with a skippable frame, a second frame, a byte appended; ustar rules 1–14 each from a crafted
   header; JCS rejects whitespace and duplicate keys via re-serialization; manifest check order (a `formatVersion` 2
