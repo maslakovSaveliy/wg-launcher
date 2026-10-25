@@ -61,6 +61,13 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - Execution style: subagent-driven development; test-first where code exists.
 - 2026-10-25 Phase 0 close-out (Task 9): `README.md`, `CONTRIBUTING.md` and the docs index `docs/README.md` exist, and
   the branch `phase-0-foundation` waits for the owner's review before any merge to `main`.
+- 2026-10-25 Task 3 (`.wgsnap` container, Assumed unless noted): the Node-only container is the package entry
+  `@wg-launcher/snapshot/container` (Ruling R10), never re-exported from `src/index.ts` (a test walks its import graph).
+  zod 4.6.7 (MIT) is a production dependency of `packages/snapshot`. A container verdict found on the compressed bytes
+  is deferred until the bytes before it are decompressed and checked, so the error code does not depend on chunking
+  (snapshot-format.md section 2). Count limits above the manifest's are `SNAP_RECORD_INVALID`, `storageKeys` above
+  `maxStorageKeys` is `SNAP_MANIFEST_INVALID` (section 8). Manifest numbers are safe integers only, so JCS needs no
+  float formatting (section 4).
 - Controlled test game (Task 4): `fixtures/test-games/progress-lab`, a pnpm workspace package
   (`@wg-launcher/fixture-progress-lab`, private) with its own Playwright suite. The interface the spike depends on
   (server, element ids, `?ephemeral=1`, `/coi/`, `iframe-host.html`, `sw.js`, storage shapes, hash) is in its
@@ -427,7 +434,18 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
 - Node's zstd does not report a truncated frame: a checksummed frame cut by 6 bytes decompressed without an error through
   `zlib.zstdDecompressSync` and through `zlib.createZstdDecompress` (the stream just ended). So the `.wgsnap` reader
-  detects truncation itself (Phase 1 plan, M6). [V, 2026-10-25, Node 24.13.0, `node -e` run locally]
+  detects truncation itself (Phase 1 plan, M6). [V, 2026-10-25, Node 24.13.0, `node -e` run locally] Done by
+  `ZstdFrameWalker` in `packages/snapshot/src/container/zstd-frame.ts` (Task 3).
+- Node's streaming zstd compressor can write a second, empty frame (`28b52ffd 24 00 01 00 00` plus a checksum) after
+  the real one: `lib/zlib.js` gives the finish flag (`ZSTD_e_end`) to a chunk that is still queued when `end()` is
+  called, and `_flush` then sends another finish, which zstd answers with a new frame. Three chunks piped from
+  `Readable.from` gave two frames; awaiting each `write()` callback before `end()` gave one. The `.wgsnap` writer does
+  the latter. [V, 2026-10-25, Node 24.13.0, scratch script and `lib/zlib.js` of v24.13.0 (`_flush`, `_transform`)]
+- Node's zstd decompressor reports a wrong content checksum as an error with code `ZSTD_error_checksum_wrong` (errno 22,
+  "Restored data doesn't match checksum"), through `zstdDecompressSync` and `createZstdDecompress` alike.
+  `zstdCompressSync` writes a single-segment frame with the content size (descriptor `0xa4` for 300 000 bytes with the
+  checksum on); the streaming compressor writes a window descriptor instead (descriptor `0x04`, window byte `0x58`,
+  2^21). [V, 2026-10-25, Node 24.13.0, `node` scratch script]
 - License gate versus bundling: `scripts/check-licenses.mjs` fails only on production dependencies, while electron-vite
   bundles renderer `dependencies` and its docs recommend renderer-only packages as `devDependencies`, so a bundled
   library kept there would escape the gate. Rule (AGENTS.md): everything bundled into or packaged with the app is in

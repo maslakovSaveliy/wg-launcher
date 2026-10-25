@@ -41,10 +41,29 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
 - Writers MUST set the content checksum flag and MUST NOT need a window larger than 2^27 bytes. Readers MUST reject a
   frame without the checksum flag (bit 2 of the frame header descriptor) or with a dictionary id, skippable frames, a
   second frame and any other byte after the frame, and MUST decode with `windowLogMax` 27 (codes in section 8). `Assumed`
+- Truncation is detected by the reader's own frame walker, not by the decompressor: Node's zstd decompresses a cut
+  checksummed frame without any error. Verified (2026-10-25, Node 24.13.0, `node -e`, [MEMORY.md](../../MEMORY.md)).
+  The walker follows RFC 8878 sections 3.1.1, 3.1.1.1 and 3.1.1.2: the magic `28 b5 2f fd` (a skippable-frame magic
+  `0x184D2A50` to `0x184D2A5F` first is `SNAP_ZSTD_INVALID`), then the frame header descriptor checked in this order:
+  reserved bit 3 set, a dictionary id flag, no checksum flag (`SNAP_ZSTD_NO_CHECKSUM`); then a window above 2^27 (for a
+  single-segment frame the window is the content size); then every block header (the reserved block type and a block
+  size above 128 KiB are `SNAP_ZSTD_INVALID`; an RLE block carries one byte) and the 4-byte checksum. Input that ends
+  before the last block and the checksum is `SNAP_TRUNCATED`. The decompressor still checks block contents and the
+  checksum value. `Assumed` (Phase 1 plan, M6)
+- A container defect found on the compressed bytes (a walker code above or `SNAP_FILE_TOO_LARGE`) stops reading at the
+  bad byte; the bytes before it are still decompressed and checked, and the container code is reported only if they
+  pass. So the code does not depend on chunking or read-ahead, and a cut file is `SNAP_TRUNCATED` unless the data before
+  the cut is itself invalid. On a complete frame a decompressor error (corrupt data, checksum mismatch) is
+  `SNAP_ZSTD_INVALID`; how much a corrupt block emits before that error depends on the zstd library, so a corrupt file
+  may instead fail with a code of the content it decoded to. `Assumed`
 - Tar: ustar headers (magic `ustar\0`, version `00`), sizes in octal only. Writers emit only regular files with mode
   0644, uid and gid 0, empty user and group names, mtime 0, the whole path in the `name` field and an empty `prefix`,
   then two zero blocks. Readers join `prefix` and `name` with `/` when `prefix` is set, accept zero padding after the
   end blocks and reject anything else after them. `Assumed`
+- Header details for readers: a text field ends at its first NUL; a numeric field (size, checksum) is one or more octal
+  digits followed only by NUL or space bytes up to the end of the field (no leading space, no base-256); the checksum
+  is the unsigned sum of the 512 header bytes with the checksum field counted as spaces. Padding after entry data is
+  not checked. A zero block followed by a block that is not zero is `SNAP_TAR_INVALID`. `Assumed`
 - The codec has its own minimal ustar reader and writer instead of a tar dependency, because the accepted subset is
   small and every rejection must map to its own error code. `Assumed`
 - Writers write `manifest.json` first, then the other entries in `entries` order. Readers MUST require `manifest.json`
@@ -76,10 +95,16 @@ Every tar header passes these checks, in this order, before its data is read. Ea
 Readers never create files from entry paths; they stream entries into the validator. The rules hold anyway, so that a
 later tool that does extract cannot be tricked. `Assumed`
 
+- Rule 8 splits the path on `/` only (a backslash is rule 9). A directory path may end in one `/`, which is removed
+  before rules 9 and 13; the 255-byte limit counts the joined path as stored. Rules 2 to 6 fail before the path is
+  known, so their errors carry no path. `Assumed`
+
 ### 3.2 Path grammar of formatVersion 1
 
 Regular files MUST have one of these paths; anything else is `SNAP_UNEXPECTED_ENTRY`. Directory entries are allowed
-only for prefixes of these paths and carry no data.
+only for prefixes of these paths (`data`, `data/<k>`, `data/<k>/idb`, `data/<k>/idb/<d>`, `blobs`) and carry no data;
+a directory with a non-zero size is `SNAP_UNEXPECTED_ENTRY`. After `manifest.json`, readers accept the entries in any
+order. `Assumed`
 
 ```text
 manifest.json
@@ -128,7 +153,16 @@ checked on its tar header. `Assumed`
   An unknown value in a known enum field (for example `flushState`) is `SNAP_MANIFEST_INVALID`. `Assumed`
 - Check order: size, JSON parse (`SNAP_MANIFEST_INVALID`), `format`, `formatVersion`, JCS canonical form, schema (zod
   in TypeScript), `contentHash`. So a future version yields `SNAP_UNSUPPORTED_VERSION` even if its manifest is not
-  canonical by v1 rules or has other fields. `Assumed`
+  canonical by v1 rules or has other fields. A JSON value that is not an object, or has no `format` member, is
+  `SNAP_UNKNOWN_FORMAT`. `Assumed`
+- Every number in `manifest.json`, unknown fields included, MUST be an integer of magnitude below 2^53 written in plain
+  decimal, and every string MUST be well-formed (no lone surrogate); anything else has no canonical form here and is
+  `SNAP_MANIFEST_INVALID`. So no implementation needs the float formatting of RFC 8785 section 3.2.2.3. `Assumed`
+- Schema details: `gameVersion` has at most 128 UTF-16 code units; `exporter.version` and `adapter.version` at most
+  256 characters; `adapter.id` follows the `exporter.id` pattern; `origin` is an `http` or `https` origin that the
+  WHATWG URL parser serializes back to itself, and `topLevelSite` the same without a port; more than `maxStorageKeys`
+  items is `SNAP_MANIFEST_INVALID`; `entries` never lists `manifest.json`; `notExported[].key` is an index into
+  `storageKeys`. `Assumed`
 
 ## 5. Content hash
 
@@ -246,7 +280,8 @@ and Blob came back through that path).
   (U+0020 to U+007E without `A` to `Z`, as the File API normalizes it), a `lastModified` that is not an integer, a hash
   that is not 64 lowercase hex digits, and one hash referenced with two sizes. `Assumed`
 - The RegExp source is stored as the exporting engine's `RegExp.prototype.source` and is not canonicalized by readers;
-  a source that does not compile is an import error. `Assumed`
+  a source that does not compile in the reader's engine is an import error, raised as `SNAP_RECORD_INVALID` while the
+  file is validated, before anything is written (section 7.3). `Assumed`
 - A File whose `lastModified` is not a safe integer, or is `-0`, is `EXP_UNSUPPORTED_VALUE` (the detail names
   `lastModified`), because the field is written as an integer; it is never normalized. `Assumed`
 - A typed array or DataView and its `ArrayBuffer`, or two views of one buffer, are the same object reached twice:
@@ -299,14 +334,21 @@ safe integer) is the float `fa 5a000000`. `Assumed`
 - IndexedDB key order: number < Date < string < binary < array; numbers and Dates by value, strings in code-unit
   order, binary bytewise unsigned, arrays element by element and then by length. Verified (2026-10-25,
   <https://www.w3.org/TR/IndexedDB/>, "compare two keys").
+- Every store of a `schema.cbor` has its `store-<s>.cbor` (zero bytes for a store without records), and every store
+  file belongs to a store of its database's schema; the databases of a key are numbered 0 to n − 1 with names strictly
+  ascending in code-unit order. Anything else is `SNAP_RECORD_INVALID`. Readers check these, the record counts and the
+  blob references of section 7.4 after the last entry, in `entries` order, so the result does not depend on the order
+  of the entries in the archive. `Assumed`
+- Every RegExp source in a record must compile in the reader's engine during validation (section 6.3), otherwise
+  `SNAP_RECORD_INVALID`, so that the import cannot fail on it after the wipe. `Assumed`
 - The key is stored even for stores with an inline key path. The importer checks that the key IndexedDB derives from
   the value equals it (`IMP_KEY_MISMATCH`, [save-transfer.md](save-transfer.md#6-restore-protocol)). `Assumed`
 
 ### 7.4 Blobs
 
 `blobs/<sha256>` holds the raw bytes once, however often they are referenced. Every blob entry MUST be referenced
-and every reference MUST name an existing blob entry with the referenced size, otherwise `SNAP_RECORD_INVALID`.
-`Assumed`
+and every reference MUST name an existing blob entry with the referenced size, and a blob's name MUST be the SHA-256 of
+its bytes, otherwise `SNAP_RECORD_INVALID`. `Assumed`
 
 ### 7.5 Key generator
 
@@ -338,19 +380,24 @@ them; production uses these values, and a unit test pins them.
 | `maxRatio` | 200, enforced once the uncompressed stream passes `ratioFloorBytes` |
 | `ratioFloorBytes` | 64 MiB |
 | `maxManifestBytes` | 1 MiB |
-| `maxStorageKeys`, databases per key, stores per database, indexes per store | 32, 256, 256, 64 |
+| `maxStorageKeys`, `maxDatabasesPerKey`, `maxStoresPerDatabase`, `maxIndexesPerStore` | 32, 256, 256, 64 |
 | `maxDepth` (value nesting) | 256 |
 
 Container-level codes, checked continuously while streaming: `SNAP_FILE_TOO_LARGE`; `SNAP_ZSTD_INVALID` (not a zstd
 frame, a skippable frame first, corrupt data, a content checksum mismatch, a window above 2^27, a dictionary id);
-`SNAP_ZSTD_NO_CHECKSUM`; `SNAP_TRUNCATED` (input ends early); `SNAP_RATIO_EXCEEDED` (uncompressed bytes so far divided
-by compressed bytes so far); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
+`SNAP_ZSTD_NO_CHECKSUM`; `SNAP_TRUNCATED` (input ends early, detected by the frame walker of section 2, since the
+decompressor does not report it); `SNAP_RATIO_EXCEEDED` (uncompressed bytes so far divided by compressed bytes read so
+far); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
 frame included, or non-zero bytes after the tar end blocks). Entry codes are in section 3.1, manifest and
 hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FORMAT`, `SNAP_UNSUPPORTED_VERSION`,
 `SNAP_CONTENT_HASH_MISMATCH`, `SNAP_SIZE_MISMATCH`, `SNAP_ENTRY_HASH_MISMATCH`, `SNAP_MISSING_ENTRY`) in sections 4 and
 5, `SNAP_UNEXPECTED_ENTRY` in sections 3.2 and 5, and `SNAP_RECORD_INVALID` in sections 6 and 7. `IMP_REVISION_CONFLICT`
 (section 4) is raised by the import, not by the reader.
 
+- Count limits: more than `maxStorageKeys` storage keys is `SNAP_MANIFEST_INVALID` (section 4); more than
+  `maxDatabasesPerKey` databases, `maxStoresPerDatabase` stores or `maxIndexesPerStore` indexes is
+  `SNAP_RECORD_INVALID`, with the path of the `schema.cbor` or `store-<s>.cbor` that exceeds it. No dedicated code
+  exists for these counts. `Assumed`
 - Validation is complete before anything is written to any game storage: all entries hashed, all records decoded and
   checked (AC-9). The restore streams the file a second time and re-checks every entry hash, so a file that changes
   between the passes fails the import and triggers the rollback. `Assumed`

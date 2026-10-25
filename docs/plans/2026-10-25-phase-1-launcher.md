@@ -183,16 +183,16 @@ ASCII/integer/null subset); `ManifestSchema` (zod: top level `z.object`, nested 
 (order: container → per-header rules 1–14 → manifest checks in §4 order → hash → per-entry size/sha256 while streaming →
 records decoded and checked with Task 2 → blob references; first failure wins); `readEntries(source, manifest)`: second
 pass re-checking hashes (R6); `writeSnapshot(input: SnapshotInput, out: Writable): Promise<{contentHash: string; sizeBytes: number}>`.
-- [ ] Tests: frame walker on real `zstdCompressSync` output with and without checksum, cut at 1, half and length−1 bytes
+- [x] Tests: frame walker on real `zstdCompressSync` output with and without checksum, cut at 1, half and length−1 bytes
   (all `SNAP_TRUNCATED`), with a skippable frame, a second frame, a byte appended; ustar rules 1–14 each from a crafted
   header; JCS rejects whitespace and duplicate keys via re-serialization; manifest check order (a `formatVersion` 2
   manifest with extra whitespace gives `SNAP_UNSUPPORTED_VERSION`); unknown top-level field ignored and not hashed,
   unknown nested member rejected (M7); ratio check only past `ratioFloorBytes`; writer output validates; nothing is
   written by the validator (it has no sink).
-- [ ] Run failing, implement, run passing; `pnpm check`.
-- [ ] MEMORY.md: Node zstd truncation gotcha [V, 2026-10-25]; snapshot-format §2 and §8 state that truncation is detected
+- [x] Run failing, implement, run passing; `pnpm check`.
+- [x] MEMORY.md: Node zstd truncation gotcha [V, 2026-10-25]; snapshot-format §2 and §8 state that truncation is detected
   by the frame walker (M6).
-- [ ] Commit `feat(snapshot): add the wgsnap container reader and writer`.
+- [x] Commit `feat(snapshot): add the wgsnap container reader and writer`.
 
 ### Task 4: Golden vectors: generator, committed files, runner (M)
 **Files:** `packages/snapshot/scripts/generate-vectors.ts`, `test-vectors/v1/index.json` and one directory per vector,
