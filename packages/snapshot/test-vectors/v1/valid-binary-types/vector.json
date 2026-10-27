@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-binary-types",
+  "description": "IndexedDB records with a Date, an ArrayBuffer, every typed array, a DataView, a partial view, a Blob and a File (both above 100 bytes), and number, Date, string, binary and array keys",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "b997107ef808ae1d4429b33f9905f87f87d057b18305d2d75855c5614ba870f0",
+    "content": "content.json"
+  }
+}

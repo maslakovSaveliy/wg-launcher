@@ -94,7 +94,7 @@ Ferdium; copy no code from any base. Assumed (reasoning from sections 2 to 4; AD
   from its own catalog), plus Xsolla Launcher for publishers and Flashpoint for web-content archiving. It says that an
   exact analog of "arbitrary URL plus modern ports plus cloud saves" was not confirmed in an earlier search, and that
   this does not prove no competitor exists. Unverified (reported in
-  [concept-v1.0.ru.md](../product/sources/concept-v1.0.ru.md) section 13, discussion of 2026-10-23, not re-checked).
+  [concept-v1.0.md](../product/sources/concept-v1.0.md) section 13, discussion of 2026-10-23, not re-checked).
 - None of the four priority bases has save backup, export or import; this was inferred from a GitHub code search for
   "backup". Unverified (inference from a GitHub code search, 2026-10-24, not re-checked by reading the code).
 

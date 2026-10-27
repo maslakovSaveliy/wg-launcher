@@ -20,7 +20,7 @@ Conventions: [ADR-0000](0000-template.md#conventions).
 
 | Tool | Version and role | Tag |
 | --- | --- | --- |
-| Node | 24 (`.nvmrc`); 24.13.0 on the dev machine | Verified (2026-10-24, [MEMORY.md](../../MEMORY.md) Dev machine) |
+| Node | 24; `.nvmrc` pins 24.22.1 since 2026-10-28 (Ruling R22, the Node line of Electron 45); the dev machine has 24.22.1 via nvm, its nvm default stays 24.13.0 | Verified (2026-10-24 and 2026-10-28, [MEMORY.md](../../MEMORY.md) Dev machine) |
 | pnpm | 12.15.0 pinned by `packageManager`; workspace `fixtures/test-games/*` | Verified (2026-10-24, MEMORY.md Decisions; `pnpm-workspace.yaml`) |
 | TypeScript | 7.0.2; the gate passed with the whole toolchain, no fallback to 6.0.3 | Verified (2026-10-24, MEMORY.md Tooling versions) |
 | Biome | 2.6.2 for JS, TS, JSON and CSS only; markdownlint-cli2 0.24.0 owns Markdown | Verified (2026-10-24, MEMORY.md Tooling versions) |
@@ -37,7 +37,7 @@ marked.
 
 | Need | Choice | Reason |
 | --- | --- | --- |
-| Runtime | `electron` 45.0.0 (ADR-0002); needs an `allowBuilds` entry for its binary download | MEMORY.md gotcha, Verified (2026-10-24) |
+| Runtime | `electron` 45.0.0 (ADR-0002), a devDependency of `apps/desktop`; it has no install script, so it needs no `allowBuilds` entry (corrected 2026-10-28: the binary is downloaded on first `require("electron")` or by its `install-electron` command) | Verified (2026-10-28, `package.json` and `index.js` of `electron@45.0.0`; installed under pnpm 12.15.0) |
 | Dev server and bundling | `electron-vite` 6.0.0 with `vite` 8.3.5; entries for main, the snapshot worker, two preloads and the renderer | Peer range `vite` ^6, ^7 or ^8. Verified (2026-10-24, [runtime-and-storage.md](../research/runtime-and-storage.md) section 2.3) |
 | UI | `react` 19.3.1 | Planned stack. Assumed (approved with the Phase 0 plan) |
 | Validation | `zod` 4.6.7 for IPC payloads, the snapshot manifest and adapters | architecture.md section 6 |
@@ -58,14 +58,25 @@ documentation recommends installing renderer-only packages as `devDependencies` 
 libraries outside the license gate. The rule is: everything bundled into or packaged with the app MUST be declared in
 `dependencies` (prod); `devDependencies` hold build and test tooling only. The Phase 1 desktop package config must
 follow this, with the electron-vite externalization and bundling settings checked accordingly (the price is a larger
-package unless the packager leaves out the bundled copies). `Assumed` (the rule is in AGENTS.md)
+package unless the packager leaves out the bundled copies). `Assumed` (the rule is in AGENTS.md). Enforcement: the
+build-time guard `scripts/prod-deps-guard.mjs` fails a build that bundles a `node_modules` package outside the
+production closure of the app (its `dependencies` and their transitive dependencies, read from `pnpm ls --prod
+--depth Infinity --json`, the same set `pnpm licenses list --prod` checks); a transitive such as `scheduler` under
+`react-dom` passes. Unit-tested with fake module ids and a path-free sample of the pnpm output, not yet run inside a
+real build. Verified (2026-10-25, `pnpm test`; JSON shape from pnpm 12.15.0 in a scratch workspace).
+*Update (2026-10-28, Phase 1 Task 5):* the guard now checks in a `transform` hook, which Rolldown calls for every
+module and every plugin (a `load` hook is "first wins", so another plugin could have hidden a module from it), and it is
+wired into the main, preload and renderer builds of `apps/desktop`. In a real build, a temporary
+`import { expect } from "@playwright/test"` in the renderer failed `electron-vite build` with `Dependency rule:
+"@playwright/test" is bundled into the app but is not a production dependency (it is declared only in devDependencies)`.
+Verified (2026-10-28, electron-vite 6.0.0, Vite 8.3.5, run locally; the import was removed again).
 
 ### Repository layout
 
 | Path | Content | When it is created |
 | --- | --- | --- |
-| `apps/desktop` | `main` (with the snapshot worker entry), `preload` (launcher bridge and quiescent preload), `renderer` | With the first Phase 1 code |
-| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | When their first code exists |
+| `apps/desktop` | `main` (with the snapshot worker entry), `preload` (launcher bridge and quiescent preload), `renderer` | Exists since Phase 1 Task 5 (skeleton; the worker and quiescent preload come later) |
+| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | `shared` and `snapshot` exist (Phase 1 Tasks 1 to 4); `exporters` when its first code exists |
 | `fixtures/` | Controlled test games (`progress-lab` now) | Exists |
 | `spikes/` | Throwaway experiments with their own lockfiles, outside the workspace | Exists |
 | `crates/` | Rust, only when an ADR-0003 trigger fires | Later |
@@ -156,6 +167,17 @@ the only native dependency the MVP would have had. Assumed
 - [ ] Before the first Windows release, check the license of everything the installer ships (agent).
 - [ ] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
   (security.md S-14; agent).
-- [ ] Phase 1: make the desktop package config follow the dependency declaration rule above (electron-vite
-  externalization and bundling settings), and confirm how `pnpm licenses list` treats our own AGPL workspace packages
-  (they must neither trip the production gate nor hide a dependency of theirs) (agent).
+- [x] Phase 1: make the desktop package config follow the dependency declaration rule above (electron-vite
+  externalization and bundling settings). Done in Phase 1 Task 5: `react` and `react-dom` (bundled into the renderer)
+  are `dependencies`; main keeps electron-vite's default externalization of `dependencies`; the preload is one bundle
+  (`externalizeDeps: false`); the guard runs in all three builds and failed a real build on a devDependency import
+  (see "Dependency declaration"). Leaving the renderer's bundled packages out of the packaged `node_modules` is part of
+  the electron-builder config (Task 16) (agent).
+- [x] Phase 1: confirm how `pnpm licenses list` treats our own AGPL workspace packages. Done in Phase 1 Task 1. In a
+  scratch workspace (package A depends on package B through `workspace:*`, both private and `AGPL-3.0-or-later`, B
+  depends on `ms@2.1.3`), `pnpm licenses list --prod --recursive --json` printed only `ms@2.1.3` (MIT): neither A nor B
+  was listed, so they cannot trip the production gate, and B's own dependency is not hidden. Verified (2026-10-25,
+  pnpm 12.15.0, run locally; recorded in `MEMORY.md`). The gate also takes the workspace package names from
+  `pnpm ls -r --depth -1 --json` and exempts a listed workspace package only while its license is
+  `AGPL-3.0-or-later`, in case a later pnpm lists them; the unit tests pin that, including that a GPL dependency of a
+  workspace package still fails (agent).

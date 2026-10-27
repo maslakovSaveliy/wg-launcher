@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-device",
+  "description": "A character device entry data/0/tty after the manifest",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_DEVICE"
+  }
+}

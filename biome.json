@@ -10,7 +10,7 @@
     "includes": [
       "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,jsonc,css}",
       "!spikes",
-      "!docs/product/sources",
+      "!packages/snapshot/test-vectors/v1",
       "!pnpm-lock.yaml",
       "!**/dist",
       "!**/out",

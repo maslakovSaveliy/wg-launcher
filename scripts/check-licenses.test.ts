@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { evaluateLicenses } from "./check-licenses.mjs";
+import { evaluateLicenses, parseWorkspaceNames } from "./check-licenses.mjs";
 
 // Fixtures mirror the shape of `pnpm licenses list --json`: packages grouped by license string.
 type Entry = { name: string; versions: string[]; license?: string };
@@ -139,6 +139,80 @@ describe("evaluateLicenses", () => {
     });
 
     expect(result.violations.map((finding) => finding.version)).toEqual(["1.0.0", "2.0.0"]);
+  });
+});
+
+describe("workspace packages", () => {
+  const members = new Set(["@wg-launcher/shared"]);
+
+  it("accepts our own AGPL-3.0-or-later package when it is a workspace member", () => {
+    const result = evaluateLicenses(
+      { prod: grouped(pkg("@wg-launcher/shared", "AGPL-3.0-or-later")), dev: {} },
+      undefined,
+      members,
+    );
+
+    expect(result.violations).toEqual([]);
+  });
+
+  it("rejects the same package when it is not a workspace member", () => {
+    const result = evaluateLicenses({
+      prod: grouped(pkg("@wg-launcher/shared", "AGPL-3.0-or-later")),
+      dev: {},
+    });
+
+    expect(result.violations).toEqual([
+      { name: "@wg-launcher/shared", version: "1.0.0", license: "AGPL-3.0-or-later" },
+    ]);
+  });
+
+  it("rejects a workspace member that has another non-allowed license", () => {
+    const result = evaluateLicenses(
+      { prod: grouped(pkg("@wg-launcher/shared", "GPL-3.0")), dev: {} },
+      undefined,
+      members,
+    );
+
+    expect(result.violations).toHaveLength(1);
+  });
+
+  it("still rejects a GPL dependency of a workspace package", () => {
+    const result = evaluateLicenses(
+      {
+        prod: grouped(pkg("@wg-launcher/shared", "AGPL-3.0-or-later"), pkg("gpl-lib", "GPL-3.0")),
+        dev: {},
+      },
+      undefined,
+      members,
+    );
+
+    expect(result.violations.map((finding) => finding.name)).toEqual(["gpl-lib"]);
+  });
+
+  it("does not warn about a dev-only workspace member", () => {
+    const result = evaluateLicenses(
+      { prod: {}, dev: grouped(pkg("@wg-launcher/shared", "AGPL-3.0-or-later")) },
+      undefined,
+      members,
+    );
+
+    expect(result.warnings).toEqual([]);
+  });
+});
+
+describe("parseWorkspaceNames", () => {
+  it("reads only the names from `pnpm ls -r --depth -1 --json`", () => {
+    const output = JSON.stringify([
+      { name: "wg-launcher", version: "0.0.0", path: "/somewhere/root", private: true },
+      { name: "@wg-launcher/shared", version: "0.0.0", path: "/somewhere/shared" },
+      { version: "1.0.0", path: "/somewhere/unnamed" },
+    ]);
+
+    expect(parseWorkspaceNames(output)).toEqual(new Set(["wg-launcher", "@wg-launcher/shared"]));
+  });
+
+  it("rejects output that is not a list", () => {
+    expect(() => parseWorkspaceNames("{}")).toThrow(/array/i);
   });
 });
 

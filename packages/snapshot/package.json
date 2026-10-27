@@ -1,0 +1,16 @@
+{
+  "name": "@wg-launcher/snapshot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The .wgsnap snapshot codec: deterministic CBOR records, the value model and the Node-only container.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./container": "./src/container/index.ts"
+  },
+  "dependencies": {
+    "@wg-launcher/shared": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

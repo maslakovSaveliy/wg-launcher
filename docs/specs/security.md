@@ -59,7 +59,7 @@ privilege. `Assumed` for the analysis; the mitigations cite where they are speci
 | T18 | 1, 6 | S: a game frame or stub sends IPC as if it were the launcher | Sender frame and origin checks; quiescent nonce handshake | S-10 |
 | T19 | 9 | I: logs leak tokens, cookies, save contents | Redaction (section 9) | AC-20, S-12 |
 | T20 | — | E: the installed app is modified or run as Node | Fuses (section 4); code signing later (section 10) | S-14 |
-| T21 | 8 | I/T: other local pages talk to development servers | Loopback only; the spike server needs a per-run token and checks `Origin`; dev origins compiled out of production | S-18 |
+| T21 | 8 | I/T: other local pages talk to development servers | Loopback only; the spike server needs a per-run token and checks `Origin`; dev origins refused by every production-flavor policy call, which receives the compile-time `FLAVOR` (Assumed design; the refusal is unit-tested, section 5 "Implementation") | S-18 |
 | T22 | 7 | S: TLS errors bypassed or a client certificate leaked | Certificate errors never overridden; no client certificate selected (section 5) | S-5 |
 | T23 | — | E: a malicious dependency | Dependency policy, exact versions, `allowBuilds`, few dependencies in security code (section 10) | `pnpm licenses:check` |
 | T24 | — | R: nobody can tell what happened to a save | Restore journal, logged job steps without content, backups kept | AC-8 |
@@ -144,6 +144,34 @@ A release check reads the fuses of the packaged app and fails on any difference 
   and `https://good.example@evil.example`; an IDN lookalike; `https://example.com.evil.net` and `https://evil-example.com`
   against `https://example.com`; `http` against `https` (schemeful site); two hosts under a public suffix such as
   `co.uk`; leading spaces and upper case; over-long URLs.
+- **Implementation (Phase 1 Task 7a).** The rules are pure functions in `apps/desktop/src/main/policy/`
+  (`url-rules.ts`, `site.ts`, `permissions.ts`) with their tests beside them; the build flavor is a parameter, and the
+  app passes the compile-time `FLAVOR`. Details settled there, `Assumed`:
+  - An http or https input is refused before parsing when its raw text has a shape the WHATWG parser would silently
+    repair, because a repair is where two parsers can disagree: control characters, spaces or DEL anywhere (also
+    leading and trailing ones; nothing is trimmed), a backslash anywhere (`https:\\evil.com`,
+    `https://evil.com\.example.com`), a scheme not followed by exactly `//` and a host (`https:evil.com`,
+    `https:///evil.com`), and `@` or `%` in the authority (user info in any form, also an empty one such as
+    `https://@evil.com`, which the parser drops silently; percent-encoded host characters such as `exa%2Emple.com`,
+    which the parser decodes into `exa.mple.com`). This applies to entry URLs, main-frame targets and
+    `isExternalUrlAllowed`, not to subframes (a `data:` frame URL may contain spaces).
+  - After parsing, a host with an empty label (`example..com`, `.example.com`, `example.com..`) is refused: tldts
+    7.4.19 gives such hosts a domain such as `.com`, which would merge unrelated hosts into one site. `siteOf` itself
+    also uses the whole host for them.
+  - Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen. A
+    same-site main-frame target has no length limit; only entry URLs and external opening do.
+  - `decideTopNavigation` returns `allow`, `ask-external` (another http or https site, or plain http other than a
+    development origin; the caller then checks `isExternalUrlAllowed` and confirms) or `block` (every other scheme, a
+    malformed or credential-carrying target, or an entry that is not an allowed entry URL in this flavor, so a
+    production build never navigates a stored development entry).
+  - Development origins are only the literal hosts `localhost` and `127.0.0.1` in the raw text (any port), in dev and
+    test builds; other spellings that the parser maps to `127.0.0.1` (`2130706433`, `0x7f.0.0.1`, `127.1`), `[::1]`,
+    `localhost.` and `sub.localhost` are not. A production-flavor call refuses them all (Verified, 2026-10-28,
+    `url-rules.test.ts`); Task 8 passes the compile-time `FLAVOR` (Assumed until wired); the dev-origin strings are
+    still in the prod bundle, because the flavor is a parameter, so `pnpm bundle:check` asserts nothing about them.
+  - Subframes: `about:blank` and `about:srcdoc` are matched on the parsed path, so a query or fragment does not
+    matter; `about:BLANK` and every other `about:` page are blocked.
+  - Permissions: a `Set` lookup with exact case, so `Fullscreen`, `__proto__` or an empty name are denied.
 
 ## 6. Launcher renderer
 
@@ -151,7 +179,8 @@ A release check reads the fuses of the packaged app and fails on any difference 
   `supportFetchAPI` and `codeCache`; not `bypassCSP`, `corsEnabled`, `allowServiceWorkers`, `stream` or
   `allowExtensions`. Those privilege names exist in Electron 45. Verified (2026-10-25, `electron.d.ts`). `Assumed` for
   the choice.
-- **Handler.** `protocol.handle("app")` on the launcher's session only. Host `launcher`; files only from the packaged
+- **Handler.** `protocol.handle("app")` on the launcher's session only (the in-memory partition `launcher`, never the
+  default session; `apps/desktop/src/main/app-protocol.ts`). Host `launcher`; files only from the packaged
   renderer directory inside the asar (normalized path, containment check) and covers from `covers/` with the exact
   name pattern; everything else is 404. Headers on every response: the CSP below, `X-Content-Type-Options: nosniff`,
   `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `Referrer-Policy:
@@ -160,8 +189,19 @@ A release check reads the fuses of the packaged app and fails on any difference 
   connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';
   require-trusted-types-for 'script'; trusted-types 'none'`. The renderer talks to main only through the bridge and
   loads no remote content; covers are local files. Development builds load from the Vite server with a looser CSP and
-  check the sender against that origin, a build-time constant. That React 19 runs under `trusted-types 'none'` is
-  Assumed; an e2e test fails on any CSP violation report. `Assumed`
+  check the sender against that origin, a build-time constant. The dev CSP (`apps/desktop/electron.vite.config.ts`,
+  sent by the Vite server) adds what Vite needs: `'unsafe-inline'` for scripts (the React refresh preamble) and
+  styles, `connect-src` to the dev server's WebSocket, `img-src app://launcher` for covers, and no Trusted Types (the
+  Vite error overlay uses `innerHTML`); the test and prod builds never use it. Verified (2026-10-28, one
+  `electron-vite dev` run on macOS arm64 with a scratch `WG_USER_DATA`, read over CDP): the dev server sends exactly
+  that header, the launcher renders with the bridge connected, the HMR WebSocket connects, a reload logs no CSP
+  violation, `eval` is refused (`EvalError`), and a control image from another origin is blocked and logged as a
+  `security` error. That `'unsafe-inline'` is needed at all (the refresh preamble) is Assumed, not tested by removal. React 19.3.1 runs under the production
+  CSP, `trusted-types 'none'` included, with no CSP or Trusted Types violation during start-up: Verified (2026-10-28,
+  `apps/desktop/e2e/launcher.spec.ts` on Electron 45.0.0, macOS arm64; the test records every console message of the
+  launcher from before its first load, and its control, an `innerHTML` assignment, is refused with a `TypeError` and
+  recorded as "This document requires 'TrustedHTML' assignment"). So the plan's fallback (one named policy) is not
+  needed. `Assumed` for the rest of this bullet.
 - **Rendering rules:** no `dangerouslySetInnerHTML`, no `innerHTML`; titles, URLs, origins, snapshot metadata, adapter
   text and error messages are rendered as text; the UI never puts a game URL into `href` or `src` (opening is a main
   action). The launcher's own `webContents` denies all navigation, new windows and permissions.

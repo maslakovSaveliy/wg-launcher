@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-truncated",
+  "description": "The input.wgsnap of valid-binary-types (1612 bytes) cut to its first floor(1612 / 2) = 806 bytes: the file ends inside the zstd frame",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_TRUNCATED"
+  }
+}

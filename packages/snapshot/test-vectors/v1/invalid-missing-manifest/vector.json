@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-missing-manifest",
+  "description": "The first regular file is data/0/local-storage.cbor; manifest.json comes after it",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_MISSING_MANIFEST"
+  }
+}

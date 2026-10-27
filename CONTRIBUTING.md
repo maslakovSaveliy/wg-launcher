@@ -17,7 +17,7 @@ rules apply to humans and AI agents.
 
 ## Setup
 
-Prerequisites: Git, Node 24 (`.nvmrc`; `nvm use`) and pnpm. The `packageManager` field pins the pnpm version and pnpm
+Prerequisites: Git, Node 24.22.1 (`.nvmrc`; `nvm install` once, then `nvm use`) and pnpm. The `packageManager` field pins the pnpm version and pnpm
 switches to it by itself inside the repository.
 
 ```sh
@@ -53,11 +53,12 @@ naming the model.
 
 The git hooks (lefthook) run for you:
 
-- pre-commit formats staged files with Biome (and re-stages them), scans them with secretlint and lints staged Markdown;
+- pre-commit formats staged files with Biome (and re-stages them), scans them with secretlint, rejects machine-specific
+  paths (home directories, temporary roots, your own user name) and lints staged Markdown;
 - commit-msg enforces Conventional Commits;
 - pre-push runs `pnpm typecheck` and `pnpm test`.
 
-CI repeats the checks on every pull request (lint, typecheck, license gate, Markdown lint, unit tests on macOS and
+CI repeats the checks on every pull request (lint, typecheck, license gate, machine-path check, Markdown lint, unit tests on macOS and
 Windows, and the fixture's Playwright suite on Ubuntu and macOS), so skipping a hook only delays the failure.
 
 ## Definition of Done
@@ -91,8 +92,7 @@ The [pull request template](.github/pull_request_template.md) repeats this list.
 
 ## Documentation
 
-- Everything is in English: docs, rules, code, comments, commits and issues. The only exception is the original concept
-  document `docs/product/sources/concept-v1.0.ru.md`, which stays verbatim.
+- Everything is in English: docs, rules, code, comments, commits and issues.
 - Tag every factual claim: `Verified (YYYY-MM-DD, source)` with a URL, command or commit as the source, `Assumed`
   (reasoned, not checked) or `Unverified` (reported, not checked). In `MEMORY.md` the short forms `[V]`, `[A]` and `[U]`
   are allowed. Keep facts and assumptions visibly separate. An untested operating system is never called verified.

@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-special-values",
+  "description": "-0, NaN, +-Infinity, other floats, undefined beside a missing property, BigInt, a sparse array with holes and an extra property, Map, Set, boxed values, RegExp, an invalid Date and lone surrogates (value, object key, localStorage value)",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "04932cf9c9ba8a3a4a4c5e7b3a5e1ff21c359120316222f5fd4a4e16731154ca",
+    "content": "content.json"
+  }
+}

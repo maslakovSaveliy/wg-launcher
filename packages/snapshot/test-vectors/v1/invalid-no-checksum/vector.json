@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-no-checksum",
+  "description": "A valid snapshot's tar in a zstd frame without the content checksum flag",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_ZSTD_NO_CHECKSUM"
+  }
+}

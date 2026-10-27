@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-pax",
+  "description": "A pax extended header (typeflag x) for data/0/local-storage.cbor between the manifest and that file",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_UNSUPPORTED_ENTRY_TYPE"
+  }
+}

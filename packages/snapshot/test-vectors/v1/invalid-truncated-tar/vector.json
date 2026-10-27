@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-truncated-tar",
+  "description": "A complete checksummed zstd frame holding the tar of valid-binary-types cut to its first 2660 bytes: the manifest, the header of the second entry blobs/40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880 (256 bytes of data) and only the first 100 bytes of its data",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_TRUNCATED"
+  }
+}

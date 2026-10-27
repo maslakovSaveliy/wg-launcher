@@ -2,7 +2,7 @@
 
 Status: draft for Phase 0, 2026-10-24; updated 2026-10-25 after the specifications and ADRs were written. Product name
 **WGLauncher** (owner decision, 2026-10-25); codename `wg-launcher`. Sources: the owner's concept
-document [concept-v1.0.ru.md](sources/concept-v1.0.ru.md) (Russian, kept verbatim), the owner's decisions of 2026-10-24
+document [concept-v1.0.md](sources/concept-v1.0.md) (English translation of the Russian original), the owner's decisions of 2026-10-24
 (recorded in [MEMORY.md](../../MEMORY.md) and the [Phase 0 plan](../plans/2026-10-24-phase-0-foundation.md)) and the
 research in [foundations.md](../research/foundations.md) and
 [runtime-and-storage.md](../research/runtime-and-storage.md).
@@ -329,7 +329,7 @@ Stage "Later" means it depends on work after the MVP.
 
 ## 19. Related documents
 
-- [concept-v1.0.ru.md](sources/concept-v1.0.ru.md): the original concept (Russian).
+- [concept-v1.0.md](sources/concept-v1.0.md): the owner's concept (English translation).
 - [foundations.md](../research/foundations.md) and [runtime-and-storage.md](../research/runtime-and-storage.md): evidence.
 - Specifications: [architecture.md](../specs/architecture.md), [snapshot-format.md](../specs/snapshot-format.md),
   [save-transfer.md](../specs/save-transfer.md) and [security.md](../specs/security.md).

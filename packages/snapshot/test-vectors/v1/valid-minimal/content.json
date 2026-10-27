@@ -1,0 +1,20 @@
+{
+  "storageKeys": [
+    {
+      "origin": "http://localhost:4417",
+      "topLevelSite": null,
+      "role": "top",
+      "localStorage": [
+        [
+          "best",
+          "2048"
+        ],
+        [
+          "theme",
+          "dark"
+        ]
+      ],
+      "indexedDB": []
+    }
+  ]
+}

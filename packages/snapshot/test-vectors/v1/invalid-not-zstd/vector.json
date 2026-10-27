@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-not-zstd",
+  "description": "The uncompressed tar of a valid snapshot, not wrapped in zstd: the file starts with the bytes of manifest.json instead of the magic 28 b5 2f fd",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_ZSTD_INVALID"
+  }
+}

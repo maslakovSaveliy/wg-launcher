@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-non-nfc",
+  "description": "A regular file data/0/cafe<U+0301>.cbor (e followed by U+0301 COMBINING ACUTE ACCENT, not NFC) after the manifest",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_NON_NFC_PATH"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-bad-content-hash",
+  "description": "The first hex digit of contentHash changed from 6 to 0; the manifest is still canonical",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_CONTENT_HASH_MISMATCH"
+  }
+}

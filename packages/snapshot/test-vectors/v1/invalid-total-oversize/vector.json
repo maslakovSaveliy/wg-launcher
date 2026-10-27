@@ -1,0 +1,13 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-total-oversize",
+  "description": "A tar stream of 4608 bytes (manifest.json and a 1508-byte data/0/local-storage.cbor) with maxTotalBytes 2048, which the localStorage file crosses; valid with the default limits",
+  "input": "input.wgsnap",
+  "limits": {
+    "maxTotalBytes": 2048
+  },
+  "expect": {
+    "ok": false,
+    "error": "SNAP_TOTAL_TOO_LARGE"
+  }
+}

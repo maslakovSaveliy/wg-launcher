@@ -1,0 +1,13 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-too-many-entries",
+  "description": "11 entries (manifest.json and the localStorage files of 10 storage keys) with maxEntries 10; valid with the default limits",
+  "input": "input.wgsnap",
+  "limits": {
+    "maxEntries": 10
+  },
+  "expect": {
+    "ok": false,
+    "error": "SNAP_TOO_MANY_ENTRIES"
+  }
+}

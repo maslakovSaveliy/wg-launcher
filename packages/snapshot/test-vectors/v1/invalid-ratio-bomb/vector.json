@@ -1,0 +1,13 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-ratio-bomb",
+  "description": "A record holding 262144 zero bytes: 790 compressed bytes expand to a 267776-byte tar, above max(ratioFloorBytes 65536, maxRatio 200 x 790 = 158000); valid with the default limits",
+  "input": "input.wgsnap",
+  "limits": {
+    "ratioFloorBytes": 65536
+  },
+  "expect": {
+    "ok": false,
+    "error": "SNAP_RATIO_EXCEEDED"
+  }
+}

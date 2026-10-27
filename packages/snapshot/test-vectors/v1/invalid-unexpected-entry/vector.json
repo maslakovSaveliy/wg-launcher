@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-unexpected-entry",
+  "description": "A regular file data/0/extra.bin after the manifest that the manifest does not list",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_UNEXPECTED_ENTRY"
+  }
+}

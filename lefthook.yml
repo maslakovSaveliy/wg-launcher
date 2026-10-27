@@ -12,6 +12,8 @@ pre-commit:
       stage_fixed: true
     - name: secretlint
       run: pnpm exec secretlint {staged_files}
+    - name: machine-paths
+      run: node scripts/check-machine-paths.mjs {staged_files}
     - name: markdownlint
       glob: "*.md"
       run: pnpm exec markdownlint-cli2 {staged_files}

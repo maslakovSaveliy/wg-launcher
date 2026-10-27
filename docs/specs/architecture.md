@@ -140,13 +140,21 @@ stateDiagram-v2
   baseline, and `app.on("web-contents-created")` refuses `<webview>` attachment and new windows by default. The
   decisions themselves are tables in [security.md](security.md#5-permission-and-navigation-policy) (AC-4, AC-5).
 - **Same-site decisions** use one function `siteOf(origin)` (scheme plus registrable domain from the Public Suffix List;
-  the host itself for IP addresses and `localhost`). The PSL dependency is chosen in Phase 1 under the dependency
-  policy. `Assumed`
+  the host itself for IP addresses and `localhost`). The PSL dependency is `tldts` 7.4.19 (MIT, with `tldts-core`,
+  MIT) with `allowPrivateDomains: true`, so `a.github.io` and `b.github.io` are different sites, as Chromium's
+  schemeful site is assumed to treat them. Where no registrable domain exists (a bare public suffix such as `co.uk`, a
+  single-label host, a host with a trailing dot or an empty label such as `example..com`) the whole host is the site, so different hosts never share one; ports
+  never matter. Implemented in `apps/desktop/src/main/policy/site.ts`. `Assumed`
 - **Storage partitioning stays on.** Playwright's Electron loader appends `ThirdPartyStoragePartitioning` to
   `--disable-features`, which makes a cross-site iframe share storage with the top level; re-appending the list without
   that entry in the main process restores partitioning. Verified (2026-10-24, RESULTS.md H11). The app MUST do this at
   start-up whenever the switch contains that entry, in every build, because partitioning is what the storage keys of
-  snapshots assume. `Assumed`
+  snapshots assume. `Assumed` for the rule. Implemented as `fixPartitioningSwitch` in `apps/desktop/src/main/start-up.ts`;
+  the e2e test "cross-site iframe storage stays partitioned under Playwright" (`apps/desktop/e2e/launcher.spec.ts`)
+  shows a cross-site progress-lab iframe in its own empty partition under `_electron.launch`, and with the fix removed
+  the same test fails because the iframe sees the top-level progress. Verified (2026-10-28, Electron 45.0.0,
+  Playwright 1.64.1, macOS arm64). Playwright adds that loader only when `_electron.launch` gets no `executablePath`.
+  Verified (2026-10-28, `coreBundle.js` of `playwright-core` 1.64.1).
 - **Frames are recorded.** `did-frame-navigate` with an http or https URL adds `(top origin, frame origin)` to
   `storage_targets` ([save-transfer.md](save-transfer.md#2-storage-keys)).
 
@@ -246,6 +254,17 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   one transaction that also sets `user_version`. Before migrating an existing database the main process copies it to
   `backups/library-v<n>-<time>.db`. A database whose `user_version` is newer than the app knows is opened read-only and
   the app shows an explicit error instead of writing. `Assumed`
+  - *How it is built (Phase 1 Task 6, `apps/desktop/src/main/db/`).* The SQL files are imported as strings with Vite's
+    `?raw` suffix, so electron-vite inlines them into the main bundle and Vitest reads them the same way; no file is
+    looked up at run time. `Assumed`. The copy before a migration is made with `VACUUM INTO` (a consistent copy of what
+    the connection sees, WAL content included, so no checkpoint or file copy of a live database is needed), written
+    as `.partial` in `tmp/` (section 3), flushed and renamed into `backups/` (same volume, `Assumed`), removed on a failure, and
+    never over an existing backup; its `<n>` is the `user_version` it holds.
+    A fresh database makes no copy. A database with a newer `user_version` is first opened with `readOnly: true`, so
+    even reading its version writes nothing to the main file. Verified (2026-10-28, Node 24.13.0, run locally:
+    `VACUUM INTO` kept `user_version` and wrote a rollback-journal copy; a read-only open of a WAL database created
+    empty `-wal` and `-shm` files and left the main file's bytes unchanged).
+  - A test compares `001-initial.sql` with the SQL block above, so the two cannot drift apart. `Assumed`
 - Statements are synchronous, so each must be small and indexed (section 13). The worker never opens the database.
 
 ## 8. Shortcuts and deep links
@@ -267,6 +286,13 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   app registers the scheme with `app.setAsDefaultProtocolClient("wglauncher")`; on Windows a deep link arrives as a
   command-line argument, so the parser accepts exactly one argument that is either a whole deep link or
   `--launch-game=<id>` and ignores the rest. Behavior on Windows is Unverified (no machine). `Assumed`
+- **Parser details** (`apps/desktop/src/main/policy/deep-link.ts`, `Assumed`): a command-line argument is a launch
+  argument when it starts with `--launch-game` or `wglauncher:`, compared case-insensitively; every other argument
+  (executable, app path, Electron and Chromium switches, `--`) is ignored. No launch argument means no launch; two or
+  more, even identical ones, are invalid, because an extra one may have been injected. A launch argument is never
+  split, so one with spaces or `--` inside is a single value that fails the id pattern. Upper-case ids and an
+  upper-case scheme are invalid. Results carry only the input's length, never its text. If Windows turns out to
+  append a trailing slash to a deep link, the link is refused until that is verified and the rule amended.
 - **macOS:** the scheme is declared in `Info.plist` (`CFBundleURLTypes`), because `setAsDefaultProtocolClient` works on
   macOS only for schemes declared at build time. Verified (2026-10-24, <https://www.electronjs.org/docs/latest/api/app>).
   The shortcut is a `.webloc` file whose only variable part is the validated id. A `.command` file is not offered,
@@ -280,6 +306,11 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
 - **Off-screen guard:** saved bounds are used only if they overlap the work area of a connected display by at least
   100 by 50 pixels; otherwise the window opens at the default size (1280 by 800) centered on the primary display. Then
   maximized and fullscreen are re-applied. `Assumed`
+- The guard (`restoreBounds`, `apps/desktop/src/main/policy/window-guard.ts`) checks the overlap against each display's
+  work area on its own, so the saved display id is only a hint and an overlap with another display is accepted. A
+  saved bounds record with no x or y, or a size that is not a positive finite number, counts as unusable and gets the
+  default; the default is clamped to a work area smaller than 1280 by 800. The maximized and fullscreen flags are
+  re-applied by the caller whether or not the saved bounds were used. `Assumed`
 - **Fullscreen toggle:** the window menu item with role `togglefullscreen` (macOS Ctrl+Cmd+F, Windows F11) and a UI
   control (F-6). `Assumed`
 - **Esc stays with the game.** The launcher never consumes Esc: no accelerator on it and no `preventDefault` on it in
@@ -304,6 +335,10 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
 - A session is one window lifetime. Active time is checkpointed every 60 s; at close a session with less than 10 000 ms
   of active time is deleted, as is an unfinished one found at start-up below that. "Under 10 s" is read as active time.
   `last_launched_at` is set at every launch. `Assumed`
+- The machine (`createPlaytime`, `apps/desktop/src/main/policy/playtime.ts`) starts with the window neither visible nor
+  focused, so a window that is already up must be replayed to it as `show` and `focus`. Every event is idempotent,
+  events after `closed` are ignored, and a clock that steps backwards counts as zero elapsed time (the machine then
+  continues from the new reading; time not yet banked by an earlier event is lost). `Assumed`
 
 ## 11. Badges
 
@@ -329,8 +364,15 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 
 - **Add (F-2, AC-17).** The URL is parsed with the WHATWG URL parser; it must be `https`, have a host and no user info,
   and be at most 2048 characters; it is stored as `url.href`. Development and test builds also accept
-  `http://localhost` and `http://127.0.0.1` on any port, behind a build-time constant that production builds do not
-  contain (PRD OQ-3, proposal adopted). Anything else is `URL_NOT_ALLOWED`. `Assumed`
+  `http://localhost` and `http://127.0.0.1` on any port (PRD OQ-3, proposal adopted). The rule takes the build flavor
+  as a parameter and a production-flavor call refuses both; the app passes the compile-time `FLAVOR`
+  (`src/main/flavor.ts`), so a production build always decides as production. The dev-origin strings stay in the
+  production bundle (they are not compiled out). `Assumed` for the design (Task 8 wires the call); the refusal of a
+  production-flavor call is Verified (2026-10-28, `apps/desktop/src/main/policy/url-rules.test.ts`). Anything else is
+  `URL_NOT_ALLOWED`. `Assumed`. Only the literal hosts count
+  (not `2130706433` or `127.1`), the input is not trimmed (the renderer may trim visibly before sending), and the raw
+  shapes the parser would repair are refused: [security.md](security.md#5-permission-and-navigation-policy),
+  "Implementation". `Assumed`
 - **Same URL twice (AC-2).** Allowed; each entry gets its own `gameId` and partition. The UI says the URL is already in
   the library before creating the second entry and never merges entries (PRD anti-goal 6). `Owner`
 - **Edit (F-3, AC-17).** Title: 1 to 200 characters after trimming, default the host name, rendered as text only.
@@ -369,6 +411,10 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 
 - End-to-end tests use Playwright `_electron.launch` (H11 PASS) and rely on the partitioning rule of section 5.
   Verified (2026-10-24, RESULTS.md H11).
+- On Linux, `_electron.launch` adds `--no-sandbox` unless `chromiumSandbox: true` is passed; the desktop harness passes
+  it, so the e2e suite runs with Chromium's sandbox on. Verified (2026-10-28, `coreBundle.js` of `playwright-core`
+  1.64.1). Whether the Ubuntu CI runner then needs `kernel.apparmor_restrict_unprivileged_userns=0` (set by the CI job)
+  is Assumed: CI has not run the desktop suite yet.
 - E2E builds are unfused: the production fuses ([security.md](security.md#4-fuses)) turn off `--inspect`, which the
   Playwright driver needs. Fuses, `Info.plist`, deep links and the media prompt are checked on a packaged build
   separately. Assumed (that Playwright needs `--inspect` is not checked here).
@@ -424,6 +470,7 @@ No crate exists before that. `Owner` for the deferral; the contract itself is AD
   unregistering the game's service workers on close (a cache-class loss: offline-capable games re-download) or
   accepting a longer AC-13 window; the owner decides. `Assumed`
 - The launcher UI uses an in-memory partition (`launcher`), not the default session; nothing in the UI needs browser
-  persistence because settings live in SQLite. `Assumed`
+  persistence because settings live in SQLite. `Assumed`; implemented this way in Phase 1 Task 5
+  (`apps/desktop/src/main/launcher-window.ts`).
 - Several devices exporting the same game have different `gameId`s; cloud sync needs the `game_keys` mapping (section
   15), which the MVP does not store. `Assumed`

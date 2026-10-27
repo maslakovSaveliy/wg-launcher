@@ -1,0 +1,591 @@
+[
+  { "id": "uint-0", "value": 0, "hex": "00", "ok": true },
+  { "id": "uint-23", "value": 23, "hex": "17", "ok": true },
+  { "id": "uint-24", "value": 24, "hex": "1818", "ok": true },
+  { "id": "uint-255", "value": 255, "hex": "18ff", "ok": true },
+  { "id": "uint-256", "value": 256, "hex": "190100", "ok": true },
+  { "id": "uint-65535", "value": 65535, "hex": "19ffff", "ok": true },
+  { "id": "uint-65536", "value": 65536, "hex": "1a00010000", "ok": true },
+  { "id": "uint-2p32", "value": 4294967296, "hex": "1b0000000100000000", "ok": true },
+  { "id": "uint-max-safe", "value": 9007199254740991, "hex": "1b001fffffffffffff", "ok": true },
+  { "id": "nint-1", "value": -1, "hex": "20", "ok": true },
+  { "id": "nint-24", "value": -24, "hex": "37", "ok": true },
+  { "id": "nint-25", "value": -25, "hex": "3818", "ok": true },
+  { "id": "nint-min-safe", "value": -9007199254740991, "hex": "3b001ffffffffffffe", "ok": true },
+  {
+    "id": "float-neg-zero",
+    "value": { "$": "f64", "hex": "8000000000000000" },
+    "hex": "f98000",
+    "ok": true
+  },
+  {
+    "id": "float-nan",
+    "value": { "$": "f64", "hex": "7ff8000000000000" },
+    "hex": "f97e00",
+    "ok": true
+  },
+  {
+    "id": "float-1.5",
+    "value": { "$": "f64", "hex": "3ff8000000000000" },
+    "hex": "f93e00",
+    "ok": true
+  },
+  {
+    "id": "float-inf",
+    "value": { "$": "f64", "hex": "7ff0000000000000" },
+    "hex": "f97c00",
+    "ok": true
+  },
+  {
+    "id": "float-neg-inf",
+    "value": { "$": "f64", "hex": "fff0000000000000" },
+    "hex": "f9fc00",
+    "ok": true
+  },
+  {
+    "id": "float-f16-min-subnormal",
+    "value": { "$": "f64", "hex": "3e70000000000000" },
+    "hex": "f90001",
+    "ok": true
+  },
+  {
+    "id": "float-f16-1023.5",
+    "value": { "$": "f64", "hex": "408ffc0000000000" },
+    "hex": "f963ff",
+    "ok": true
+  },
+  {
+    "id": "float-f32-100000.5",
+    "value": { "$": "f64", "hex": "40f86a0800000000" },
+    "hex": "fa47c35040",
+    "ok": true
+  },
+  {
+    "id": "float-f32-2p53",
+    "value": { "$": "f64", "hex": "4340000000000000" },
+    "hex": "fa5a000000",
+    "ok": true
+  },
+  {
+    "id": "float-f32-2pm25",
+    "value": { "$": "f64", "hex": "3e60000000000000" },
+    "hex": "fa33000000",
+    "ok": true
+  },
+  {
+    "id": "float-f64-0.1",
+    "value": { "$": "f64", "hex": "3fb999999999999a" },
+    "hex": "fb3fb999999999999a",
+    "ok": true
+  },
+  { "id": "simple-false", "value": false, "hex": "f4", "ok": true },
+  { "id": "simple-true", "value": true, "hex": "f5", "ok": true },
+  { "id": "simple-null", "value": null, "hex": "f6", "ok": true },
+  { "id": "simple-undefined", "value": { "$": "undefined" }, "hex": "f7", "ok": true },
+  { "id": "text-empty", "value": "", "hex": "60", "ok": true },
+  { "id": "text-a", "value": "a", "hex": "6161", "ok": true },
+  { "id": "text-u-umlaut", "value": "ü", "hex": "62c3bc", "ok": true },
+  { "id": "text-bom", "value": "﻿", "hex": "63efbbbf", "ok": true },
+  { "id": "text-emoji", "value": "😀", "hex": "64f09f9880", "ok": true },
+  {
+    "id": "text-24-bytes",
+    "value": "aaaaaaaaaaaaaaaaaaaaaaaa",
+    "hex": "7818616161616161616161616161616161616161616161616161",
+    "ok": true
+  },
+  {
+    "id": "str16-lone-high",
+    "value": { "$": "str16", "hex": "00d8" },
+    "hex": "d9814e4200d8",
+    "ok": true
+  },
+  {
+    "id": "str16-reversed-pair",
+    "value": { "$": "str16", "hex": "00dc00d8" },
+    "hex": "d9814e4400dc00d8",
+    "ok": true
+  },
+  { "id": "bigint-0", "value": { "$": "bigint", "v": "0" }, "hex": "d981516130", "ok": true },
+  {
+    "id": "bigint-neg",
+    "value": { "$": "bigint", "v": "-123" },
+    "hex": "d98151642d313233",
+    "ok": true
+  },
+  {
+    "id": "bigint-2p64",
+    "value": { "$": "bigint", "v": "18446744073709551616" },
+    "hex": "d98151743138343436373434303733373039353531363136",
+    "ok": true
+  },
+  { "id": "array-empty", "value": [], "hex": "80", "ok": true },
+  { "id": "array-two", "value": [1, "a"], "hex": "82016161", "ok": true },
+  { "id": "array-nested", "value": [[]], "hex": "8180", "ok": true },
+  { "id": "array-undefined", "value": [{ "$": "undefined" }], "hex": "81f7", "ok": true },
+  {
+    "id": "object-empty",
+    "value": { "$": "object", "entries": [] },
+    "hex": "d9814d80",
+    "ok": true
+  },
+  {
+    "id": "object-a",
+    "value": { "$": "object", "entries": [["a", 1]] },
+    "hex": "d9814d82616101",
+    "ok": true
+  },
+  {
+    "id": "object-index-first",
+    "value": {
+      "$": "object",
+      "entries": [["1", 2], ["b", 1]]
+    },
+    "hex": "d9814d84613102616201",
+    "ok": true
+  },
+  {
+    "id": "object-proto-key",
+    "value": { "$": "object", "entries": [["__proto__", 1]] },
+    "hex": "d9814d82695f5f70726f746f5f5f01",
+    "ok": true
+  },
+  {
+    "id": "sparse-hole",
+    "value": { "$": "sparse", "length": 3, "entries": [["0", 1]] },
+    "hex": "d9814f8303613001",
+    "ok": true
+  },
+  {
+    "id": "sparse-extra",
+    "value": {
+      "$": "sparse",
+      "length": 1,
+      "entries": [["0", 1], ["x", 2]]
+    },
+    "hex": "d9814f8501613001617802",
+    "ok": true
+  },
+  {
+    "id": "sparse-empty-length-2",
+    "value": { "$": "sparse", "length": 2, "entries": [] },
+    "hex": "d9814f8102",
+    "ok": true
+  },
+  { "id": "date-0", "value": { "$": "date", "v": 0 }, "hex": "d9815000", "ok": true },
+  { "id": "date-neg", "value": { "$": "date", "v": -1 }, "hex": "d9815020", "ok": true },
+  {
+    "id": "date-invalid",
+    "value": { "$": "date", "v": { "$": "f64", "hex": "7ff8000000000000" } },
+    "hex": "d98150f97e00",
+    "ok": true
+  },
+  {
+    "id": "map-one",
+    "value": { "$": "map", "entries": [[1, "a"]] },
+    "hex": "d9815282016161",
+    "ok": true
+  },
+  { "id": "map-empty", "value": { "$": "map", "entries": [] }, "hex": "d9815280", "ok": true },
+  { "id": "set-one", "value": { "$": "set", "items": [1] }, "hex": "d981538101", "ok": true },
+  {
+    "id": "set-insertion-order",
+    "value": { "$": "set", "items": ["b", "a"] },
+    "hex": "d981538261626161",
+    "ok": true
+  },
+  { "id": "boxed-false", "value": { "$": "boxed", "v": false }, "hex": "d9815481f4", "ok": true },
+  {
+    "id": "boxed-neg-zero",
+    "value": { "$": "boxed", "v": { "$": "f64", "hex": "8000000000000000" } },
+    "hex": "d9815481f98000",
+    "ok": true
+  },
+  { "id": "boxed-string", "value": { "$": "boxed", "v": "a" }, "hex": "d98154816161", "ok": true },
+  {
+    "id": "boxed-bigint",
+    "value": { "$": "boxed", "v": { "$": "bigint", "v": "1" } },
+    "hex": "d9815481d981516131",
+    "ok": true
+  },
+  {
+    "id": "regexp-g",
+    "value": { "$": "regexp", "source": "a", "flags": "g" },
+    "hex": "d9524a8261616167",
+    "ok": true
+  },
+  {
+    "id": "regexp-empty",
+    "value": { "$": "regexp", "source": "(?:)", "flags": "" },
+    "hex": "d9524a8264283f3a2960",
+    "ok": true
+  },
+  { "id": "bytes-empty", "value": { "$": "bytes", "hex": "" }, "hex": "40", "ok": true },
+  {
+    "id": "bytes-three",
+    "value": { "$": "bytes", "hex": "010203" },
+    "hex": "43010203",
+    "ok": true
+  },
+  {
+    "id": "view-uint8",
+    "value": { "$": "view", "type": "Uint8Array", "hex": "0102" },
+    "hex": "d840420102",
+    "ok": true
+  },
+  {
+    "id": "view-uint8-empty",
+    "value": { "$": "view", "type": "Uint8Array", "hex": "" },
+    "hex": "d84040",
+    "ok": true
+  },
+  {
+    "id": "view-uint8-clamped",
+    "value": { "$": "view", "type": "Uint8ClampedArray", "hex": "ff" },
+    "hex": "d84441ff",
+    "ok": true
+  },
+  {
+    "id": "view-int8",
+    "value": { "$": "view", "type": "Int8Array", "hex": "ff" },
+    "hex": "d84841ff",
+    "ok": true
+  },
+  {
+    "id": "view-uint16",
+    "value": { "$": "view", "type": "Uint16Array", "hex": "0100" },
+    "hex": "d845420100",
+    "ok": true
+  },
+  {
+    "id": "view-int16",
+    "value": { "$": "view", "type": "Int16Array", "hex": "feff" },
+    "hex": "d84d42feff",
+    "ok": true
+  },
+  {
+    "id": "view-uint32",
+    "value": { "$": "view", "type": "Uint32Array", "hex": "01000000" },
+    "hex": "d8464401000000",
+    "ok": true
+  },
+  {
+    "id": "view-int32",
+    "value": { "$": "view", "type": "Int32Array", "hex": "ffffffff" },
+    "hex": "d84e44ffffffff",
+    "ok": true
+  },
+  {
+    "id": "view-biguint64",
+    "value": { "$": "view", "type": "BigUint64Array", "hex": "0100000000000000" },
+    "hex": "d847480100000000000000",
+    "ok": true
+  },
+  {
+    "id": "view-bigint64",
+    "value": { "$": "view", "type": "BigInt64Array", "hex": "ffffffffffffffff" },
+    "hex": "d84f48ffffffffffffffff",
+    "ok": true
+  },
+  {
+    "id": "view-float16",
+    "value": { "$": "view", "type": "Float16Array", "hex": "003e" },
+    "hex": "d85442003e",
+    "ok": true
+  },
+  {
+    "id": "view-float32",
+    "value": { "$": "view", "type": "Float32Array", "hex": "0000c03f" },
+    "hex": "d855440000c03f",
+    "ok": true
+  },
+  {
+    "id": "view-float64",
+    "value": { "$": "view", "type": "Float64Array", "hex": "000000000000f83f" },
+    "hex": "d85648000000000000f83f",
+    "ok": true
+  },
+  {
+    "id": "view-dataview",
+    "value": { "$": "view", "type": "DataView", "hex": "abcd" },
+    "hex": "d9815542abcd",
+    "ok": true
+  },
+  {
+    "id": "view-partial-uint8",
+    "value": {
+      "$": "view",
+      "type": "Uint8Array",
+      "hex": "0203",
+      "bufferHex": "01020304",
+      "byteOffset": 1,
+      "length": 2
+    },
+    "hex": "d9815684184044010203040102",
+    "ok": true
+  },
+  {
+    "id": "view-partial-uint16",
+    "value": {
+      "$": "view",
+      "type": "Uint16Array",
+      "hex": "0100",
+      "bufferHex": "00000100",
+      "byteOffset": 2,
+      "length": 1
+    },
+    "hex": "d9815684184544000001000201",
+    "ok": true
+  },
+  {
+    "id": "view-partial-dataview",
+    "value": {
+      "$": "view",
+      "type": "DataView",
+      "hex": "02",
+      "bufferHex": "0102",
+      "byteOffset": 1,
+      "length": 1
+    },
+    "hex": "d98156841981554201020101",
+    "ok": true
+  },
+  {
+    "id": "blob-empty",
+    "value": { "$": "blob", "type": "", "hex": "" },
+    "hex": "d98157836000784065336230633434323938666331633134396166626634633839393666623932343237616534316534363439623933346361343935393931623738353262383535",
+    "ok": true
+  },
+  {
+    "id": "blob-text-hi",
+    "value": { "$": "blob", "type": "text/plain", "hex": "6869" },
+    "hex": "d98157836a746578742f706c61696e02784038663433343334363634386636623936646638396464613930316335313736623130613664383339363164643363316163383862353962326463333237616134",
+    "ok": true
+  },
+  {
+    "id": "file-empty",
+    "value": { "$": "file", "name": "a.txt", "lastModified": 0, "type": "", "hex": "" },
+    "hex": "d981588565612e747874006000784065336230633434323938666331633134396166626634633839393666623932343237616534316534363439623933346361343935393931623738353262383535",
+    "ok": true
+  },
+  { "id": "inv-head-23-in-1-byte", "hex": "1817", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-head-255-in-2-bytes", "hex": "1900ff", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-length-not-shortest", "hex": "580161", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-tag-not-shortest", "hex": "d9004040", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-f32-fits-f16", "hex": "fa3fc00000", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-f64-fits-f32",
+    "hex": "fb40f86a0800000000",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-f16-integer-1", "hex": "f93c00", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-f64-integer-2",
+    "hex": "fb4000000000000000",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-f64-max-safe-integer",
+    "hex": "fb433fffffffffffff",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-nan-payload", "hex": "f97e01", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-nan-negative", "hex": "f9fe00", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-nan-f32", "hex": "fa7fc00000", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-nan-f64",
+    "hex": "fb7ff8000000000000",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-uint-2p53",
+    "hex": "1b0020000000000000",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-nint-minus-2p53",
+    "hex": "3b001fffffffffffff",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-reserved-info", "hex": "1c", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-indefinite-array", "hex": "9fff", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-indefinite-bytes", "hex": "5fff", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-break", "hex": "ff", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-simple-16", "hex": "f0", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-simple-32", "hex": "f820", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-truncated-bytes", "hex": "4201", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-truncated-head", "hex": "1901", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-utf8-invalid-byte", "hex": "61ff", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-utf8-surrogate", "hex": "63eda080", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-utf8-overlong", "hex": "62c0af", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-map-unsorted",
+    "hex": "a2616201616101",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-map-duplicate-key",
+    "hex": "a2616101616102",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-map-integer-key", "hex": "a10101", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-map-as-value", "hex": "a0", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-tag-33199", "hex": "d981af00", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-tag-0", "hex": "c06161", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-tag-in-tag", "hex": "d9814dd9814d80", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-str16-well-formed",
+    "hex": "d9814e426100",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-str16-odd-length",
+    "hex": "d9814e4100",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-bigint-leading-zero",
+    "hex": "d98151623031",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-bigint-minus-zero",
+    "hex": "d98151622d30",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-bigint-plus", "hex": "d98151622b31", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  { "id": "inv-date-fraction", "hex": "d98150f93e00", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-date-out-of-range",
+    "hex": "d981501b001eb208c2dc0001",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-object-key-order",
+    "hex": "d9814d84616201613102",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-object-duplicate-key",
+    "hex": "d9814d84616101616102",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-object-odd-items",
+    "hex": "d9814d816161",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-object-integer-key",
+    "hex": "d9814d820101",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-sparse-dense",
+    "hex": "d9814f8301613001",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-sparse-index-out-of-range",
+    "hex": "d9814f8301613101",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-sparse-length-key",
+    "hex": "d9814f8301666c656e67746801",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-set-neg-zero",
+    "hex": "d9815381f98000",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-set-duplicate", "hex": "d98153820101", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-map-value-duplicate-key",
+    "hex": "d981528401010102",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  { "id": "inv-boxed-null", "hex": "d9815481f6", "ok": false, "error": "SNAP_RECORD_INVALID" },
+  {
+    "id": "inv-regexp-flag-order",
+    "hex": "d9524a826161626967",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-regexp-duplicate-flag",
+    "hex": "d9524a826161626767",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-regexp-flags-u-and-v",
+    "hex": "d9524a826161627576",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-typed-array-misaligned",
+    "hex": "d846420100",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-view-whole-as-partial",
+    "hex": "d981568418404201020002",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-view-out-of-range",
+    "hex": "d981568418404201020102",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-view-misaligned-offset",
+    "hex": "d9815684184544000000000101",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-view-unknown-view-tag",
+    "hex": "d981568418414201020001",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-blob-bad-hash",
+    "hex": "d981578360006161",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  },
+  {
+    "id": "inv-blob-uppercase-type",
+    "hex": "d9815783614100784065336230633434323938666331633134396166626634633839393666623932343237616534316534363439623933346361343935393931623738353262383535",
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  }
+]

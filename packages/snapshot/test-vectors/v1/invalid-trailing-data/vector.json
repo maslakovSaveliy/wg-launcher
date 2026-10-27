@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-trailing-data",
+  "description": "One 512-byte block starting with the text trailing data after the two tar end blocks, inside the zstd frame",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_TRAILING_DATA"
+  }
+}

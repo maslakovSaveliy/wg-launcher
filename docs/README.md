@@ -17,7 +17,7 @@ these documents carries a tag: `Verified (date, source)`, `Assumed` or `Unverifi
 | Document | Content |
 | --- | --- |
 | [prd.md](product/prd.md) | Product requirements for the MVP: features, honest badges, delete semantics, saves, platforms, acceptance criteria AC-1 to AC-25, risks, open questions |
-| [sources/concept-v1.0.ru.md](product/sources/concept-v1.0.ru.md) | The owner's original concept document (Russian, kept verbatim) |
+| [sources/concept-v1.0.md](product/sources/concept-v1.0.md) | The owner's concept document (English translation of the Russian original, which it replaced on 2026-10-25) |
 
 ## Specifications (`docs/specs/`)
 

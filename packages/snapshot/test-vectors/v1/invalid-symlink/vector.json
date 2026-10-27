@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-symlink",
+  "description": "A symbolic link entry data/0/link pointing to /etc/passwd after the manifest",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_SYMLINK"
+  }
+}
