@@ -236,15 +236,19 @@ progress-lab server on a free port). electron-vite: main (`externalizeDeps` defa
 with `isolatedEntries: true, externalizeDeps: false` (launcher bridge now, quiescent preload in Task 13), renderer with
 React; `prodDepsGuard` on all three; electron-builder `files` excludes packages already fully bundled into the renderer
 (react, react-dom, scheduler) so they are not shipped twice.
-- [ ] Tests (unit): `redact` (URL → origin, home → `~`, `Authorization`/cookie dropped, deep-link input → length);
+- [x] Tests (unit): `redact` (URL → origin, home → `~`, `Authorization`/cookie dropped, deep-link input → length);
   protocol path containment (`..`, `%2e%2e`, absolute, cover name pattern); `fixPartitioningSwitch` keeps other features.
-- [ ] Tests (e2e): app starts, launcher page served from `app://launcher` with the CSP header; no CSP violation report
+- [x] Tests (e2e): app starts, launcher page served from `app://launcher` with the CSP header; no CSP violation report
   during start-up (S-15 part, decides the Trusted Types open check); a second instance exits and focuses the first;
   under Playwright the iframe partitioning check of progress-lab's `iframe-host.html` shows partitioned storage.
 - [ ] Run failing, implement, run passing; `pnpm check`; `pnpm test:e2e`; CI green on the pushed branch only when the
-  owner approves the push.
-- [ ] MEMORY.md: Electron install under pnpm, React 19 under `trusted-types 'none'` result [V], Linux xvfb note.
-- [ ] Commit `feat(desktop): add the app skeleton, launcher protocol and e2e harness`.
+  owner approves the push. (Local part done 2026-10-28; CI not run, nothing pushed.)
+- [x] MEMORY.md: Electron install under pnpm, React 19 under `trusted-types 'none'` result [V], Linux xvfb note.
+- [x] Commit `feat(desktop): add the app skeleton, launcher protocol and e2e harness`.
+- Notes (2026-10-28): `electron@45.0.0` has no install script, so no `allowBuilds` entry was added (the binary is
+  downloaded on first use; CI runs `install-electron`). `fixPartitioningSwitch` takes `app.commandLine`, since
+  Playwright appends its switches there. The electron-builder `files` exclusion moves to Task 16, which adds
+  electron-builder. Open check 6 is settled: React 19 runs under `trusted-types 'none'` (security.md section 6).
 
 ### Task 6: SQLite database, migrations, repositories (M)
 **Files:** `src/main/db/{database.ts,migrate.ts,migrations/001-initial.sql}`, `src/main/db/repos/{games.ts,window-state.ts,
@@ -482,7 +486,7 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 | 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION` |
 | 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types |
 | 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides) |
-| 6 | React 19 runs under `trusted-types 'none'` (Task 5) | Allow one named policy, keep `require-trusted-types-for 'script'` |
+| 6 | React 19 runs under `trusted-types 'none'` (Task 5): settled 2026-10-28, it does (security.md section 6) | Allow one named policy, keep `require-trusted-types-for 'script'` |
 | 7 | `node:sqlite` runs without a warning in Electron 45 main (Task 6) | better-sqlite3 13.0.3 per ADR-0004 revisit trigger |
 | 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data) |
 | 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc |

@@ -10,19 +10,21 @@ codename, and `wglauncher://` the deep-link scheme.
 
 ## Status
 
-**Phase 0 (foundation) is done: specifications, decision records, rules, tooling and a runtime evaluation. There is no
-launcher client yet, and nothing here can be installed or played.** Phase 1 comes next: the first vertical scenario (add
-a URL, play, change progress, export a snapshot, restore it in a clean session and see the same progress). It is code and
-tests only, with no new spikes.
+**Phase 1 is in progress; nothing here can be installed or played yet.** Phase 0 (specifications, decision records,
+rules, tooling and a runtime evaluation) is done. Phase 1 builds the first vertical scenario (add a URL, play, change
+progress, export a snapshot, restore it in a clean session and see the same progress), following
+[its plan](docs/plans/2026-10-25-phase-1-launcher.md). It is code and tests only, with no new spikes.
 
 | Exists | Does not exist yet |
 | --- | --- |
-| Product requirements ([PRD](docs/product/prd.md)) with 25 acceptance criteria | The launcher itself: no `apps/` and no `packages/` code |
+| Product requirements ([PRD](docs/product/prd.md)) with 25 acceptance criteria | A usable launcher: `apps/desktop` starts and shows its window, but has no library yet |
 | Specifications for [architecture](docs/specs/architecture.md), the [snapshot format](docs/specs/snapshot-format.md), [save transfer](docs/specs/save-transfer.md) and [security](docs/specs/security.md) | Library UI, game windows, export and restore as software |
 | Six [architecture decision records](docs/adr/), including the runtime choice (Electron 45) | Installers, releases, code signing |
 | Quality tooling: Biome, strict TypeScript, Vitest, a dependency license gate, Markdown lint, git hooks and CI | Cloud sync, accounts, a game catalog |
 | `progress-lab`, a controlled test game with verifiable saves, and its Playwright suite | Any game verified to work: the compatibility matrix lists only spike runs |
 | A throwaway runtime spike whose results the decisions cite ([RESULTS.md](spikes/runtime-compat/RESULTS.md)) | Frame-time comparison with Chrome: deferred to Phase 1 |
+| `packages/shared` (ids, error codes) and `packages/snapshot` (the `.wgsnap` codec with golden vectors) | |
+| `apps/desktop`: the Electron app skeleton (strict `app://launcher` protocol and CSP, launcher window, redacted log) and its Playwright e2e suite | |
 
 ## Quick start for contributors
 
@@ -34,20 +36,21 @@ git clone https://github.com/maslakovSaveliy/wg-launcher.git
 cd wg-launcher
 nvm use
 pnpm install     # also installs the git hooks (lefthook)
-pnpm check       # lint, typecheck, unit tests, license gate, Markdown lint
+pnpm check       # lint, typecheck, unit tests, license gate, path and bundle checks, Markdown lint
 ```
 
 | Command | What it does |
 | --- | --- |
 | `pnpm lint` | Biome lint, format check and import order for JS, TS, JSON and CSS (not Markdown) |
 | `pnpm format` | Biome formatter, writing changes |
-| `pnpm typecheck` | `tsc -b` with the strict base config, for the root project and the fixture's TypeScript |
+| `pnpm typecheck` | `tsc -b` with the strict base config, for every TypeScript project in the workspace |
 | `pnpm test` | Vitest unit tests |
-| `pnpm test:e2e` | Playwright suite of the `progress-lab` fixture (CI runs `--project=chromium`; needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once). Not part of `pnpm check` |
+| `pnpm test:e2e` | The desktop app's Playwright `_electron` suite (opens real windows), then the `progress-lab` fixture's suite (extra arguments such as `--project=chromium` reach the fixture only; it needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once). Not part of `pnpm check` |
 | `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
 | `pnpm paths:check` | No machine-specific paths (home directories, temporary roots) in tracked text files |
-| `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check and docs:lint |
+| `pnpm bundle:check` | Builds the desktop app's prod and test flavors; the test hooks must not be in prod |
+| `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check, bundle:check and docs:lint |
 
 The workflow, commit rules, Definition of Done and dependency policy are in [CONTRIBUTING.md](CONTRIBUTING.md). The rules
 every contributor and AI agent follows are in [AGENTS.md](AGENTS.md).
@@ -86,7 +89,8 @@ was deferred out of Phase 0. A failure there reopens ADR-0002 and ADR-0005. The 
 
 ## Limitations
 
-- There is no usable client. Everything about the launcher's behavior is a specification or a plan, not software.
+- There is no usable client yet. `apps/desktop` starts and shows an empty launcher window; the library, game windows,
+  export and restore are specified and planned, not yet software.
 - All runtime evidence comes from one fanless MacBook Air. It says nothing about other Macs, Windows, Linux or other GPUs.
 - Electron's frame time against Chrome is unmeasured. No speed or memory number is claimed anywhere.
 - Whether heavy fan-made web ports of major commercial games are complete, whether a free market for them exists, and

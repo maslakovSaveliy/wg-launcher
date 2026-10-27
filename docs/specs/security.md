@@ -151,7 +151,8 @@ A release check reads the fuses of the packaged app and fails on any difference 
   `supportFetchAPI` and `codeCache`; not `bypassCSP`, `corsEnabled`, `allowServiceWorkers`, `stream` or
   `allowExtensions`. Those privilege names exist in Electron 45. Verified (2026-10-25, `electron.d.ts`). `Assumed` for
   the choice.
-- **Handler.** `protocol.handle("app")` on the launcher's session only. Host `launcher`; files only from the packaged
+- **Handler.** `protocol.handle("app")` on the launcher's session only (the in-memory partition `launcher`, never the
+  default session; `apps/desktop/src/main/app-protocol.ts`). Host `launcher`; files only from the packaged
   renderer directory inside the asar (normalized path, containment check) and covers from `covers/` with the exact
   name pattern; everything else is 404. Headers on every response: the CSP below, `X-Content-Type-Options: nosniff`,
   `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `Referrer-Policy:
@@ -160,8 +161,16 @@ A release check reads the fuses of the packaged app and fails on any difference 
   connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';
   require-trusted-types-for 'script'; trusted-types 'none'`. The renderer talks to main only through the bridge and
   loads no remote content; covers are local files. Development builds load from the Vite server with a looser CSP and
-  check the sender against that origin, a build-time constant. That React 19 runs under `trusted-types 'none'` is
-  Assumed; an e2e test fails on any CSP violation report. `Assumed`
+  check the sender against that origin, a build-time constant. The dev CSP (`apps/desktop/electron.vite.config.ts`,
+  sent by the Vite server) adds what Vite is expected to need: `'unsafe-inline'` for scripts (the React refresh
+  preamble) and styles, `connect-src` to the dev server's WebSocket, `img-src app://launcher` for covers, and no Trusted
+  Types (the Vite error overlay uses `innerHTML`); the test and prod builds never use it. Assumed: the dev flavor was
+  not run in Phase 1 Task 5. React 19.3.1 runs under the production
+  CSP, `trusted-types 'none'` included, with no CSP or Trusted Types violation during start-up: Verified (2026-10-28,
+  `apps/desktop/e2e/launcher.spec.ts` on Electron 45.0.0, macOS arm64; the test records every console message of the
+  launcher from before its first load, and its control, an `innerHTML` assignment, is refused with a `TypeError` and
+  recorded as "This document requires 'TrustedHTML' assignment"). So the plan's fallback (one named policy) is not
+  needed. `Assumed` for the rest of this bullet.
 - **Rendering rules:** no `dangerouslySetInnerHTML`, no `innerHTML`; titles, URLs, origins, snapshot metadata, adapter
   text and error messages are rendered as text; the UI never puts a game URL into `href` or `src` (opening is a main
   action). The launcher's own `webContents` denies all navigation, new windows and permissions.

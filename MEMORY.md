@@ -68,6 +68,16 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `generic-web-storage` 1.0.0) make generation deterministic: two runs gave byte-identical files, zstd included [V,
   2026-10-28, Node 24.13.0, run locally]. `v1/` is excluded from Biome so the JSON stays byte-identical to the
   generator's `JSON.stringify(value, null, 2)`.
+- 2026-10-28 Phase 1 Task 5 (`apps/desktop` skeleton, Assumed unless noted): build flavors through `__WG_FLAVOR__`
+  (`electron-vite build --mode test` = test, `electron-vite build` = prod, `electron-vite dev` = dev); the dev flavor
+  uses its own userData `<appData>/WGLauncher Dev`, the test flavor refuses to start without an absolute
+  `WG_USER_DATA`; the launcher session is the in-memory partition `launcher`; covers are named
+  `<uuidv7>-<16 lowercase hex>.<png|jpg|webp>` (the protocol's `COVER_NAME`); the preload is CommonJS
+  (`out/preload/launcher.cjs`, a sandboxed preload cannot be ESM); the launcher quits when its last window closes, on
+  macOS too. `fixPartitioningSwitch` takes Electron's `app.commandLine`, not argv, because Playwright's loader appends
+  its switches with `appendSwitch`. `pnpm test:e2e` runs the desktop suite first, so extra arguments reach the fixture
+  only; CI runs `test:e2e:fixture --project=chromium` and a separate desktop job. Leaving react, react-dom and scheduler
+  out of the packaged `node_modules` moves to Task 16 (no electron-builder config exists yet).
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -153,9 +163,14 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 ### pnpm and the toolchain
 
 - pnpm 11+ skips dependency build scripts unless listed in `allowBuilds` in `pnpm-workspace.yaml` (`strictDepBuilds`:
-  `ERR_PNPM_IGNORED_BUILDS`); Electron's binary download and lefthook need entries (`allowBuilds: {lefthook: true}` works
-  in 12.15.0; without it `pnpm add` fails and writes no placeholder). Vitest 5 uses rolldown, so esbuild needs no entry.
-  [V, 2026-10-24, pnpm 12.11 docs and a 12.15.0 run]
+  `ERR_PNPM_IGNORED_BUILDS`); lefthook needs an entry (`allowBuilds: {lefthook: true}` works in 12.15.0; without it
+  `pnpm add` fails and writes no placeholder). Vitest 5 uses rolldown, so esbuild needs no entry. [V, 2026-10-24, pnpm
+  12.11 docs and a 12.15.0 run]
+- `electron@45.0.0` has no install script, so it needs no `allowBuilds` entry (the older note that its binary download
+  needs one was wrong for 45): `pnpm add -D electron@45.0.0` ran no script, and the binary is downloaded on the first
+  `require("electron")` (which prints "Downloading Electron binary...") or by its `install-electron` bin, which CI calls.
+  electron-vite builds without the binary (it reads only `electron/package.json`). [V, 2026-10-28, pnpm 12.15.0, the
+  package's `package.json`, `index.js` and `install.js`]
 - pnpm 11+ reads only auth and registry settings from `.npmrc`; others go in `pnpm-workspace.yaml` in camelCase. [V,
   2026-10-24: `save-exact` in `.npmrc` ignored, `saveExact` in the YAML worked]
 - pnpm 11+ defaults `minimumReleaseAge` to 1440 minutes: a version younger than a day cannot be installed. pnpm switches
@@ -265,6 +280,28 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Playwright launches Chrome headed, but an exact 1280 x 720 CSS-pixel viewport at native scale needs `viewport: null`
   plus CDP `Browser.setWindowBounds`; `Page.bringToFront` is enough for focus. [V, 2026-10-24]
 - Safari's AppleScript can close its own tabs, but `tabs of window` indexes shift: iterate backwards. [V, 2026-10-24]
+- Playwright 1.64.1 `_electron.launch` adds its loader (`-r loader.js`, which appends the Chromium switches above with
+  `app.commandLine.appendSwitch`, so they are not in `process.argv`) only when no `executablePath` is given; with one,
+  no switch is added and partitioning stays on by itself. It adds `--no-sandbox` on Linux unless `chromiumSandbox: true`.
+  [V, 2026-10-28, `coreBundle.js` and `loader.js` of `playwright-core` 1.64.1; the desktop partitioning e2e failed with
+  `executablePath` set (switch value without the entry) and passed without it]
+- The desktop partitioning e2e test fails when `fixPartitioningSwitch` is removed: the cross-site iframe then shows the
+  top-level progress hash. [V, 2026-10-28, mutation run on Electron 45.0.0, macOS arm64]
+- Electron 45 reports a CSP or Trusted Types violation as a launcher `console-message` with level `error` ("This document
+  requires 'TrustedHTML' assignment. The action has been blocked."), so recording that event from window creation
+  catches start-up violations; React 19.3.1 under the production CSP with `trusted-types 'none'` produced none. [V,
+  2026-10-28, `apps/desktop/e2e/launcher.spec.ts`; security.md section 6]
+- `session.fetch("app://launcher/...")` from the main process goes through that session's `protocol.handle`, so e2e
+  tests read the launcher's real response headers without a `connect-src`. Electron 45 `console-message` passes one
+  event object (`level` is `info`, `warning`, `error` or `debug`); the positional arguments are deprecated. [V,
+  2026-10-28, desktop e2e; `electron.d.ts` of 45.0.0]
+- electron-vite 6.0.0 has no Electron 45 entry in its Node and Chrome target tables and falls back to 44's (`node24.18`,
+  Chrome 152): output is transpiled for a slightly older runtime, harmless. A main-process `if (__WG_FLAVOR__ === "test")
+  await import(...)` is dropped from the prod bundle, chunk included. `electron-vite build` has `--outDir` but no
+  `--emptyOutDir`. [V, 2026-10-28, `lib-*.js` of electron-vite 6.0.0; `pnpm bundle:check`]
+- [A] Linux CI for the desktop suite: Electron runs under `xvfb-run` with Chromium's sandbox on, which on Ubuntu 24.04
+  is assumed to need `sysctl kernel.apparmor_restrict_unprivileged_userns=0`, and its system libraries are installed with
+  `playwright install-deps chromium`. Not run: nothing was pushed (2026-10-28).
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]

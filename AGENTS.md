@@ -14,16 +14,18 @@ It is not cloud streaming, not a reverse-engineering tool and not an automatic c
 
 ## Status
 
-**Phase 0 (foundation): specifications, documentation, rules, tooling and a runtime evaluation. There is no launcher
-client code yet, and none may be written in this phase.** The plan is
-[docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md). Phase 1 (the first
-vertical scenario: add URL, play, save progress, export, restore in a clean session) gets its own plan. It is code and
-tests only, with no spikes and one review per task (owner decision, 2026-10-25).
+**Phase 1 (launcher MVP) is in progress**, following
+[docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md): the first vertical scenario (add
+a URL, play, save progress, export, restore in a clean session) plus the library and every MUST of the specs. It is code
+and tests only, with no spikes and one review per task (owner decision, 2026-10-25); each task starts only on the
+owner's word. Phase 0 (foundation: specifications, documentation, rules, tooling and a runtime evaluation) is done; its
+plan is [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md).
 
 Stack: Electron 45 ([ADR-0002](docs/adr/0002-desktop-runtime.md), accepted by the owner on the condition that Phase 1
 re-measures H7 frame time on the launcher against Chrome), React with TypeScript, electron-vite and `node:sqlite`
 ([ADR-0004](docs/adr/0004-toolchain-and-repo-layout.md)). Rust is deferred
-([ADR-0003](docs/adr/0003-native-languages.md)). None of it is installed in the pnpm workspace yet.
+([ADR-0003](docs/adr/0003-native-languages.md)). Electron, electron-vite, Vite and React are installed in `apps/desktop`;
+`node:sqlite` comes with the database task.
 
 ## Repository map
 
@@ -47,14 +49,15 @@ Exists now:
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
-| `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy, and `prod-deps-guard.mjs` is the build-time guard (a Vite/Rollup plugin) that fails a build bundling a package outside the production closure, i.e. `dependencies` and their transitives (both with tests; the guard is wired into the desktop build when it exists) |
+| `scripts/` | Repo tooling; `check-licenses.mjs` enforces the dependency license policy, and `prod-deps-guard.mjs` is the build-time guard (a Vite/Rolldown plugin with a `transform` hook) that fails a build bundling a package outside the production closure, i.e. `dependencies` and their transitives (both with tests; the guard is wired into all three desktop builds) |
+| `apps/desktop/` | `@wg-launcher/desktop`, the Electron 45 client built with electron-vite: `src/main/` (start-up, build flavor, userData layout, the `app://launcher` protocol with its CSP, the launcher window, native dialogs, redacted rotating log, test hooks of the test flavor), `src/preload/launcher.ts` (sandboxed CommonJS bridge), `src/renderer/` (React UI), `e2e/` (Playwright `_electron` harness and suite), `scripts/check-prod-bundle.mjs` (test hooks never in a prod bundle) |
 | `packages/shared/` | `@wg-launcher/shared`, consumed as TypeScript source: UUIDv7 ids, the `Result` type and every result error code named in the specs (no dependencies yet) |
 | `packages/snapshot/` | `@wg-launcher/snapshot`, TypeScript source: the `.wgsnap` record layer (`src/record/`: deterministic CBOR profile, value model, IndexedDB key order, data files; Web APIs only), its errors, the Node-only `.wgsnap` container (`src/container/`, entry `@wg-launcher/snapshot/container`), test helpers (`test/`, test-only), the hand-written CBOR vectors `test-vectors/cbor-v1.json` and the frozen golden vectors `test-vectors/v1/` (one-time generator `scripts/generate-vectors.ts`, runner `src/vectors.test.ts`; never regenerate them to make a test pass) |
 | `fixtures/test-games/progress-lab/` | Controlled test game with verifiable persisted progress and its Playwright suite; see its `README.md`. Not a real game |
 
 Reserved, **not created yet**. Do not create a directory until the work that needs it exists:
 
-- `apps/desktop` (Electron client), `packages/exporters`.
+- `packages/exporters`.
 - `crates/` (Rust, only if and when the local-packages stage needs it).
 
 ## Commands
@@ -66,20 +69,23 @@ version by itself inside the repo. `pnpm install` also installs the git hooks (t
 | --- | --- |
 | `pnpm lint` | Biome lint, format check and import order for JS, TS, JSON and CSS (not Markdown) |
 | `pnpm format` | Biome formatter, writing changes |
-| `pnpm typecheck` | `tsc -b` with the strict base config, for the root project and the fixture's TypeScript (config and tests) |
+| `pnpm typecheck` | `tsc -b` with the strict base config, for the root project, the fixture's TypeScript (config and tests), the shared packages and the desktop app (`tsconfig.node.json`, `tsconfig.web.json`, `tsconfig.e2e.json`) |
 | `pnpm test` | Vitest unit tests (fast; also run by the pre-push hook) |
-| `pnpm test:e2e` | Playwright suite of the `progress-lab` fixture in bundled Chromium and, locally, installed Chrome (`--project=chromium` for Chromium only, as CI does). Needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once. Not part of `pnpm test` or `pnpm check` |
+| `pnpm test:e2e` | Both Playwright suites: first the desktop app (`test:e2e:desktop`: builds the test flavor, then runs `apps/desktop/e2e` through `_electron.launch`; opens real windows), then the `progress-lab` fixture (`test:e2e:fixture`) in bundled Chromium and, locally, installed Chrome. Extra arguments reach the fixture's Playwright only, so `pnpm test:e2e --project=chromium` still selects bundled Chromium there. The fixture needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once. Not part of `pnpm test` or `pnpm check` |
 | `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
 | `pnpm paths:check` | No machine-specific paths in tracked text files: home paths, macOS temp roots, the current user's home and user name (findings print `file:line:column kind`, never the text). `/home/web_user` (Emscripten IDBFS tests) is the only exception |
+| `pnpm bundle:check` | Builds the desktop app's prod and test flavors into temporary directories; fails if the test hooks (`__wgTest`) appear in prod or are missing from test |
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
-| `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check and docs:lint (not `test:e2e`) |
+| `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check, bundle:check and docs:lint (not `test:e2e`) |
 
 Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed copy.
 
 Git hooks (lefthook) run for you: pre-commit formats staged files with Biome (and re-stages them), scans them with
 secretlint, rejects machine-specific paths (`scripts/check-machine-paths.mjs`) and lints staged Markdown; commit-msg enforces Conventional Commits; pre-push runs `pnpm typecheck` and
-`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks (including `pnpm paths:check`) on every pull request and also runs the fixture's
-Playwright suite (`pnpm test:e2e --project=chromium`) on Ubuntu and macOS.
+`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks (including `pnpm paths:check` and `pnpm bundle:check`) on
+every pull request and also runs the fixture's Playwright suite (`pnpm test:e2e:fixture --project=chromium`) and the
+desktop suite (`pnpm test:e2e:desktop`, under `xvfb-run` on Linux) on Ubuntu and macOS; both prove the build and tests,
+not game compatibility.
 
 ## Hard rules
 

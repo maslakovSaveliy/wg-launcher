@@ -146,7 +146,12 @@ stateDiagram-v2
   `--disable-features`, which makes a cross-site iframe share storage with the top level; re-appending the list without
   that entry in the main process restores partitioning. Verified (2026-10-24, RESULTS.md H11). The app MUST do this at
   start-up whenever the switch contains that entry, in every build, because partitioning is what the storage keys of
-  snapshots assume. `Assumed`
+  snapshots assume. `Assumed` for the rule. Implemented as `fixPartitioningSwitch` in `apps/desktop/src/main/start-up.ts`;
+  the e2e test "cross-site iframe storage stays partitioned under Playwright" (`apps/desktop/e2e/launcher.spec.ts`)
+  shows a cross-site progress-lab iframe in its own empty partition under `_electron.launch`, and with the fix removed
+  the same test fails because the iframe sees the top-level progress. Verified (2026-10-28, Electron 45.0.0,
+  Playwright 1.64.1, macOS arm64). Playwright adds that loader only when `_electron.launch` gets no `executablePath`.
+  Verified (2026-10-28, `coreBundle.js` of `playwright-core` 1.64.1).
 - **Frames are recorded.** `did-frame-navigate` with an http or https URL adds `(top origin, frame origin)` to
   `storage_targets` ([save-transfer.md](save-transfer.md#2-storage-keys)).
 
@@ -369,6 +374,10 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 
 - End-to-end tests use Playwright `_electron.launch` (H11 PASS) and rely on the partitioning rule of section 5.
   Verified (2026-10-24, RESULTS.md H11).
+- On Linux, `_electron.launch` adds `--no-sandbox` unless `chromiumSandbox: true` is passed; the desktop harness passes
+  it, so the e2e suite runs with Chromium's sandbox on. Verified (2026-10-28, `coreBundle.js` of `playwright-core`
+  1.64.1). Whether the Ubuntu CI runner then needs `kernel.apparmor_restrict_unprivileged_userns=0` (set by the CI job)
+  is Assumed: CI has not run the desktop suite yet.
 - E2E builds are unfused: the production fuses ([security.md](security.md#4-fuses)) turn off `--inspect`, which the
   Playwright driver needs. Fuses, `Info.plist`, deep links and the media prompt are checked on a packaged build
   separately. Assumed (that Playwright needs `--inspect` is not checked here).
@@ -424,6 +433,7 @@ No crate exists before that. `Owner` for the deferral; the contract itself is AD
   unregistering the game's service workers on close (a cache-class loss: offline-capable games re-download) or
   accepting a longer AC-13 window; the owner decides. `Assumed`
 - The launcher UI uses an in-memory partition (`launcher`), not the default session; nothing in the UI needs browser
-  persistence because settings live in SQLite. `Assumed`
+  persistence because settings live in SQLite. `Assumed`; implemented this way in Phase 1 Task 5
+  (`apps/desktop/src/main/launcher-window.ts`).
 - Several devices exporting the same game have different `gameId`s; cloud sync needs the `game_keys` mapping (section
   15), which the MVP does not store. `Assumed`
