@@ -2,507 +2,281 @@
 
 Shared memory for all agents and contributors. Append dated entries; fix or remove stale ones (see `AGENTS.md`).
 Tags: `[V]` Verified (date, source), `[A]` Assumed (reasoned, not checked), `[U]` Unverified (reported, not checked).
-All entries below are dated 2026-10-24 unless they say otherwise.
+All entries below are dated 2026-10-24 unless they say otherwise. Keep here decisions, gotchas, open questions and facts
+recorded nowhere else; anything a committed document holds is a pointer to its section (owner decision, 2026-10-28).
 
 ## Decisions
 
-- 2026-10-24 Phase 0 plan: [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md).
-  Decisions are recorded as ADRs in [docs/adr/](docs/adr/) (index: [docs/README.md](docs/README.md)):
-  ADR-0001 own small client, not a fork (Accepted); ADR-0002 desktop runtime, Electron 45.0.0 (Accepted by the owner on
-  2026-10-25 under the Phase 1 H7 condition below); ADR-0003 native languages, Rust deferred and Go not adopted
-  (Accepted); ADR-0004 toolchain and repository layout (Accepted; its Electron-specific rows are reopened with ADR-0002);
-  ADR-0005 save transfer mechanism, the quiescent window (Accepted with ADR-0002, same condition); ADR-0006 licensing
-  model (Accepted; awaits a lawyer's review).
-- Phase 0 produces specs, docs, rules and tooling only. No launcher client code until Phase 1, which gets its own plan.
-- Own small Electron client, not a fork of itch, Flashpoint, Pixens or web-runner. Their code is not reused (patterns
-  only). The runtime is Electron 45.0.0 (ADR-0002); the compatibility spike supplied the evidence, on one machine
-  (macOS arm64).
-- 2026-10-25 Owner: ADR-0002 (Electron) and ADR-0005 (save transfer) are Accepted on one condition: Phase 1 re-runs
-  H7 (p95 frame time at most Chrome's p95 x 1.15) on the launcher, with the frozen method, because the hands-off timing
-  runs (H7, the Chrome side of H8, the H9 rerun, H20-6 and the demo frame samples) were deferred out of Phase 0. A
-  Phase 1 H7 FAIL reopens both ADRs ([A] the fallback, Chrome `--app` with CDP, has no preload, `ses.protocol.handle` or
-  `webContents.debugger`, so ADR-0005's mechanism would not carry over). Source: ADR-0002 "Decision", ADR-0005 "Status".
-- 2026-10-25 Owner: the Tauri build was dropped (hypotheses H17 and H18 are N/A) and Safari is used only as a labeled
-  WebKit proxy; Phase 1 is code and tests only (no spikes, one review per task); exports without a confirmed in-game
-  flush are allowed and labeled "flush unconfirmed" (ADR-0005 decision 7). The owner keeps their own git identity in
-  commits.
-- 2026-10-25 Owner: CLA counterparty is Savelii Maslakov as an individual (passport spelling), governing law is the
-  Russian Federation; both are now written into `CLA.md`. The CLA stays inactive, and no outside contribution is
-  accepted, until a lawyer has reviewed it and the CLA Assistant app is set up.
-- 2026-10-25 Decided in the specs (Assumed; the owner can override): the snapshot record encoding is deterministic CBOR
-  (snapshot-format.md section 6.1); packaging is electron-builder (ADR-0004, option P1); PRD OQ-2 (removing a game keeps
-  its data as orphaned until deleted) and OQ-3 (plain `http://localhost` and `http://127.0.0.1` only in development and
-  test builds) are decided as proposed (architecture.md section 12).
-- 2026-10-25 `spikes/runtime-compat/` stays where it is, labeled THROWAWAY: the ADRs and specs link to its results, and
-  Phase 1's H7 re-run uses its method. It is deleted or archived only after the Phase 1 H7 outcome is recorded.
-  Routine decision, Assumed.
+- Phase 0 plan [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md) (specs, docs,
+  rules, tooling, runtime spike; no client code) is merged to `main` at d5a4812 (Phase 1 plan "Context"). ADRs in
+  [docs/adr/](docs/adr/), index [docs/README.md](docs/README.md): 0001 own small client (Accepted); 0002 Electron 45.0.0
+  (Accepted 2026-10-25 under the H7 condition below); 0003 Rust deferred, Go not adopted (Accepted); 0004 toolchain and
+  layout (Accepted; Electron rows reopen with 0002); 0005 quiescent-window save transfer (Accepted, same condition);
+  0006 licensing model (Accepted; awaits a lawyer).
+- Own small Electron client, not a fork of itch, Flashpoint, Pixens or web-runner; their code is not reused (patterns
+  only). The runtime is Electron 45.0.0 (ADR-0002); the spike supplied the evidence, on one machine (macOS arm64).
+- 2026-10-25 Owner: ADR-0002 and ADR-0005 are Accepted on one condition: Phase 1 re-runs H7 (p95 frame time at most
+  Chrome's p95 x 1.15) on the launcher with the frozen method. The hands-off timing runs (H7, Chrome side of H8, H9
+  rerun, H20-6, demo frame samples) are "deferred" to Phase 1, not N/A or INVALID. A Phase 1 H7 FAIL reopens both ADRs
+  ([A] the fallback, Chrome `--app` with CDP, has no preload, `ses.protocol.handle` or `webContents.debugger`, so
+  ADR-0005's mechanism would not carry over). Source: ADR-0002 "Decision", ADR-0005 "Status", RESULTS.md header.
+- 2026-10-25 Owner: the Tauri build was dropped (H17, H18 N/A) and Safari is only a labeled WebKit proxy; Phase 1 is code
+  and tests only (no spikes, one review per task); exports without a confirmed in-game flush are allowed and labeled
+  "flush unconfirmed" (ADR-0005 decision 7). The owner keeps their own git identity in commits.
+- 2026-10-25 Owner: CLA counterparty is Savelii Maslakov as an individual (passport spelling), governing law the Russian
+  Federation, both in `CLA.md`. The CLA stays inactive, and no outside contribution is accepted, until a lawyer has
+  reviewed it and the CLA Assistant app is set up.
+- 2026-10-25 Decided in the specs (Assumed; the owner can override): record encoding is deterministic CBOR
+  (snapshot-format.md section 6.1); packaging is electron-builder (ADR-0004, option P1); PRD OQ-2 (a removed game's data
+  stays orphaned until deleted) and OQ-3 (plain `http://localhost` and `http://127.0.0.1` only in development and test
+  builds) are decided as proposed (architecture.md section 12).
+- 2026-10-25 `spikes/runtime-compat/` stays in place, labeled THROWAWAY: ADRs and specs link to its results and the
+  Phase 1 H7 re-run uses its method; it is deleted or archived only after the H7 outcome is recorded. Routine, Assumed.
 - Rust is deferred to the local-packages stage. The MVP snapshot codec is TypeScript; a language-neutral spec with
   golden vectors lets a later Rust version pass the same vectors. Go is not adopted in the MVP.
-- English everywhere in the repo, with no exception. Product name **WGLauncher** (owner decision,
-  2026-10-25); codename and repo `wg-launcher`, deep-link scheme `wglauncher`.
-- 2026-10-25 Owner: the Russian concept document was replaced by its English translation
-  `docs/product/sources/concept-v1.0.md`; the language exception and its lint ignores are gone.
+- English everywhere in the repo, no exception. Product name **WGLauncher** (owner, 2026-10-25); codename and repo
+  `wg-launcher`, deep-link scheme `wglauncher`. 2026-10-25 Owner: the Russian concept was replaced by its English
+  translation `docs/product/sources/concept-v1.0.md`; the language exception and its lint ignores are gone.
 - 2026-10-25 Owner: the Phase 1 plan [docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md)
-  is approved; each task starts only on the owner's word. Phase 1 UI is functional only (design and UX come later).
-  Final-review rulings recorded there: M5 (a launch cancels a background storage check, user tasks still give
-  `GAME_BUSY`), M6, M7 (manifest top level not strict, IPC strict), M8, M11, M13.
+  is approved; each task starts only on the owner's word; Phase 1 UI is functional only (design and UX later).
+  Final-review rulings M5 (a launch cancels a background storage check, user tasks still give `GAME_BUSY`), M6, M7
+  (manifest top level not strict, IPC strict), M8, M11 and M13 are recorded there.
 - License model: `AGPL-3.0-or-later` by default, commercial use by separate agreement, CLA for outside contributors,
   future paid features only in one named source-available directory (none exists), trademark policy, core features
-  always free. See `LICENSING.md`. Not legal advice; a lawyer should review before outside contributions.
-- Dependency policy: shipped dependencies permissive only; see `AGENTS.md`.
-- Package manager pinned to `pnpm@12.15.0` (`packageManager` field). Why: in the repo `pnpm -v` switches to 12.15.0 by
-  itself, `pnpm install` and `pnpm install --frozen-lockfile` succeed, and the default `minimumReleaseAge` does not
-  block Electron 45.0.0. Fallback if it misbehaves later: `pnpm@11.7.0`. [V, 2026-10-24, run locally]
-- Quality toolchain (Task 2): Biome for JS, TS, JSON and CSS only; markdownlint-cli2 for Markdown with no line-length
-  rule; secretlint on staged files; commitlint with Conventional Commits plus `spike`; lefthook hooks (pre-commit,
-  commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, and the Playwright suite is the separate
-  `pnpm test:e2e` script of the test game. License gate: production dependencies strict against the AGENTS.md
-  allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
-- Execution style: subagent-driven development; test-first where code exists.
-- 2026-10-28 Owner: the rule "no absolute home paths, local usernames or other machine-specific paths" is enforced by
-  tooling, not only by instructions. `scripts/check-machine-paths.mjs` (`pnpm paths:check`, part of `pnpm check`) runs
-  in the lefthook pre-commit job on staged files and in the CI quality job on all tracked text files. It flags POSIX
-  and Windows home paths, macOS temp roots and (locally only) the current home directory and user name; findings print
-  `file:line:column kind`, never the text. `/home/web_user` (Emscripten IDBFS test path) is the only allowlisted path.
-  The user-name needle is off on CI (`CI=true`): a runner's generic user name would match ordinary words.
-- 2026-10-25 Phase 0 close-out (Task 9): `README.md`, `CONTRIBUTING.md` and the docs index `docs/README.md` exist, and
-  the branch `phase-0-foundation` waits for the owner's review before any merge to `main`.
-- 2026-10-25 Task 3 (`.wgsnap` container, Assumed unless noted): the Node-only container is the package entry
-  `@wg-launcher/snapshot/container` (Ruling R10), never re-exported from `src/index.ts` (a test walks its import graph).
-  zod 4.6.7 (MIT) is a production dependency of `packages/snapshot`. A container verdict found on the compressed bytes
-  is deferred until the bytes before it are decompressed and checked, so the error code does not depend on chunking
-  (snapshot-format.md section 2). Owner ruling R11 (fix round 1): the reader takes the exact compressed size
-  (`validateSnapshot(source, {compressedSize, limits})`), checks it against `maxFileBytes` first, and the ratio limit
-  is max(`ratioFloorBytes`, `maxRatio` × `compressedSize`) tar bytes; a source longer than declared is
-  `SNAP_FILE_TOO_LARGE`, shorter `SNAP_TRUNCATED`. A decompressor error is always `SNAP_ZSTD_INVALID` (R12). Count limits above the manifest's are `SNAP_RECORD_INVALID`, `storageKeys` above
-  `maxStorageKeys` is `SNAP_MANIFEST_INVALID` (section 8). Manifest numbers are safe integers only, so JCS needs no
-  float formatting (section 4).
-- 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): `packages/snapshot/test-vectors/v1/` holds the 31
-  vectors of snapshot-format.md section 10 plus `invalid-truncated-tar` (M6), generated once by
-  `scripts/generate-vectors.ts` and frozen; the runner is `src/vectors.test.ts`, and `test/content.ts` turns
-  `content.json` into data files and back for both. `index.json` is a JSON array of ids. The fixed manifest fields
-  (`VECTOR_FIELDS`: UUIDv7s with the 2026-01-01 timestamp, `createdAt` `2026-01-01T00:00:00.000Z`, exporter
-  `generic-web-storage` 1.0.0) make generation deterministic: two runs gave byte-identical files, zstd included, with
-  Node 24.13.0 [V, 2026-10-28, run locally]. `v1/` is excluded from Biome so the committed JSON stays byte-identical
-  to the generator's `JSON.stringify(value, null, 2)` output. The generator refuses an existing `v1/` without
-  `--overwrite`.
-- Controlled test game (Task 4): `fixtures/test-games/progress-lab`, a pnpm workspace package
-  (`@wg-launcher/fixture-progress-lab`, private) with its own Playwright suite. The interface the spike depends on
-  (server, element ids, `?ephemeral=1`, `/coi/`, `iframe-host.html`, `sw.js`, storage shapes, hash) is in its
-  `README.md`. All timestamps and binary values are synthetic and deterministic, so the hash depends only on the number
-  of steps. `pnpm test:e2e` is separate from `pnpm test` and `pnpm check`; CI runs it on Ubuntu and macOS in bundled
-  Chromium only, the `chrome` project is local only. The server logs each request to stdout because hypothesis H14
-  (variant b) reads a request log.
-- Spike hypotheses are frozen: `spikes/runtime-compat/HYPOTHESES.md` (H1 to H21, thresholds, decision rules) was written
-  on 2026-10-24 before any spike ran. After the first run it changes only through its dated "Amendments" section.
-  Electron is fatal on H1, H2, H3 (both 45 and 44.9.x), H5 (no adapter where Chrome has one, also with the switch), a
-  persistent H6 failure (software renderer) and H7 (p95 > Chrome x 1.15); Tauri must beat a criterion Electron fails;
-  Electron failing a GPU or performance comparison against a valid Chrome baseline means reconsidering Chrome `--app` +
-  CDP. H1 to H6 were measured on Electron 45.0.0; H7 was not, and ADR-0002 was accepted on 2026-10-25 with H7 as a
-  Phase 1 condition (see above).
-- PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; acceptance criteria AC-1 to AC-25
-  each name a test type.
-- Public GitHub repo: <https://github.com/maslakovSaveliy/wg-launcher>. Work happens on branches; merge to `main` only
-  on the owner's approval.
+  always free: `LICENSING.md`, ADR-0006. Not legal advice. Dependency policy: shipped dependencies permissive only
+  (`AGENTS.md`).
+- `pnpm@12.15.0` pinned in `packageManager`: in the repo `pnpm -v` switches to it, `pnpm install` and
+  `--frozen-lockfile` succeed, the default `minimumReleaseAge` does not block Electron 45.0.0. Fallback: `pnpm@11.7.0`.
+  [V, 2026-10-24, run locally]
+- Quality toolchain (Phase 0 Task 2): Biome for JS, TS, JSON and CSS only; markdownlint-cli2 for Markdown, no
+  line-length rule; secretlint on staged files; commitlint with Conventional Commits plus `spike`; lefthook (pre-commit,
+  commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, `pnpm test:e2e` is the fixture's
+  Playwright suite. License gate: production dependencies strict against the allowlist (SPDX `OR`/`AND` understood),
+  dev-only ones warn. Execution style: subagent-driven development, test-first where code exists.
+- 2026-10-28 Owner: "no machine-specific paths" is enforced by `scripts/check-machine-paths.mjs` (`pnpm paths:check`,
+  in `pnpm check`, pre-commit on staged files, CI on all tracked text files); what it flags and the one allowed path
+  `/home/web_user`: AGENTS.md "Commands" and the script header. The user-name needle is off on CI (`CI=true`), because a
+  runner's generic user name would match ordinary words.
+- 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): rulings R10 (Node-only entry
+  `@wg-launcher/snapshot/container`), R11 (exact `compressedSize`, ratio bound), R12 (a decompressor error is always
+  `SNAP_ZSTD_INVALID`), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
+  Task 3. The container entry is never re-exported from `src/index.ts`; zod 4.6.7 (MIT) is a production dependency.
+- 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): layout, the 31 vectors plus `invalid-truncated-tar`
+  (M6), `--overwrite` and freezing: snapshot-format.md section 10, plan Task 4. `VECTOR_FIELDS` in
+  `scripts/generate-vectors.ts` (UUIDv7s at 2026-01-01, `createdAt` `2026-01-01T00:00:00.000Z`, exporter
+  `generic-web-storage` 1.0.0) make generation deterministic: two runs gave byte-identical files, zstd included [V,
+  2026-10-28, Node 24.13.0, run locally]. `v1/` is excluded from Biome so the JSON stays byte-identical to the
+  generator's `JSON.stringify(value, null, 2)`.
+- Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
+  hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
+  "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
+- Spike hypotheses `spikes/runtime-compat/HYPOTHESES.md` (H1 to H21, thresholds, decision rules in section 4) were
+  frozen on 2026-10-24 before any run and change only through its dated "Amendments". Outcomes: RESULTS.md "Summary".
+- PRD (`docs/product/prd.md`) marks each requirement `Owner`, `Concept` or `Assumed`; AC-1 to AC-25 each name a test type.
+- Public repo <https://github.com/maslakovSaveliy/wg-launcher>. Work on branches; merge to `main` only on the owner's
+  approval.
 
 ## Verified facts
 
-### Open-source bases (checked via `gh api`)
+### Where the evidence lives
 
-- [V] itchio/itch: MIT, f5a18100 (2026-10-08), very active, Electron ^44.5.1. Per-game session
-  `persist:gamesession_${game.id}`, custom `itch-cave://` protocol, but `sandbox:false` and `webSecurity:false`; needs
-  butler (Go, MIT) and the itch.io API. <https://github.com/itchio/itch>
-- [V] FlashpointProject/launcher: MIT own code plus bundled third-party (7zip under LGPL), e5f45fc1 (2026-09-28),
-  Electron 19.1.9, no per-game partitions. <https://github.com/FlashpointProject/launcher>
-- [V] arhitekt86/pixens-launcher: MIT, 8a52abbb (2026-05-21), 2 commits total, Electron ^33, one shared session,
-  hard-wired to pixens.io and Supabase. <https://github.com/arhitekt86/pixens-launcher>
-- [V] lutris/web-runner: GPL-3.0 (copy no code), 15bb58c2 (2026-02-24), nearly dormant, Electron 4.2.12.
-  <https://github.com/lutris/web-runner>
-- [V] Ferdium (Apache-2.0, Electron 44.2) uses `persist:service-${id}` per service: the closest pattern to per-card
-  sessions. <https://github.com/ferdium/ferdium-app>
-- [U] None of these has save backup/export/import (inferred from GitHub code search for "backup").
-- [A] Verdict: none is worth forking; reuse ideas only.
+- Open-source bases (itch, Flashpoint, Pixens, web-runner; Ferdium's per-service session), the [U] "none has save
+  export" inference and the [A] "none worth forking" verdict: [foundations.md](docs/research/foundations.md) sections 1
+  to 4; test games and licenses: section 5; licensing precedent (bitwarden, Harmony CLA CC BY 3.0, Contributor Covenant
+  CC BY-SA 4.0): section 6. [V, 2026-10-24, `gh api`]
+- Electron 45 versions and support, its changes, the APIs we rely on, security checklist, fuses, packaging, Playwright's
+  experimental Electron support, known issues: [runtime-and-storage.md](docs/research/runtime-and-storage.md) section 2;
+  Tauri section 3; iOS and Android section 4; save extraction (CDP, isolated worlds, IDBFS, Unity, partitioning, OPFS,
+  export libraries, Node zstd) section 5; packaging and crate versions section 7. [V, 2026-10-24]
+- Runtime spike, Electron 45 (H1 to H16), Chrome (H19), Chrome `--app` (H20), Safari proxy, demos (H21), the Windows CI
+  job not added: [RESULTS.md](spikes/runtime-compat/RESULTS.md) "Summary" and per-hypothesis sections, machine under
+  "Run"; matrix [docs/compat/matrix.md](docs/compat/matrix.md). [V, 2026-10-24, run locally] In short: WebGPU without a
+  switch (H5; Electron 24 features, Chrome 155 and bundled Chromium 23); H12 environment-dependent; H9 and H13 INVALID;
+  H16 FAIL (the renderer lived 27.8 s, until the service worker stopped); H2b SIGKILL lost a persistent cookie only.
 
-### Electron
+### Tooling versions (2026-10-24; the living list runtime-and-storage.md section 7 points to)
 
-- [V] Electron 45.0.0 is npm latest, published 2026-10-21 (Chromium 156.0.8078.48, Node 24.22.0, V8 15.6).
-  46.0.0-alpha.1 on 2026-10-23, stable planned 2027-01-05. <https://releases.electronjs.org/release/v45.0.0>,
-  <https://releases.electronjs.org/schedule>
-- [V] Support covers the latest 3 stable majors (now 45, 44, 43); 42 reached end of life on 2026-10-20; 45 is
-  tentatively supported until 2027-04-27. <https://www.electronjs.org/docs/latest/tutorial/electron-timelines>
-- [V] Electron 45 changes that matter: display/window/tab capture permission requests arrive as `display-capture`;
-  sandboxed preloads lost `Buffer`, `events`, `timers`, `url`; 32-bit builds are gone (x64 and arm64 only).
-- [V] `session.fromPartition('persist:x')` is persistent; without the prefix it is in-memory. `ses.clearStorageData` and
-  `ses.clearData` can target origins and storage kinds. <https://www.electronjs.org/docs/latest/api/session>
-- [V] `setPermissionRequestHandler` also covers pointerLock, fullscreen, keyboardLock and display-capture;
-  `setPermissionCheckHandler` and `setDevicePermissionHandler` exist.
-- [V] BrowserView is deprecated since Electron 29; use WebContentsView.
-- [V] `protocol.handle` replaced the old register/intercept APIs in 25.0.0 and is per session;
-  `registerSchemesAsPrivileged` must run before `ready`, once. <https://www.electronjs.org/docs/latest/api/protocol>
-- [V] macOS `setAsDefaultProtocolClient` works only for schemes declared in Info.plist at build time;
-  `requestSingleInstanceLock(additionalData)` plus `second-instance` exist; register `open-url` before `ready`.
-  <https://www.electronjs.org/docs/latest/api/app>
-- [V] `utilityProcess.fork` exists (after ready), with message ports. `webContents.debugger` and
-  `executeJavaScriptInIsolatedWorld` are documented.
-- [V] Fuses (@electron/fuses 2.1.3): turn off runAsNode, nodeOptions, nodeCliInspect, grantFileProtocolExtraPrivileges;
-  turn on cookieEncryption, embeddedAsarIntegrityValidation (macOS, Windows), onlyLoadAppFromAsar.
-  <https://www.electronjs.org/docs/latest/tutorial/fuses>
-- [V] Security checklist: contextIsolation default since 12, sandbox default since 20; no Node for remote content; keep
-  webSecurity; deny new windows via `setWindowOpenHandler`; never pass untrusted URLs to `shell.openExternal`; validate
-  IPC senders. <https://www.electronjs.org/docs/latest/tutorial/security>
-- [V] Packaging: Electron Forge 8.0.1, electron-builder 26.18.0, electron-vite 6.0.0 (peer vite 6, 7 or 8).
-  <https://www.electronjs.org/docs/latest/tutorial/tutorial-packaging>
-- [V] Playwright's Electron support is experimental. <https://playwright.dev/docs/api/class-electron>
-- [V] WebGPU works without any switch in Electron 45.0.0 on this Mac (spike H5 PASS: adapter `apple`/`metal-3`, device
-  created, compute readback correct; 2026-10-24, [RESULTS.md](spikes/runtime-compat/RESULTS.md) H5). [U] Whether it is on
-  by default on other OSes and GPUs: no Electron doc says so (Chromium ships it on Windows x64 and macOS since 113).
-- [V] Known issues: Electron 41 on macOS broke COOP/COEP cross-origin isolation (#50242), fix merged in PR #50789 on
-  2026-04-30; [U] which versions got the backport. Pointer lock on Wayland #49754 fixed 2026-02. Gamepad with Steam
-  Input #45989 closed. <https://github.com/electron/electron/issues>
-
-### Tauri
-
-- [V] Tauri 2 stable 2.12.5 (crates.io, 2026-10-21). <https://v2.tauri.app/blog/>
-- [V] It uses system webviews: WebView2 (Windows), WKWebView (macOS, iOS), WebKitGTK (Linux), system WebView (Android).
-  <https://v2.tauri.app/reference/webview-versions/>
-- [V] Per-webview data: `data_directory` is unsupported on WKWebView; `data_store_identifier` needs macOS 14 or iOS 17
-  and is unsupported on Windows, Linux and Android.
-  <https://docs.rs/tauri/latest/tauri/webview/struct.WebviewBuilder.html>
-- [V] Several webviews per window need the `unstable` feature (desktop only).
-- [V] WebGPU in WKWebView works on macOS and iOS 26+ per a maintainer (2025-11-24).
-  <https://github.com/tauri-apps/tauri/issues/6381>
-- [V] Tauri 3 with a CEF runtime is alpha only (tauri-v3.0.0-alpha.5, 2026-10-14), with open Linux keyboard and WebGPU
-  issues. Not a candidate. <https://github.com/tauri-apps/tauri/releases>
-- [U] WebGPU in WebKitGTK; COOP/COEP behavior of custom protocols on every OS.
-
-### iOS and Android
-
-- [V] App Store guideline 2.5.6: apps that browse the web must use WebKit; alternative engines only under an entitlement
-  available in the EU and Japan. Guideline 4.7 allows HTML5 mini games under conditions.
-  <https://developer.apple.com/app-store/review/guidelines/>
-- [A] Desktop Chromium code cannot reach iOS; an iOS client would use WKWebView and behave differently. Android
-  WebView is Chromium-based.
-
-### Save extraction
-
-- [V] The CDP IndexedDB domain (experimental) can read and delete but has no put/add: it cannot restore data.
-  <https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/pdl/domains/IndexedDB.pdl>
-- [V] CDP DOMStorage can get/set/remove/clear localStorage items as strings; the CDP Storage domain can return the
-  storage key and clear data per origin or storage key. (Same repository, `DOMStorage.pdl`, `Storage.pdl`.)
-- [V] `webFrame.executeJavaScriptInIsolatedWorld(worldId, scripts)`: world 0 is the page, 999 is Electron's context
-  isolation world; if the script throws, the promise resolves with `undefined`.
-  <https://www.electronjs.org/docs/latest/api/web-frame>
-- [V] Storage calls from an isolated world hit the host page's data, so an isolated-world exporter can use the real
-  IndexedDB API with full structured clone.
-  <https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies>
-- [V] Emscripten IDBFS: object store `FILE_DATA`, DB version 21, key is the absolute path, value
-  `{timestamp: Date, mode, contents: Uint8Array}` (or `link`); the in-memory FS is the truth while running,
-  `syncfs(false)` writes it back.
-  <https://raw.githubusercontent.com/emscripten-core/emscripten/main/src/lib/libidbfs.js>
-- [V] Unity WebGL stores PlayerPrefs (up to 1 MB) in IndexedDB.
-  <https://docs.unity3d.com/ScriptReference/PlayerPrefs.html>
-  [U] Its path contains the build hash and changes per build (community report).
-- [V] Since Chrome 115 third-party iframe storage is keyed by the iframe origin plus the top-level site, so a snapshot
-  must record the full storage key. <https://developer.chrome.com/docs/privacy-sandbox/storage-partitioning>
-- [U] OPFS has no CDP domain; reading it needs an in-page script.
-- [V] dexie-export-import 4.4.2 (Apache-2.0) handles Date, ArrayBuffer, Blob via typeson; indexeddb-export-import 2.2.0
-  (MIT) is JSON-only and unsuitable.
-- [V] Node 24.13 on the dev machine has `zlib.zstdCompressSync`; Electron 45 ships Node 24.22.
-
-### Test games (licenses via `gh api`)
-
-- [V] 2048 (MIT, localStorage), A Dark Room (MPL-2.0, localStorage with built-in export), OpenTTD web (GPL-2.0, IDBFS:
-  external test URL only, never vendored), three.js (MIT), Babylon.js (Apache-2.0), webgpu-samples (BSD-3-Clause) for
-  GPU checks.
-- [U] doom-wasm has no IDBFS save; Sandspiel uses only localStorage; OpenTTD likely needs extra graphics assets.
-
-### Tooling versions (npm and cargo, 2026-10-24)
-
-- [V] electron 45.0.0, electron-vite 6.0.0, vite 8.3.5, react 19.3.1, typescript 7.0.2 (latest; 6.0.3 is the last 6.x),
+- [V] electron 45.0.0, electron-vite 6.0.0, vite 8.3.5, react 19.3.1, typescript 7.0.2 (6.0.3 is the last 6.x),
   @biomejs/biome 2.6.2, vitest 5.0.5, @playwright/test 1.64.1, zod 4.6.7, lefthook 2.2.2, @commitlint/cli 21.2.4,
-  secretlint 13.0.7, markdownlint-cli2 0.24.0, @types/node 24.19.2 (24.x line), pnpm 12.15.0 (latest). All installed
-  at exactly these versions in Task 2.
-- [V] Biome 2.6.2 also formats Markdown and YAML by default: `biome check .` rewrote the tables in `AGENTS.md`, and
-  its config schema has `markdown`, `yaml`, `html` and `graphql` sections (checked 2026-10-24 by running it). An earlier
-  note that Biome has no Markdown support was wrong. `biome.json` therefore whitelists JS, TS, JSON and CSS file
-  extensions in `files.includes`, and markdownlint-cli2 owns Markdown.
-- [V] `node:sqlite` is release candidate since Node 25.7 and needs no flag since 22.13. [U] Its stability label in
-  Node 24.22. <https://nodejs.org/api/sqlite.html>
-- [V] `pnpm licenses list --json` (pnpm 12.15.0) prints `{"<license string>": [{name, versions[], paths[], license,
-  author, homepage, description}]}`; `--prod` and `--dev` select the scope. License strings can be SPDX expressions
-  such as `(MIT OR CC0-1.0)` or `MIT OR Apache-2.0`. `paths` are absolute machine paths: never print them. Without
-  `--recursive` it reports only the root importer: in a scratch workspace the root gave `{}` while `--recursive` listed
-  the member's dependencies. `scripts/check-licenses.mjs` therefore passes `--recursive`. [U] What pnpm prints for a
-  package with no license field (the script treats missing, empty and `Unknown` alike). (2026-10-24, run locally)
-- [V] TypeScript 7.0.2 works with the whole toolchain, so there is no fallback to 6.0.3: `tsc -b` type-checks `.ts` and
+  secretlint 13.0.7, markdownlint-cli2 0.24.0, @types/node 24.19.2 (24.x line), pnpm 12.15.0; installed exactly so.
+- [V, run locally] TypeScript 7.0.2 works with the whole toolchain, no fallback to 6.0.3: `tsc -b` checks `.ts` and
   checked `.mjs` (`allowJs`, `checkJs`) with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and
-  `verbatimModuleSyntax` on, and fails on a deliberate type error; vitest 5.0.5, Biome 2.6.2, commitlint 21.2.4
-  (`.mjs` config), secretlint 13.0.7 and markdownlint-cli2 0.24.0 run on Node 24.13. TS 7 ships as a native binary (an
-  optional `@typescript/typescript-<platform>` package). (2026-10-24, run locally)
+  `verbatimModuleSyntax`, and fails on a deliberate type error; Vitest, Biome, commitlint (`.mjs` config), secretlint and
+  markdownlint-cli2 run on Node 24.13. TS 7 is a native binary (optional `@typescript/typescript-<platform>` package).
+- [V, run locally] Biome 2.6.2 also formats Markdown and YAML by default (`biome check .` rewrote `AGENTS.md` tables; its
+  schema has `markdown`, `yaml`, `html`, `graphql`), so `biome.json` whitelists JS, TS, JSON and CSS in `files.includes`.
+- [V] `node:sqlite` is release candidate since Node 25.7, needs no flag since 22.13
+  (<https://nodejs.org/api/sqlite.html>), and runs in Electron 45 main and `utilityProcess` without a warning (RESULTS.md H10).
 
-### Test fixture (progress-lab, 2026-10-24, run locally)
+### Test fixture and record layer
 
-- [V] Playwright 1.64.1 launches Chromium with `ThirdPartyStoragePartitioning` in `--disable-features`
-  (`chromiumSwitches`, linked to playwright issue 32230; the Electron loader lists it too), so a cross-site iframe
-  shares storage with the top-level page. Bundled Chromium 156.0.8078.4 and installed Chrome 155.0.8059.85, both
-  driven by Playwright, showed exactly that: the iframe on `127.0.0.1` inside a `localhost` page saw the top-level
-  progress. Adding `--enable-features=ThirdPartyStoragePartitioning` changed nothing (disable wins); a later
-  `--disable-features=Translate` argument replaces Playwright's list (last switch wins) and partitions storage in both
-  browsers. [V] `_electron.launch` has the same effect in Electron 45 (cross-site iframe storage shared); a normal
-  launch partitions. Re-appending `disable-features` without that entry in the app's main process restores
-  partitioning under Playwright (Task 5 spike, `spikes/runtime-compat/RESULTS.md` H11).
-- [V] `localhost` and `127.0.0.1` count as different sites for storage partitioning in Chromium 156 and Chrome 155.
-- [V] IndexedDB `clear()` on an `autoIncrement` store does not reset its key generator (keys 1, 2, clear, next add is 3 in
-  Chromium 156); deleting the database does. A snapshot format has to say how it handles the generator.
-- [V] The 14 fixture tests pass three times in a row in both Playwright projects (84 runs): bundled Chromium 156.0.8078.4
-  and the installed Google Chrome 155.0.8059.85 (`channel: "chrome"`).
+- [V, 2026-10-24, run locally] The 14 fixture tests pass three times in a row in both Playwright projects (84 runs):
+  bundled Chromium 156.0.8078.4 and installed Chrome 155.0.8059.85. `localhost` and `127.0.0.1` are different sites
+  for partitioning in both (fixture README "Server"); `clear()` does not reset an `autoIncrement` key generator, deleting
+  the database does (README "Storage shapes", snapshot-format.md section 7.5).
+- [V, 2026-10-25, Node 24.13.0, `node -e`] Node 24 has `DataView` `setFloat16`/`getFloat16`, `Float16Array`,
+  `Math.f16round` (V8 `--js-float16array`, on by default) and `String.prototype.isWellFormed`; `Blob`, `File`,
+  `crypto.subtle` are globals. TypeScript 7.0.2 types Float16 only with lib `ES2025.Float16` (added in
+  `packages/snapshot/tsconfig.json`). [A] Chromium 156 has them too (Float16 shipped in Chrome 135; not run in Electron).
+- [V, 2026-10-25, Node 24.13.0, `node -e`; basis of snapshot-format.md section 6.3] V8 enumerates array indexes
+  (canonical decimal up to 2^32 − 2, `"4294967294"`) first, ascending, then other keys in insertion order
+  (`"4294967295"`, `"01"` are ordinary keys); `Map`/`Set` store `-0` as `+0`; `new RegExp("a/b").source` is `a\/b`,
+  `new RegExp("").source` `(?:)`, `/a/gimsuyd.flags` `dgimsuy`; `Blob` lowercases `type` and empties one outside
+  printable ASCII; `new File(["x"], "\ud800").name` is U+FFFD; `lastModified: -0` stays `-0`, `2 ** 60` stays unsafe
+  (value.test.ts); `Object.prototype.toString` of a class instance is `[object Object]`, so error details never name
+  the class.
+- Record-layer decisions (Assumed): depth counting, keys and values at depth 1, `keyGenerator` 2^53 as `fa 5a000000`,
+  view plus buffer as `EXP_SHARED_REFERENCE`, and controller rulings R7 and R9 (RegExp source never canonicalized, flags
+  checked, a non-compiling source is `SNAP_RECORD_INVALID`; File `lastModified` `-0` or above 2^53 − 1 is
+  `EXP_UNSUPPORTED_VALUE`): snapshot-format.md sections 6.2, 6.3 and 7. API choices (`onBlob` once per value, caller
+  deduplicates; `encodeLocalStorage` gives `null` for no items; `encode*` sort and throw `TypeError` on duplicates or a
+  schema the reader would refuse) are in the comments of `src/record/value.ts` and `src/record/data-files.ts`.
+- [V, 2026-10-25, pnpm 12.15.0, scratch workspace and this repository] `pnpm licenses list --prod --recursive --json`
+  lists neither our `AGPL-3.0-or-later` workspace packages nor hides their dependencies, so `pnpm licenses:check` passes;
+  [A] a later pnpm may list them, so the gate exempts a member only while its license is exactly `AGPL-3.0-or-later`
+  (unit-tested). Full record: ADR-0004 "Action items".
 
-### Runtime spike, Electron 45 (Task 5; run locally, `spikes/runtime-compat/RESULTS.md`)
+### Cursor rules and dev machine
 
-- [V] Dev machine is a MacBook Air M3 (`Mac15,12`, fanless), built-in display 60 Hz.
-- [V] Electron 45.0.0 here: partitions isolated and persistent across `app.quit()` (H1, H2); `crossOriginIsolated`
-  with server or `onHeadersReceived` headers (H3, H4); WebGPU adapter, device and compute without switches (H5); WebGL2
-  on ANGLE Metal (H6); `node:sqlite` (SQLite 3.53.4) and zstd in main and `utilityProcess` with no warning (H10);
-  Playwright `_electron.launch` (H11); quiescent export and restore of progress-lab in four variants (H14); packaged
-  ad-hoc-signed deep link with one instance (H15). H7 is deferred to Phase 1 (owner decision 2026-10-25).
-- [V] H12 is environment-dependent. Full run: microphone `getUserMedia` stalled 8 s and never reached
-  `setPermissionRequestHandler` (FAIL). Rerun after the owner allowed the macOS microphone prompt
-  (`getMediaAccessStatus` `granted`): it reached the handler and was denied (PASS). [A] Cause: Chromium touches the
-  audio device, and so macOS TCC, before asking the embedder; the TCC log does not prove it. [V] TCC names the app that
-  launched the runner (`com.anthropic.claude-code`) as responsible for the dev Electron process.
-- [V] H13 INVALID: `navigator.keyboard.lock()` resolves without a gesture; injected mouse and key input grant gestures;
-  `requestPointerLock()` right after `requestFullscreen()` in one handler fails ("A user gesture is required") but works
-  alone or first. [A] Cause: `requestFullscreen()` consumes the transient activation.
-- [V] H16 FAIL: a closed game window's renderer was still alive 5 s after the close and exited 27.8 s after it, at the
-  moment the session reported no running service worker; 5 s after the app quit no process of the bundle remained
-  (RESULTS.md H16). [A] Cause: the game's service worker keeps that renderer alive until it stops; the coincidence in
-  time does not prove it. H9 is INVALID in all three attempts (the window was hidden and unfocused because the machine
-  was in use); its rerun is deferred to Phase 1.
-- [V] After SIGKILL 5 s after writes, a persistent cookie was lost; localStorage, IndexedDB, Cache Storage and OPFS kept.
-- [V] Quiescent export: `ses.protocol.handle("http")` stub at the game origin plus CDP `Network.setBypassServiceWorker`
-  keeps a registered service worker out of a top-level stub navigation; without the bypass the worker controls the
-  stub (control run). In the cross-site iframe variant the partitioned worker was registered yet the iframe stub had no
-  controller and no worker start; [A] that the page-level bypass covers subframes (no no-bypass iframe control was run).
-  The fixture request log cannot tell bypass from no bypass (0 requests both ways); the CDP canary can.
-- [V] Electron's `WebFrameMain` has no isolated-world execution; for a subframe use a preload
-  (`nodeIntegrationInSubFrames`) calling `webFrame.executeJavaScriptInIsolatedWorld`.
-- [V] Restoring `autoIncrement` records with explicit keys 1 to 7 advances the key generator: the next `add` gets 8.
-- [V] Partitioned iframe storage key `http://127.0.0.1:4417/^0http://localhost`; `ses.clearStorageData({origin})` does
-  not clear it, CDP `Storage.clearDataForStorageKey` does; `ses.clearStorageData()` without options clears everything.
-
-### Runtime spike, Chrome, Safari proxy, demos (Task 6, non-timing part; run locally 2026-10-24, `spikes/runtime-compat/RESULTS.md`)
-
-- Owner decision (2026-10-25): the hands-off timing runs (H7 frame time against Chrome, the Chrome side of H8, the H9 rerun,
-  H20-6, the demo frame samples) are deferred to Phase 1 and will be measured on the real launcher against Chrome. They are
-  "deferred", not N/A or INVALID; the Electron numbers from Task 5 stay as reported. `run-timing.mjs` was wiring-checked only
-  and never run for a result.
-- Tauri was not built (owner-approved scope change): decision-irrelevant because Tauri can only win by passing a criterion
-  Electron fails and cannot replace H7. [A] WKWebView has no CDP, so ADR-0005's save transfer would not work there
-  (reasoning in `docs/research/runtime-and-storage.md` section 3; not tested, section 9). H17 and H18 are N/A. A Windows
-  CI job was not added: the runner's process accounting is macOS-only and [V, 2026-10-25, GitHub Actions events reference] a
-  `workflow_dispatch` file must be on the default branch to run, and merging to `main` was out of scope.
-- [V] Installed Chrome is 155.0.8059.85, Electron 45's Chromium is 156.0.8078.48 (version mismatch, Chrome not updated);
-  Playwright's bundled Chromium is 156.0.8078.4. All three give hardware WebGL2 (`ANGLE Metal Renderer: Apple M3`), WebGPU
-  adapter `apple`/`metal-3`, `crossOriginIsolated` on `/coi/`. WebGPU features: Chrome and bundled Chromium 23, Electron 24 (the
-  extra one is `texture-compression-unaligned`; cause not investigated); the 36 adapter limits are identical.
-- [V] Safari 27.0.1 (WebKit proxy, not WKWebView): WebGPU adapter `apple`/`apple` with 21 features and a working compute pass,
-  WebGL2 `Apple GPU`, `crossOriginIsolated` true on `/coi/`, OPFS `createWritable` works, `AudioContext` stays suspended without a
-  gesture. Safari's AppleScript lets a script close its own tabs (`tabs of window` indexes shift: iterate backwards).
-- [V] Chrome `--app=<url> --user-data-dir=<dir>`: two profiles are isolated and persistent across `Browser.close` (5 of 5 runs),
-  the browser UI is 32 px high in 5 of 5 runs against 87 px for a normal window (one screenshot, read once by the agent, showed a
-  title bar only), CDP reads storage but cannot write it. The closed window's renderer exits 3.1 to 5.9 s after the close (the
-  Assumed 5 s threshold falls inside the spread: PASS in 2, FAIL in 3 of 5 runs), and the Chrome
-  process keeps running after its last window closes, so a launcher must quit it. A fresh profile showed a Google Translate bubble
-  in the app window.
-- [V] Public demos (webgpu-samples helloTriangle, cubemap, computeBoids; three.js webgl_animation_keyframes, webgl_shadowmap,
-  webgpu_compute_birds) load in Electron 45 and Chrome 155 with WebGPU used where the page uses it and no Electron-only failure;
-  the only console-error difference is Chrome's `/favicon.ico` 404.
-
-### Workspace packages and the license gate (Phase 1 Task 1, 2026-10-25)
-
-- [V, 2026-10-25, scratch workspace outside the repo, pnpm 12.15.0: package A depends on package B through
-  `workspace:*`, both private and `AGPL-3.0-or-later`, B depends on `ms@2.1.3`;
-  `pnpm licenses list --prod --recursive --json`] pnpm lists only `ms` (group `MIT`, entry keys `name`, `versions`,
-  `paths`, `license`, `homepage`, `description`). Neither A nor B appears, in `--prod` or `--dev`, and the dependency of
-  the workspace package is not hidden. Without `--recursive` the same call printed `{}`. The repository itself behaves the
-  same: after adding `packages/shared` (and with the AGPL fixture package) no `@wg-launcher/*` or `wg-launcher` entry is
-  listed and `pnpm licenses:check` passes. [A] A later pnpm may list workspace members, so the gate also reads their
-  names (`pnpm ls -r --depth -1 --json`, names only) and exempts a member only while its license is exactly
-  `AGPL-3.0-or-later`; a GPL dependency of a member and a member with another license still fail (unit-tested).
-
-### Snapshot record layer (Phase 1 Task 2, 2026-10-25)
-
-- [V, 2026-10-25, Node 24.13.0, `node -e` run locally] Node 24 has `DataView.prototype.setFloat16` and `getFloat16`,
-  `Float16Array`, `Math.f16round` (V8 flag `--js-float16array`, on by default) and `String.prototype.isWellFormed`;
-  `Blob`, `File` and `crypto.subtle` are globals. TypeScript 7.0.2 types Float16 only with the lib `ES2025.Float16`
-  (`lib.es2025.float16.d.ts`), which `packages/snapshot/tsconfig.json` adds to `ES2024`. [A] Chromium 156 (Electron 45)
-  has them too (Float16 shipped in Chrome 135; not run in Electron here).
-- [V, 2026-10-25, Node 24.13.0, `node -e`] V8 enumerates own keys of plain objects and arrays with array indexes
-  (canonical decimal up to 2^32 − 2, so `"4294967294"`) first in ascending order, then other keys in insertion order
-  (`"4294967295"` and `"01"` are ordinary keys); `new Map([[-0, 1]])` and `new Set([-0])` store `+0`;
-  `new RegExp("a/b").source` is `a\/b` and `new RegExp("").source` is `(?:)`; `/a/gimsuyd.flags` is `dgimsuy`.
-- [V, 2026-10-25, Node 24.13.0, `node -e`] Node's `Blob` lowercases `type` (`TEXT/Plain` becomes `text/plain`) and
-  empties a type with a character outside printable ASCII; `new File(["x"], "\ud800").name` is U+FFFD (the name is a
-  USVString). `Object.prototype.toString` of a class instance is `[object Object]`, so `EXP_UNSUPPORTED_VALUE` details
-  of class instances do not name the class.
-- Decisions (Assumed, recorded in snapshot-format.md sections 6.2, 6.3 and 7): depth counts arrays and maps, not tags,
-  and a tag's content is never a tag; record keys and values sit at depth 1; `toItem` calls `onBlob` once per Blob or
-  File value and the caller deduplicates hashes; `encodeLocalStorage` returns `null` for no items (no file) and the
-  decoder refuses an empty file; `encodeStoreRecords` and `encodeLocalStorage` sort and throw `TypeError` on duplicate
-  keys; `encodeSchema` re-decodes its own output and throws `TypeError` on a schema the reader would refuse;
-  `keyGenerator` 2^53 is the float `fa 5a000000`; a view and its buffer reached twice is `EXP_SHARED_REFERENCE`.
-- 2026-10-25 Controller rulings R7 and R9 (Task 2 fix round): readers never compile or canonicalize a RegExp source
-  (only the flags are checked: ordered subset of `dgimsuvy`, not both `u` and `v`); `fromItem` turns a source that does
-  not compile into `SNAP_RECORD_INVALID`. A File with `lastModified` `-0` or above 2^53 − 1 is `EXP_UNSUPPORTED_VALUE`
-  at export, because the reader requires an integer. [V, 2026-10-25, Node 24.13.0] `new File(["x"], "a",
-  {lastModified: -0}).lastModified` stays `-0` and `2 ** 60` stays unsafe (value.test.ts).
-
-### Licensing precedent
-
-- [V] bitwarden/server uses AGPL-3.0 as the default license and a separate source-available license only for the
-  `bitwarden_license` directory, with a separate trademark policy (LICENSE.txt via `gh api`).
-- [V] The Harmony HA-CLA-I template is published under CC BY 3.0 (<https://www.harmonyagreements.org/>); Contributor
-  Covenant 3.0 is licensed CC BY-SA 4.0 (<https://www.contributor-covenant.org/version/3/0/>).
-
-### Cursor rules
-
-- [V] Project rules live in `.cursor/rules/*.mdc` with frontmatter `description`, `globs`, `alwaysApply`; Cursor reads
+- [V] Project rules are `.cursor/rules/*.mdc` with frontmatter `description`, `globs`, `alwaysApply`; Cursor reads
   `AGENTS.md` natively. <https://cursor.com/docs/context/rules>
-
-### Dev machine
-
-- [V] macOS 27.0.1 on arm64 (Apple M3, Metal 4); Node 24.13.0 via nvm; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0;
-  Google Chrome and Xcode installed. A global Biome and a Homebrew lefthook 2.1.15 also exist.
-- [V] No Windows or Linux machine is available, so those platforms are **unverified** until CI or a real run says
-  otherwise.
+- [V] Dev machine: macOS 27.0.1 on arm64 (MacBook Air M3 `Mac15,12`, fanless, Metal 4, 60 Hz display); Node 24.13.0 via
+  nvm; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
+  lefthook 2.1.15. No Windows or Linux machine: those platforms are **unverified** until CI or a real run says otherwise.
 
 ## Gotchas
 
-- pnpm 11+ skips dependency build scripts unless the package is listed in `allowBuilds` in `pnpm-workspace.yaml`
-  (`strictDepBuilds` makes it an error, `ERR_PNPM_IGNORED_BUILDS`). Electron's binary download, esbuild and lefthook
-  need entries. [V, pnpm 12.11 docs, 2026-10-24]
-- pnpm 11+ reads only auth and registry settings from `.npmrc`; other settings go in `pnpm-workspace.yaml` in camelCase.
-  [V, 2026-10-24: `save-exact` in `.npmrc` was ignored, `saveExact` in the YAML worked with pnpm 12.15.0]
-- pnpm 11+ defaults `minimumReleaseAge` to 1440 minutes, so a version younger than a day cannot be installed. Electron
-  45.0.0 (published 2026-10-21) resolved fine. [V, 2026-10-24]
-- pnpm switches itself to the version in `packageManager` inside the repo (`pnpm -v` prints 11.7.0 outside it, 12.15.0
-  inside) and records it in `pnpm-lock.yaml`. [V, 2026-10-24]
-- Hooks and scripts must call tools through `pnpm exec`, because a global Biome and a Homebrew lefthook exist on the dev
-  machine and can drift from the project versions.
+### pnpm and the toolchain
+
+- pnpm 11+ skips dependency build scripts unless listed in `allowBuilds` in `pnpm-workspace.yaml` (`strictDepBuilds`:
+  `ERR_PNPM_IGNORED_BUILDS`); Electron's binary download and lefthook need entries (`allowBuilds: {lefthook: true}` works
+  in 12.15.0; without it `pnpm add` fails and writes no placeholder). Vitest 5 uses rolldown, so esbuild needs no entry.
+  [V, 2026-10-24, pnpm 12.11 docs and a 12.15.0 run]
+- pnpm 11+ reads only auth and registry settings from `.npmrc`; others go in `pnpm-workspace.yaml` in camelCase. [V,
+  2026-10-24: `save-exact` in `.npmrc` ignored, `saveExact` in the YAML worked]
+- pnpm 11+ defaults `minimumReleaseAge` to 1440 minutes: a version younger than a day cannot be installed. pnpm switches
+  itself to `packageManager`'s version inside the repo (`pnpm -v` 11.7.0 outside, 12.15.0 inside) and records it in
+  `pnpm-lock.yaml`. [V, 2026-10-24]
+- The `packages` glob `fixtures/*` matches one level only; `fixtures/test-games/<name>` needs `fixtures/*/*` or the
+  explicit `fixtures/test-games/*` (used). [V, 2026-10-24, pnpm 12.15.0]
+- pnpm JSON output carries absolute machine paths: read names only, never print paths. [V, 2026-10-24 and 2026-10-25,
+  pnpm 12.15.0, scratch workspaces] `pnpm licenses list --json` gives `{"<license string>": [{name, versions[], paths[],
+  license, author, homepage, description}]}`, `--prod`/`--dev` pick the scope, strings can be SPDX expressions such as
+  `(MIT OR CC0-1.0)`, and without `--recursive` only the root importer is reported (`{}`), so `check-licenses.mjs` passes
+  `--recursive`. `pnpm ls -r --depth -1 --json` lists the root project too (`wg-launcher`). `pnpm ls --prod --depth
+  Infinity --json` lists projects whose `dependencies` map names to `{from, version, resolved?, path, dependencies?}`
+  (plus `optionalDependencies`), workspace dependencies as `link:...`, no dev-only packages. [U] What pnpm prints for a
+  package without a license field (the script treats missing, empty and `Unknown` alike).
+- A new workspace package without dependencies adds nothing to `pnpm-lock.yaml`; `pnpm install` says "Already up to
+  date". [V, 2026-10-25, pnpm 12.15.0]
+- Call tools through `pnpm exec` in hooks and scripts: a global Biome and a Homebrew lefthook on the dev machine drift.
+  lefthook's postinstall writes a commented-out `lefthook.yml` if none exists and installs hooks that prefer a `lefthook`
+  on `PATH`, so git runs Homebrew 2.1.15 here, not 2.2.2; `min_version` is `2.1.15` (tested with both). [V, 2026-10-24]
+- lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the Biome
+  fix. [U] not tested here
 - nvm reads `.nvmrc` (`nvm use`); `24` resolves to the newest installed Node 24.
-- Electron approves every permission request unless a handler denies it.
-- CDP IndexedDB is read/delete only, so restore cannot use CDP.
-- `LICENSE` must stay the unmodified canonical AGPL text for GitHub to detect the license.
-- `.gitattributes` forces LF so format checks behave the same on Windows checkouts.
-- Contributor Covenant 3.0 is CC BY-SA 4.0, not CC BY 4.0; `CODE_OF_CONDUCT.md` keeps that attribution.
-- The `packages` glob `fixtures/*` matches only one directory level; a package at `fixtures/test-games/<name>` needs
-  `fixtures/*/*` or the explicit `fixtures/test-games/*`, which `pnpm-workspace.yaml` now uses. [V, 2026-10-24, tested
-  with pnpm 12.15.0]
-- `tsc -b` with `references` needs `composite: true` and refuses `noEmit` (TS6306, TS6310), which the base config sets.
-  The root `typecheck` script therefore lists the projects instead: `tsc -b . fixtures/test-games/progress-lab`; a new
-  `tsconfig.json` outside the root one must be added there. [V, 2026-10-24, TypeScript 7.0.2]
-- Biome 2.6's `usePlaywrightValidDescribeCallback` flags any call to a function named `describe`, even a local helper.
-  [V, 2026-10-24]
-- `@playwright/test` `webServer.port` is deprecated; use `url`. `pnpm test:e2e --project=chromium` forwards the
-  arguments to Playwright. `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so
-  traversal tests use `node:http`. [V, 2026-10-24]
-- `spike` is not a Conventional Commits type in `@commitlint/config-conventional`; `commitlint.config.mjs` adds it to
-  the preset's list. [V, 2026-10-24: `spike: ...` accepted, `wip: ...` and `Spike: ...` rejected]
-- `allowBuilds: {lefthook: true}` in `pnpm-workspace.yaml` is the working build-allowlist key in pnpm 12.15.0. Without
-  it `pnpm add` fails with `ERR_PNPM_IGNORED_BUILDS` and no placeholder entry is written. Vitest 5 uses rolldown, so
-  esbuild is not installed and needs no entry. [V, 2026-10-24]
-- lefthook's postinstall creates a commented-out default `lefthook.yml` when none exists, and installs the hooks. The
-  generated hook script prefers a `lefthook` on `PATH` over `node_modules`, so on this machine git runs the Homebrew
-  2.1.15, not the project's 2.2.2. `min_version` is therefore `2.1.15` (config tested with both). [V, 2026-10-24]
-- markdownlint-cli2 appends the config `globs` to command-line globs, so `.markdownlint-cli2.jsonc` has none: the
-  `docs:lint` script passes `"**/*.md"` and the pre-commit hook passes the staged files. `gitignore: true` skips
-  ignored paths such as `.superpowers/`. MD013 (line length) is off, MD041 is off only for the pull request template,
-  and MD004, MD022 and MD032 are off only under `docs/plans/` (compact plan layout). [V, 2026-10-24]
-- Biome 2.6 deprecates `linter.rules.recommended`; use `linter.rules.preset: "recommended"`. [V, 2026-10-24]
-- `webContents.debugger` commands (even `Network.enable`) hang on a window that never navigated: load `about:blank`
-  first. `app.getGPUFeatureStatus()` right after `ready` says everything is disabled until `app.getGPUInfo("complete")`
-  or a first render. [V, 2026-10-24, Electron 45 spike]
-- Frame timing on the dev Mac: [V, 2026-10-24, Electron 45 spike, RESULTS.md "Findings and gotchas"] a locked screen puts
-  `loginwindow` in front and no window can be focused. With `--disable-gpu-vsync --disable-frame-rate-limit` the uncapped
-  launches took 38.5, 37.4 and 63.5 s instead of about 23 s (15 to 41 s of work after the page had finished), and a dev
-  run that interleaved uncapped with capped runs gave a capped p95 of 34.2 and 33.3 ms against 18.6 ms with cooldowns and
-  no interleaving (those dev runs are not committed). [A] Cause: uncapped Chromium queues GPU work (heat is possible; `pmset -g therm` recorded no
-  warning); keep cooldowns and do not interleave.
-- The prebuilt Electron 45.0.0 app's `Info.plist` ships five usage descriptions: `NSCameraUsageDescription`,
-  `NSMicrophoneUsageDescription`, `NSAudioCaptureUsageDescription` and two Bluetooth ones. [V, 2026-10-25, `plutil -p` on
-  `Electron.app/Contents/Info.plist` of `electron@45.0.0` in the spike's `node_modules`] The packaged launcher must not
-  ship them (security.md section 5). electron-vite's example `electron-builder.yml` adds the camera and microphone
-  ones, so do not copy it as is. [V, 2026-10-25, electron-vite docs "Distribution", as recorded in ADR-0004]
-- `app.setAsDefaultProtocolClient` leaves a LaunchServices handler preference (an `LSHandlers` entry in
-  `~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist`) that outlives `lsregister -u`
-  and the deleted app. [V, 2026-10-24, Electron 45 spike]
-- In zsh, `log` is a shell builtin: call the macOS unified log as `/usr/bin/log`. [V, 2026-10-24]
-- lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the
-  Biome fix. [U] not tested here
-- CDP `IndexedDB.requestData` fails with "Could not get index" when `indexName` is an empty string; leave the parameter out to
-  read the object store (Chrome 155). A stale `DevToolsActivePort` file in a reused user-data directory names a dead port: delete
-  it before relaunching Chrome with `--remote-debugging-port=0`. [V, 2026-10-24, Task 6 spike]
-- Playwright launches Chrome headed but `viewport: null` plus `Browser.setWindowBounds` over CDP is needed to get an exact
-  1280 x 720 CSS-pixel viewport at the native scale factor; `Page.bringToFront` is enough to get focus. [V, 2026-10-24]
-- `TextDecoder` drops a leading U+FEFF unless it is built with `ignoreBOM: true`: decoding `ef bb bf 61` gave one
-  character by default and two with the option. The CBOR decoder uses `{fatal: true, ignoreBOM: true}`, because text
-  is never altered (snapshot-format.md section 6.2 rule 4). [V, 2026-10-25, Node 24.13.0, `node -e`]
-- `pnpm exec biome check --write` also reformats JSON test vectors (line breaks only); the hex strings stay as written.
-  [V, 2026-10-25, Biome 2.6.2]
-- In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
-- Running a TypeScript file of this repo with plain `node` (Node 24.13.0) fails twice: strip-only mode refuses
-  parameter properties (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`, `constructor(readonly original)` in
-  `src/container/inflate.ts`), and Node does not map the `.js` import specifiers to their `.ts` files
-  (`ERR_MODULE_NOT_FOUND`). `scripts/generate-vectors.ts` therefore runs with `--experimental-transform-types` (prints
-  an ExperimentalWarning) and registers a `module.registerHooks` resolve fallback from `.js` to `.ts` before it imports
-  the project modules dynamically; no dependency is needed. [V, 2026-10-28, Node 24.13.0, run locally]
-- Node's zstd does not report a truncated frame: a checksummed frame cut by 6 bytes decompressed without an error through
-  `zlib.zstdDecompressSync` and through `zlib.createZstdDecompress` (the stream just ended). So the `.wgsnap` reader
-  detects truncation itself (Phase 1 plan, M6). [V, 2026-10-25, Node 24.13.0, `node -e` run locally] Done by
-  `ZstdFrameWalker` in `packages/snapshot/src/container/zstd-frame.ts` (Task 3).
-- Node's streaming zstd compressor can write a second, empty frame (`28b52ffd 24 00 01 00 00` plus a checksum) after
-  the real one: `lib/zlib.js` gives the finish flag (`ZSTD_e_end`) to a chunk that is still queued when `end()` is
-  called, and `_flush` then sends another finish, which zstd answers with a new frame. Three chunks piped from
-  `Readable.from` gave two frames; awaiting each `write()` callback before `end()` gave one. The `.wgsnap` writer does
-  the latter. [V, 2026-10-25, Node 24.13.0, scratch script and `lib/zlib.js` of v24.13.0 (`_flush`, `_transform`)]
-- Node's zstd decompressor reports a wrong content checksum as an error with code `ZSTD_error_checksum_wrong` (errno 22,
-  "Restored data doesn't match checksum"), through `zstdDecompressSync` and `createZstdDecompress` alike.
-  `zstdCompressSync` writes a single-segment frame with the content size (descriptor `0xa4` for 300 000 bytes with the
-  checksum on); the streaming compressor writes a window descriptor instead (descriptor `0x04`, window byte `0x58`,
-  2^21). [V, 2026-10-25, Node 24.13.0, `node` scratch script]
-- License gate versus bundling: `scripts/check-licenses.mjs` fails only on production dependencies, while electron-vite
-  bundles renderer `dependencies` and its docs recommend renderer-only packages as `devDependencies`, so a bundled
-  library kept there would escape the gate. Rule (AGENTS.md): everything bundled into or packaged with the app is in
-  `dependencies`; `devDependencies` are build and test tooling only. [V, 2026-10-25, electron-vite docs "Dependency
-  Handling" read through Context7 for the bundling statements; the script header for the gate] Phase 1 check still open:
-  the electron-vite externalization and bundling settings follow the rule (ADR-0004). Enforced since 2026-10-25 by
-  `scripts/prod-deps-guard.mjs` (a plugin for the desktop build, wired in with `apps/desktop`; it passes a bundled
-  package iff it is in the production closure, i.e. `dependencies` plus their transitives from `pnpm ls --prod --depth
-  Infinity --json`, so `scheduler` under `react-dom` is fine; unit-tested with fake ids only, [A] that the `load` hook sees every bundled module in a real electron-vite build until Task 5 runs it).
-- `pnpm ls -r --depth -1 --json` lists the root project too (name `wg-launcher`) and prints absolute `path`s: read only
-  `name`. A workspace package without dependencies adds nothing to `pnpm-lock.yaml`, so `pnpm install` reports "Already up
-  to date" when it is created. [V, 2026-10-25, pnpm 12.15.0]
-- `packages/shared` is consumed as TypeScript source (`exports` points at `src/index.ts`, no build). Under `NodeNext`
-  relative imports need the `.js` extension (`./ids.js`); Vitest and Vite map it to the `.ts` file. [V, 2026-10-25,
-  `pnpm typecheck` and `pnpm test`]
-- `pnpm ls --prod --depth Infinity --json` (pnpm 12.15.0) prints a list of projects, each with `dependencies` mapping a
-  name to `{from, version, resolved?, path, dependencies?}` (and `optionalDependencies` when present); a workspace
-  dependency has version `link:...`; dev-only packages are absent. Read only the names (keys); `path` is absolute. [V,
-  2026-10-25, scratch workspace]
+- `tsc -b` with `references` needs `composite: true` and refuses `noEmit` (TS6306, TS6310), which the base config sets,
+  so the root `typecheck` script lists the projects (`tsc -b . <dirs>`): add every new `tsconfig.json` there. [V,
+  2026-10-24, TypeScript 7.0.2]
+- `packages/shared` is consumed as TypeScript source (`exports` → `src/index.ts`); under `NodeNext` relative imports need
+  `.js` (`./ids.js`), which Vitest and Vite map to `.ts`. [V, 2026-10-25, `pnpm typecheck`, `pnpm test`]
+- Plain `node` (24.13.0) cannot run this repo's TypeScript: strip-only mode refuses parameter properties
+  (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`, `src/container/inflate.ts`) and `.js` specifiers do not map to `.ts`
+  (`ERR_MODULE_NOT_FOUND`). `scripts/generate-vectors.ts` runs with `--experimental-transform-types` (prints an
+  ExperimentalWarning) and a `module.registerHooks` `.js` → `.ts` resolve fallback before dynamic imports; no dependency.
+  [V, 2026-10-28, run locally]
+- Biome 2.6: `linter.rules.recommended` is deprecated, use `linter.rules.preset: "recommended"`;
+  `usePlaywrightValidDescribeCallback` flags any function named `describe`, even a local helper; `biome check --write`
+  reformats JSON test vectors (line breaks only, hex kept). [V, 2026-10-24 and 2026-10-25, Biome 2.6.2]
+- markdownlint-cli2 appends config `globs` to command-line globs, so `.markdownlint-cli2.jsonc` has none (`docs:lint`
+  passes `"**/*.md"`, pre-commit the staged files); `gitignore: true` skips `.superpowers/` and the like. MD013 off; MD041
+  off only for the PR template; MD004, MD022, MD032 off only under `docs/plans/`. [V, 2026-10-24]
+- `spike` is not a type in `@commitlint/config-conventional`; `commitlint.config.mjs` adds it. [V, 2026-10-24: `spike:`
+  accepted, `wip:` and `Spike:` rejected]
+- License gate versus bundling: the gate fails only on production dependencies, but electron-vite bundles renderer
+  `dependencies` and recommends renderer-only packages as `devDependencies`, which would escape it. Everything bundled or
+  packaged goes in `dependencies`; `scripts/prod-deps-guard.mjs` enforces it in the desktop build (ADR-0004 "Dependency
+  declaration"). Open in Phase 1: the electron-vite settings, and [A] that the guard's `load` hook sees every bundled
+  module in a real build (unit-tested with fake ids only until Task 5).
+- Repo files: `LICENSE` stays the unmodified AGPL text or GitHub stops detecting it; `.gitattributes` forces LF so format
+  checks match on Windows; Contributor Covenant 3.0 is CC BY-SA 4.0 (not CC BY 4.0), as `CODE_OF_CONDUCT.md` says.
+- A `workflow_dispatch` workflow runs only when its file is on the default branch, so it cannot be tried from a feature
+  branch. [V, 2026-10-25, GitHub Actions events reference; RESULTS.md "Windows CI job"]
+
+### Node, zstd and the snapshot codec
+
+- Node's zstd does not report truncation: a checksummed frame cut by 6 bytes decompressed without error through
+  `zstdDecompressSync` and `createZstdDecompress`. The `.wgsnap` reader detects it itself (plan M6, `ZstdFrameWalker` in
+  `packages/snapshot/src/container/zstd-frame.ts`). [V, 2026-10-25, Node 24.13.0, `node -e`]
+- Node's streaming zstd compressor can append a second, empty frame (`28b52ffd 24 00 01 00 00` plus checksum):
+  `lib/zlib.js` gives `ZSTD_e_end` to a chunk still queued at `end()`, then `_flush` finishes again. Three chunks piped from
+  `Readable.from` gave two frames; awaiting each `write()` callback before `end()` (what the writer does) gave one. [V,
+  2026-10-25, Node 24.13.0, scratch script and `lib/zlib.js` `_flush`, `_transform`]
+- A wrong content checksum fails with `ZSTD_error_checksum_wrong` (errno 22, "Restored data doesn't match checksum") in
+  both Node APIs. `zstdCompressSync` writes a single-segment frame with the content size (descriptor `0xa4` for 300 000
+  bytes with checksum); the streaming compressor writes a window descriptor (`0x04`, window byte `0x58`, 2^21). [V,
+  2026-10-25, Node 24.13.0, scratch script]
+- `TextDecoder` drops a leading U+FEFF unless built with `ignoreBOM: true` (`ef bb bf 61` gave one character, two with
+  it); the CBOR decoder uses `{fatal: true, ignoreBOM: true}` because text is never altered (snapshot-format.md section
+  6.2 rule 4). [V, 2026-10-25, Node 24.13.0, `node -e`]
+
+### Electron, Chromium and the spike
+
+- Electron approves every permission request unless a handler denies it (runtime-and-storage.md section 2.3). CDP
+  IndexedDB can read and delete but has no put or add, so restore cannot use CDP (section 5.1; `IndexedDB.pdl`).
+- Playwright 1.64.1 (also `_electron.launch`) disables `ThirdPartyStoragePartitioning` (issue 32230): a cross-site
+  iframe shares storage with the top level. `--enable-features=...` changes nothing; a later `--disable-features` list
+  without that entry restores partitioning (last switch wins), as `playwright.config.ts` does and the app must
+  (architecture.md section 5). [V, 2026-10-24, Chromium 156, Chrome 155, Electron 45; fixture README "Tests", RESULTS.md H11]
+- `ses.clearStorageData({origin})` does not clear a partitioned iframe's storage (key
+  `http://127.0.0.1:4417/^0http://localhost`); CDP `Storage.clearDataForStorageKey` does; `ses.clearStorageData()`
+  without options clears everything. [V, 2026-10-24, RESULTS.md H14 wipe probes]
+- Main-process `WebFrameMain` has no isolated-world execution: for a subframe use a preload (`nodeIntegrationInSubFrames`)
+  calling `webFrame.executeJavaScriptInIsolatedWorld`. A registered service worker controls a stub navigation unless CDP
+  `Network.setBypassServiceWorker` is on; export after the game's worker stopped. [V, 2026-10-24, RESULTS.md H14,
+  "Deviations" 2 and 3]
+- `requestPointerLock()` right after `requestFullscreen()` in one handler fails ("A user gesture is required"); call it
+  alone or first. `navigator.keyboard.lock()` needs no gesture. [V, 2026-10-24, RESULTS.md H13; [A] fullscreen consumes
+  the transient activation]
+- `webContents.debugger` commands (even `Network.enable`) hang on a window that never navigated: load `about:blank` first.
+  `app.getGPUFeatureStatus()` right after `ready` reports everything disabled until `app.getGPUInfo("complete")` or a
+  first render. [V, 2026-10-24, RESULTS.md "Findings and gotchas"]
+- Frame timing on the dev Mac needs an unlocked screen (else `loginwindow` keeps focus); uncapped runs queue 15 to 41 s of
+  GPU work and degrade interleaved capped runs: keep cooldowns, never interleave. [V, 2026-10-24, RESULTS.md "Findings
+  and gotchas" and "Deviations" 6, with the numbers; [A] the cause]
+- macOS TCC attributes the dev Electron process to the app that launched it (`com.anthropic.claude-code` for agent runs),
+  and a microphone request stalls before the permission handler while OS access is undecided: rerun media checks on the
+  packaged app. [V, 2026-10-24, RESULTS.md H12; security.md section 5]
+- The prebuilt Electron 45.0.0 `Info.plist` ships camera, microphone, audio-capture and two Bluetooth usage descriptions;
+  the packaged launcher must not (security.md section 5), and electron-vite's example `electron-builder.yml` adds camera
+  and microphone ones, so do not copy it. [V, 2026-10-25, `plutil -p` of `electron@45.0.0`; ADR-0004]
+- `app.setAsDefaultProtocolClient` leaves a LaunchServices `LSHandlers` entry that outlives `lsregister -u` and the
+  deleted app; location and removal recipe: RESULTS.md H15. [V, 2026-10-24]
+- Chrome `--app` keeps the browser process alive after its last window closes (a launcher must quit it), and a fresh
+  profile shows a Google Translate bubble in the app window. [V, 2026-10-24, RESULTS.md H20]
+- CDP `IndexedDB.requestData` fails with "Could not get index" for an empty `indexName`: omit it to read the store
+  (Chrome 155). A stale `DevToolsActivePort` in a reused user-data directory names a dead port: delete it before
+  relaunching with `--remote-debugging-port=0`. [V, 2026-10-24, Task 6 spike]
+- Playwright launches Chrome headed, but an exact 1280 x 720 CSS-pixel viewport at native scale needs `viewport: null`
+  plus CDP `Browser.setWindowBounds`; `Page.bringToFront` is enough for focus. [V, 2026-10-24]
+- Safari's AppleScript can close its own tabs, but `tabs of window` indexes shift: iterate backwards. [V, 2026-10-24]
+- `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
+  Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
+  use `node:http`. [V, 2026-10-24]
+- zsh: `log` is a builtin, call the macOS unified log as `/usr/bin/log`; an unmatched glob aborts the whole command
+  (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
 
 ## Open questions
 
-- Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (the CLA party and governing law are filled in; whether
-  the Harmony template wording, such as the UN Convention exclusion in section 6.1, and the waiver of moral rights fit
-  Russian law is for the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal
-  address or another contact for the owner beyond the GitHub account? Default: the lawyer decides.
-- Does Electron pass H7 on the launcher (Phase 1 condition of ADR-0002 and ADR-0005)? Chrome 156 is not installed on the
-  dev machine, so a result against Chrome 155 carries the label "version mismatch". Default until measured: Electron
-  stays the runtime.
-- `node:sqlite` works in Electron 45 main and `utilityProcess` without a warning (spike H10); its stability label in
-  Node 24.22 is still unchecked.
-- WebGPU works by default in Electron 45 on this Mac (spike H5); Chrome 155 reports 23 features, Electron 24 (one extra, `texture-compression-unaligned`): cause unknown.
-- Cross-origin isolation works on Electron 45.0.0 (spike H3, H4); 44.x was not tested (no retry was needed).
+- Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (party and governing law are filled in; whether the
+  Harmony wording, such as the UN Convention exclusion in section 6.1, and the moral-rights waiver fit Russian law is for
+  the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal address or another
+  contact beyond the GitHub account? Default: the lawyer decides.
+- Does Electron pass H7 on the launcher (condition of ADR-0002 and ADR-0005)? Chrome 156 is not installed, so a result
+  against Chrome 155 carries "version mismatch". Default until measured: Electron stays the runtime.
+- Spike leftovers (RESULTS.md): the `node:sqlite` stability label in Node 24.22 (H10); why Electron reports one extra
+  WebGPU feature, `texture-compression-unaligned` (H19); Electron 44.x cross-origin isolation, untested because 45.0.0
+  passed (H3, H4); H12 on the packaged app and the H13 real-click run ("Open items for the owner").
 - Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
   presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
