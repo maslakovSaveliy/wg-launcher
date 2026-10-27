@@ -144,6 +144,30 @@ A release check reads the fuses of the packaged app and fails on any difference 
   and `https://good.example@evil.example`; an IDN lookalike; `https://example.com.evil.net` and `https://evil-example.com`
   against `https://example.com`; `http` against `https` (schemeful site); two hosts under a public suffix such as
   `co.uk`; leading spaces and upper case; over-long URLs.
+- **Implementation (Phase 1 Task 7a).** The rules are pure functions in `apps/desktop/src/main/policy/`
+  (`url-rules.ts`, `site.ts`, `permissions.ts`) with their tests beside them; the build flavor is a parameter, and the
+  app passes the compile-time `FLAVOR`. Details settled there, `Assumed`:
+  - An http or https input is refused before parsing when its raw text has a shape the WHATWG parser would silently
+    repair, because a repair is where two parsers can disagree: control characters, spaces or DEL anywhere (also
+    leading and trailing ones; nothing is trimmed), a backslash anywhere (`https:\\evil.com`,
+    `https://evil.com\.example.com`), a scheme not followed by exactly `//` and a host (`https:evil.com`,
+    `https:///evil.com`), and `@` or `%` in the authority (user info in any form, also an empty one such as
+    `https://@evil.com`, which the parser drops silently; percent-encoded host characters such as `exa%2Emple.com`,
+    which the parser decodes into `exa.mple.com`). This applies to entry URLs, main-frame targets and
+    `isExternalUrlAllowed`, not to subframes (a `data:` frame URL may contain spaces).
+  - Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen. A
+    same-site main-frame target has no length limit; only entry URLs and external opening do.
+  - `decideTopNavigation` returns `allow`, `ask-external` (another http or https site, or plain http other than a
+    development origin; the caller then checks `isExternalUrlAllowed` and confirms) or `block` (every other scheme, a
+    malformed or credential-carrying target, or an entry that is not an allowed entry URL in this flavor, so a
+    production build never navigates a stored development entry).
+  - Development origins are only the literal hosts `localhost` and `127.0.0.1` in the raw text (any port), in dev and
+    test builds; other spellings that the parser maps to `127.0.0.1` (`2130706433`, `0x7f.0.0.1`, `127.1`), `[::1]`,
+    `localhost.` and `sub.localhost` are not. A production-flavor call refuses them all; the dev-origin strings are
+    still in the prod bundle, because the flavor is a parameter, so `pnpm bundle:check` asserts nothing about them.
+  - Subframes: `about:blank` and `about:srcdoc` are matched on the parsed path, so a query or fragment does not
+    matter; `about:BLANK` and every other `about:` page are blocked.
+  - Permissions: a `Set` lookup with exact case, so `Fullscreen`, `__proto__` or an empty name are denied.
 
 ## 6. Launcher renderer
 

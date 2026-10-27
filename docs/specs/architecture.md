@@ -140,8 +140,11 @@ stateDiagram-v2
   baseline, and `app.on("web-contents-created")` refuses `<webview>` attachment and new windows by default. The
   decisions themselves are tables in [security.md](security.md#5-permission-and-navigation-policy) (AC-4, AC-5).
 - **Same-site decisions** use one function `siteOf(origin)` (scheme plus registrable domain from the Public Suffix List;
-  the host itself for IP addresses and `localhost`). The PSL dependency is chosen in Phase 1 under the dependency
-  policy. `Assumed`
+  the host itself for IP addresses and `localhost`). The PSL dependency is `tldts` 7.4.19 (MIT, with `tldts-core`,
+  MIT) with `allowPrivateDomains: true`, so `a.github.io` and `b.github.io` are different sites, as Chromium's
+  schemeful site is assumed to treat them. Where no registrable domain exists (a bare public suffix such as `co.uk`, a
+  single-label host, a host with a trailing dot) the whole host is the site, so different hosts never share one; ports
+  never matter. Implemented in `apps/desktop/src/main/policy/site.ts`. `Assumed`
 - **Storage partitioning stays on.** Playwright's Electron loader appends `ThirdPartyStoragePartitioning` to
   `--disable-features`, which makes a cross-site iframe share storage with the top level; re-appending the list without
   that entry in the main process restores partitioning. Verified (2026-10-24, RESULTS.md H11). The app MUST do this at
@@ -283,6 +286,13 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   app registers the scheme with `app.setAsDefaultProtocolClient("wglauncher")`; on Windows a deep link arrives as a
   command-line argument, so the parser accepts exactly one argument that is either a whole deep link or
   `--launch-game=<id>` and ignores the rest. Behavior on Windows is Unverified (no machine). `Assumed`
+- **Parser details** (`apps/desktop/src/main/policy/deep-link.ts`, `Assumed`): a command-line argument is a launch
+  argument when it starts with `--launch-game` or `wglauncher:`, compared case-insensitively; every other argument
+  (executable, app path, Electron and Chromium switches, `--`) is ignored. No launch argument means no launch; two or
+  more, even identical ones, are invalid, because an extra one may have been injected. A launch argument is never
+  split, so one with spaces or `--` inside is a single value that fails the id pattern. Upper-case ids and an
+  upper-case scheme are invalid. Results carry only the input's length, never its text. If Windows turns out to
+  append a trailing slash to a deep link, the link is refused until that is verified and the rule amended.
 - **macOS:** the scheme is declared in `Info.plist` (`CFBundleURLTypes`), because `setAsDefaultProtocolClient` works on
   macOS only for schemes declared at build time. Verified (2026-10-24, <https://www.electronjs.org/docs/latest/api/app>).
   The shortcut is a `.webloc` file whose only variable part is the validated id. A `.command` file is not offered,
@@ -355,7 +365,10 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 - **Add (F-2, AC-17).** The URL is parsed with the WHATWG URL parser; it must be `https`, have a host and no user info,
   and be at most 2048 characters; it is stored as `url.href`. Development and test builds also accept
   `http://localhost` and `http://127.0.0.1` on any port, behind a build-time constant that production builds do not
-  contain (PRD OQ-3, proposal adopted). Anything else is `URL_NOT_ALLOWED`. `Assumed`
+  contain (PRD OQ-3, proposal adopted). Anything else is `URL_NOT_ALLOWED`. `Assumed`. Only the literal hosts count
+  (not `2130706433` or `127.1`), the input is not trimmed (the renderer may trim visibly before sending), and the raw
+  shapes the parser would repair are refused: [security.md](security.md#5-permission-and-navigation-policy),
+  "Implementation". `Assumed`
 - **Same URL twice (AC-2).** Allowed; each entry gets its own `gameId` and partition. The UI says the URL is already in
   the library before creating the second entry and never merges entries (PRD anti-goal 6). `Owner`
 - **Edit (F-3, AC-17).** Title: 1 to 200 characters after trimming, default the host name, rendered as text only.

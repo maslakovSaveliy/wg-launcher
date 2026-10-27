@@ -87,6 +87,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   union of `WritableDb` and `ReadOnlyDb`, and repositories accept only the writable one. Over 1 000 games, 5 sessions,
   2 storage targets and 3 snapshots each, one call took 1.05 ms for `games.list` (1 000 rows) and 0.002 to 0.015 ms for
   the indexed lookups [V, 2026-10-28, Node 24.13.0, mean of 200 calls, a throwaway script; not a product number].
+- 2026-10-28 Phase 1 Task 7a (URL, permission and deep-link policies, Assumed): `apps/desktop/src/main/policy/`
+  (`site.ts`, `url-rules.ts`, `permissions.ts`, `deep-link.ts`); `tldts` 7.4.19 (MIT, `tldts-core` MIT) is a
+  production dependency of `apps/desktop`. The settled details (raw shapes refused before parsing, literal dev hosts
+  only, whole host as the site where no registrable domain exists, two launch arguments are invalid): security.md
+  section 5 "Implementation", architecture.md sections 5, 8 and 12.
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -232,6 +237,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - markdownlint-cli2 appends config `globs` to command-line globs, so `.markdownlint-cli2.jsonc` has none (`docs:lint`
   passes `"**/*.md"`, pre-commit the staged files); `gitignore: true` skips `.superpowers/` and the like. MD013 off; MD041
   off only for the PR template; MD004, MD022, MD032 off only under `docs/plans/`. [V, 2026-10-24]
+- secretlint's recommended preset (BasicAuth rule) rejects a staged file containing a URL with `user:pass@`, even a
+  fake one in a test; such a test input carries `// secretlint-disable-next-line` above it
+  (`apps/desktop/src/main/policy/url-rules.test.ts`). [V, 2026-10-28, secretlint 13.0.7, pre-commit hook]
 - `spike` is not a type in `@commitlint/config-conventional`; `commitlint.config.mjs` adds it. [V, 2026-10-24: `spike:`
   accepted, `wip:` and `Spike:` rejected]
 - License gate versus bundling: the gate fails only on production dependencies, but electron-vite bundles renderer
@@ -260,6 +268,16 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - `TextDecoder` drops a leading U+FEFF unless built with `ignoreBOM: true` (`ef bb bf 61` gave one character, two with
   it); the CBOR decoder uses `{fatal: true, ignoreBOM: true}` because text is never altered (snapshot-format.md section
   6.2 rule 4). [V, 2026-10-25, Node 24.13.0, `node -e`]
+- WHATWG `new URL` repairs hostile shapes silently: `http://2130706433/`, `http://0x7f.0.0.1/` and `http://127.1/`
+  all become host `127.0.0.1`; `https:\\evil.com`, `https:evil.com` and `https:///example.com` parse with that host;
+  `https://example.com\@evil.net` has host `example.com` (the backslash starts the path); `https://@evil.com` and
+  `https://:@evil.com` drop the empty user info; `https://exa%2Emple.com/` becomes host `exa.mple.com`; tabs and
+  newlines inside are dropped, leading and trailing spaces trimmed; `https://example.com.` keeps the trailing dot. So
+  `url-rules.ts` refuses those raw shapes before parsing. [V, 2026-10-28, Node 24.13.0, scratch script]
+- tldts 7.4.19 `parse(host, {allowPrivateDomains: true, extractHostname: false})` gives domain `com.` for
+  `example.com.` (trailing dot), `null` for `co.uk`, `github.io`, `localhost`, `intranet` and IP literals (`isIp`
+  true, also for `[::1]`), `a.github.io` for `a.github.io`, and falls back to the last label for an unknown TLD
+  (`domain.unknown`, `sub.localhost`). `siteOf` handles the trailing dot itself. [V, 2026-10-28, same script]
 
 ### Electron, Chromium and the spike
 

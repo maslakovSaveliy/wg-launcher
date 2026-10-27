@@ -280,13 +280,13 @@ play-sessions.ts,storage-targets.ts,snapshots.ts,restore-journal.ts,storage-chec
 boolean`; `decidePermission(name: string): "allow" | "deny"`; `parseLaunchInput(argv: readonly string[]): LaunchInput`
 and `parseDeepLink(url: string): LaunchInput` with `LaunchInput = {kind: "launch"; gameId: string} | {kind: "invalid";
 length: number} | {kind: "none"}` (one argument that is a whole deep link or `--launch-game=<id>`, rest ignored).
-- [ ] Tests: the full S-5 list of security §5 (`javascript:`, `file:`, `wglauncher:`, `app:`, userinfo tricks, IDN
+- [x] Tests: the full S-5 list of security §5 (`javascript:`, `file:`, `wglauncher:`, `app:`, userinfo tricks, IDN
   lookalike in punycode, `example.com.evil.net`, `evil-example.com`, http vs https, `co.uk` siblings, `github.io`
   siblings, spaces and upper case, over-long); redirect www ↔ apex allowed (Review Focus 1); permission table incl. an
   unknown future name; deep-link pattern accepts only lowercase UUIDv7 with no query, fragment, port or userinfo; argv
   with extra `--` switches or spaces cannot inject anything (S-11).
-- [ ] Run failing, implement, run passing.
-- [ ] Commit `feat(desktop): add URL, permission and deep-link policies`.
+- [x] Run failing, implement, run passing.
+- [x] Commit `feat(desktop): add URL, permission and deep-link policies`.
 
 ### Task 7b: Product policies as pure functions (S)
 **Files:** `src/main/policy/{playtime.ts,badges.ts,window-guard.ts}`, tests.
