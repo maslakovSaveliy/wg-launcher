@@ -81,6 +81,43 @@ describe("findMachinePaths", () => {
     expect(findMachinePaths(`https://example.com${LINUX_HOME}${NAME}`)).toEqual([]);
   });
 
+  it("detects a home path after a colon in a PATH-style list", () => {
+    expect(findMachinePaths(`PATH=/usr/bin:${MAC_HOME}${NAME}/bin`)).toEqual([
+      { line: 1, column: 15, kind: "posix-home" },
+    ]);
+    expect(findMachinePaths(`PATH=/usr/bin:${LINUX_HOME}${NAME}/bin:/opt/x`)).toEqual([
+      { line: 1, column: 15, kind: "posix-home" },
+    ]);
+    // A drive letter before the colon still belongs to the Windows pattern: one finding, not two.
+    expect(findMachinePaths(`C:${MAC_HOME}${NAME}`)).toEqual([
+      { line: 1, column: 1, kind: "windows-home" },
+    ]);
+  });
+
+  it("detects project-directory slugs made from a home path", () => {
+    const macSlug = `-${MAC_HOME.slice(1, -1)}-${NAME}-wg-launcher`;
+    const linuxSlug = `-${LINUX_HOME.slice(1, -1)}-${NAME}-wg-launcher`;
+
+    expect(findMachinePaths(`.claude/projects/${macSlug}/memory`)).toEqual([
+      { line: 1, column: 18, kind: "home-slug" },
+    ]);
+    expect(findMachinePaths(`"${linuxSlug}"`)).toEqual([{ line: 1, column: 2, kind: "home-slug" }]);
+    expect(findMachinePaths(`${LINUX_HOME.slice(1, -1)}`)).toEqual([]);
+  });
+
+  it("keeps the IDBFS test name allowed in slug form", () => {
+    expect(findMachinePaths(`-${LINUX_HOME.slice(1, -1)}-web_user-save`)).toEqual([]);
+  });
+
+  it("does not flag ordinary hyphenated words as slugs", () => {
+    const users = MAC_HOME.slice(1, -1);
+    const home = LINUX_HOME.slice(1, -1);
+
+    expect(findMachinePaths(`a well-known-${home}-made thing, power-${users}-guide`)).toEqual([]);
+    expect(findMachinePaths(`the -${users}-guide and --${home}-page-title`)).toEqual([]);
+    expect(findMachinePaths(`-${users}-`)).toEqual([]);
+  });
+
   it("detects every extra needle, also several per line", () => {
     const text = `hello ${NAME} and ${NAME}\nnothing here`;
 
@@ -158,6 +195,24 @@ describe("check-machine-paths CLI", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(":1:7 posix-home");
     expect(result.stdout + result.stderr).not.toContain(NAME);
+  });
+
+  it("exits 2 with a neutral message when a file cannot be read", () => {
+    const dir = mkdtempSync(join(tmpdir(), "paths-check-"));
+    try {
+      // A directory passed as a file: reading it fails with EISDIR.
+      const result = spawnSync(process.execPath, [script, dir], {
+        encoding: "utf8",
+        env: { ...process.env, CI: "true" },
+      });
+
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain("Could not read");
+      expect(result.stderr).not.toContain("    at ");
+      expect(result.stderr).not.toContain("EISDIR");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("skips binary files (a NUL byte)", () => {

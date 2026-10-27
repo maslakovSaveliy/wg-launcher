@@ -19,7 +19,7 @@ import { pathToFileURL } from "node:url";
  * @typedef {object} Finding
  * @property {number} line 1-based
  * @property {number} column 1-based
- * @property {string} kind `posix-home`, `windows-home`, `macos-temp` or `current-user`
+ * @property {string} kind `posix-home`, `home-slug`, `windows-home`, `macos-temp` or `current-user`
  */
 
 /**
@@ -36,11 +36,15 @@ const MIN_NEEDLE_LENGTH = 3;
 const EXCLUDED_BASENAMES = new Set(["pnpm-lock.yaml"]);
 
 // A path must start where a path can start: not inside a word, a host name (`example.com/...`) or a relative path
-// (`../...`), and not right after a drive letter (the Windows pattern owns that case).
-const PATH_START = "(?<![A-Za-z0-9_.~-])(?<![A-Za-z]:)";
+// (`../...`), and not right after a standalone drive letter (the Windows pattern owns that case). The drive letter
+// must itself start a word: the `n:` in `bin:` of a PATH-style list is not a drive.
+const PATH_START = "(?<![A-Za-z0-9_.~-])(?<!(?<![A-Za-z0-9])[A-Za-z]:)";
 const NAME = String.raw`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*`;
 
 const POSIX_HOME = new RegExp(String.raw`${PATH_START}\/(Users|home)\/(${NAME})`, "g");
+// Tools such as Claude Code name a project directory after its path with the separators turned into hyphens
+// (`-Users-<name>-<repo>`). The slug must start a token, so ordinary hyphenated words do not match.
+const HOME_SLUG = /(?<![A-Za-z0-9_.~-])-(Users|home)-([A-Za-z0-9_]+)-/g;
 const WINDOWS_HOME = /(?<![A-Za-z0-9])[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9_]/gi;
 const MACOS_TEMP = new RegExp(
   String.raw`${PATH_START}\/(?:private\/(?:var\/folders|tmp)|var\/folders)\/`,
@@ -77,6 +81,13 @@ export function findMachinePaths(text, { extraNeedles = [] } = {}) {
         continue;
       }
       add(line, match.index, "posix-home");
+    }
+    for (const match of content.matchAll(HOME_SLUG)) {
+      const [, root, name] = match;
+      if (root === "home" && name !== undefined && ALLOWED_LINUX_HOME_NAMES.includes(name)) {
+        continue;
+      }
+      add(line, match.index, "home-slug");
     }
     for (const match of content.matchAll(WINDOWS_HOME)) {
       add(line, match.index, "windows-home");
@@ -170,6 +181,8 @@ function main() {
     if (EXCLUDED_BASENAMES.has(basename(file))) {
       continue;
     }
+    // Never echo an absolute path: it would hold the home directory.
+    const shown = isAbsolute(file) ? relative(process.cwd(), file) : file;
     /** @type {Buffer} */
     let data;
     try {
@@ -179,14 +192,15 @@ function main() {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") {
         continue;
       }
-      throw error;
+      // Any other failure: say which file, and nothing else (a stack trace or error message holds absolute paths).
+      console.error(`Could not read ${shown}.`);
+      process.exitCode = 2;
+      return;
     }
     if (data.includes(0)) {
       continue;
     }
     checked++;
-    // Never echo an absolute path: it would hold the home directory.
-    const shown = isAbsolute(file) ? relative(process.cwd(), file) : file;
     for (const finding of findMachinePaths(data.toString("utf8"), { extraNeedles })) {
       console.error(formatFinding(shown, finding));
       found++;
