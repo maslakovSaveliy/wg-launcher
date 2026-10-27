@@ -3,10 +3,12 @@
 // Everything bundled into or packaged with the app must be a production dependency: declared in `dependencies`,
 // or a transitive dependency of one (the production closure, which is what `pnpm licenses list --prod` checks).
 // `devDependencies` hold build and test tooling only. The license gate (`check-licenses.mjs`) trusts that split,
-// so this Vite/Rollup plugin fails the build when a module is loaded from `node_modules` and its package is not
-// in the production closure.
-// It is wired into the electron-vite config of `apps/desktop` (Phase 1, Task 5). It needs no Vite import: the
-// plugin is a plain object with a Rollup `load` hook, so it can be unit-tested by calling the hook directly.
+// so this Vite/Rolldown plugin fails the build when a module from `node_modules` enters the bundle and its package
+// is not in the production closure.
+// It is wired into all three electron-vite builds of `apps/desktop` (main, preload, renderer). It needs no Vite
+// import: the plugin is a plain object with a `transform` hook, so it can be unit-tested by calling the hook directly.
+// `transform` is a sequential hook: Rolldown and Vite call it for every module and every plugin. A `load` hook would
+// not do: it is a "first" hook, so a plugin that loads a module before this one would hide that module from it.
 
 import { execSync } from "node:child_process";
 
@@ -104,17 +106,18 @@ export function readProdClosure(cwd = process.cwd()) {
  * A Rollup/Vite plugin that fails the build when a module from `node_modules` belongs to a package that is not
  * in `prodClosure` (see `readProdClosure`). A workspace package resolved through its pnpm symlink is allowed
  * when it is in the closure; when the bundler resolves it to its real path it is not in `node_modules` at all
- * and is not checked here. The `load` hook sees every module regardless of how it was resolved. `pkgJson` only
- * words the error: it says whether the package is declared in `devDependencies` or not declared at all.
+ * and is not checked here. The `transform` hook sees every module regardless of which plugin resolved or loaded
+ * it. `pkgJson` only words the error: it says whether the package is declared in `devDependencies` or not declared
+ * at all.
  * @param {PackageJsonDependencies} pkgJson
  * @param {ReadonlySet<string>} prodClosure
- * @returns {{ name: string, load: (this: unknown, id: string) => null }}
+ * @returns {{ name: string, transform: (this: unknown, code: string, id: string) => null }}
  */
 export function prodDepsGuard(pkgJson, prodClosure) {
   const devOnly = new Set(Object.keys(pkgJson.devDependencies ?? {}));
   return {
     name: "wg-prod-deps-guard",
-    load(id) {
+    transform(_code, id) {
       const name = packageNameFromId(id);
       if (name !== null && !prodClosure.has(name)) {
         const declared = devOnly.has(name)
