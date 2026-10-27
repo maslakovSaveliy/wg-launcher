@@ -249,6 +249,9 @@ React; `prodDepsGuard` on all three; electron-builder `files` excludes packages 
   downloaded on first use; CI runs `install-electron`). `fixPartitioningSwitch` takes `app.commandLine`, since
   Playwright appends its switches there. The electron-builder `files` exclusion moves to Task 16, which adds
   electron-builder. Open check 6 is settled: React 19 runs under `trusted-types 'none'` (security.md section 6).
+  Fix round 1 (2026-10-28): the guard is `apply: "build"` (it broke the dev server); the test flavor never reads
+  Electron's default userData (reading it created an empty real `WGLauncher` directory), guarded by the e2e harness;
+  the dev flavor was run once and verified (security.md section 6).
 
 ### Task 6: SQLite database, migrations, repositories (M)
 **Files:** `src/main/db/{database.ts,migrate.ts,migrations/001-initial.sql}`, `src/main/db/repos/{games.ts,window-state.ts,

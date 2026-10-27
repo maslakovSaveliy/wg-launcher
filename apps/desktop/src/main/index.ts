@@ -32,10 +32,8 @@ function fail(message: string, error: unknown): void {
 
 function chooseUserData(): string | null {
   try {
-    return resolveUserData(FLAVOR, process.env, {
-      userData: app.getPath("userData"),
-      appData: app.getPath("appData"),
-    });
+    // Pass `app` itself: reading app.getPath("userData") creates that directory, so it is read only when used.
+    return resolveUserData(FLAVOR, process.env, app);
   } catch (error) {
     fail("cannot choose the userData directory", error);
     return null;

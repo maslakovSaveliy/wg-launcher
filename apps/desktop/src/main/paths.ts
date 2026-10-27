@@ -41,24 +41,35 @@ export async function prepareAppPaths(paths: AppPaths): Promise<void> {
   );
 }
 
+/** The part of Electron's `app` used to find the default directories. */
+export interface ElectronPaths {
+  getPath(name: "userData" | "appData"): string;
+}
+
 /**
- * userData per flavor: the test flavor takes it from `WG_USER_DATA` (an absolute path; e2e tests always pass a
- * fresh temporary directory) and refuses to start without it, so a test run never touches a real profile; the dev
- * flavor uses its own directory next to the production one (Assumed: keeps development runs out of real saves);
- * prod uses Electron's default and ignores the variable.
+ * userData per flavor. Electron creates the userData directory as soon as `app.getPath("userData")` is read
+ * (Verified 2026-10-28, a probe app on Electron 45.0.0), so the default is asked for only when it is used:
+ * - test: `WG_USER_DATA` (an absolute path; e2e tests pass a fresh temporary directory), and the app refuses to
+ *   start without it, so a test run never creates or touches a real profile;
+ * - dev: `WG_USER_DATA` when set (for check runs), otherwise its own directory next to the production one
+ *   (Assumed: keeps development runs out of real saves);
+ * - prod: Electron's default; the variable is ignored.
  */
 export function resolveUserData(
   flavor: Flavor,
   env: Readonly<Record<string, string | undefined>>,
-  defaults: { userData: string; appData: string },
+  electron: ElectronPaths,
 ): string {
+  const fromEnv = env.WG_USER_DATA;
   if (flavor === "test") {
-    const dir = env.WG_USER_DATA;
-    if (!dir)
+    if (!fromEnv)
       throw new Error("The test build needs WG_USER_DATA (a temporary userData directory).");
-    if (!isAbsolute(dir)) throw new Error("WG_USER_DATA must be an absolute path.");
-    return dir;
+    if (!isAbsolute(fromEnv)) throw new Error("WG_USER_DATA must be an absolute path.");
+    return fromEnv;
   }
-  if (flavor === "dev") return join(defaults.appData, "WGLauncher Dev");
-  return defaults.userData;
+  if (flavor === "dev") {
+    if (fromEnv && isAbsolute(fromEnv)) return fromEnv;
+    return join(electron.getPath("appData"), "WGLauncher Dev");
+  }
+  return electron.getPath("userData");
 }

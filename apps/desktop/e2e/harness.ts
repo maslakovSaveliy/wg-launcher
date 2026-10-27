@@ -3,10 +3,10 @@
 // profile), and the progress-lab fixture server on a free port.
 
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { _electron, type ElectronApplication, type Page } from "@playwright/test";
 import type { TestHooks } from "../src/main/test-hooks.js";
@@ -84,6 +84,50 @@ export function appEnv(userData: string): Record<string, string> {
   return env;
 }
 
+/**
+ * Electron's default `appData` directory on this OS (where the real app keeps its userData), computed without
+ * starting Electron.
+ */
+function defaultAppData(): string {
+  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support");
+  if (process.platform === "win32")
+    return process.env.APPDATA ?? join(homedir(), "AppData", "Roaming");
+  return process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+}
+
+/** The userData directories of the real app (prod) and of the dev flavor. Tests must never create or change them. */
+export const REAL_PROFILE_DIRS = ["WGLauncher", "WGLauncher Dev"].map((name) =>
+  join(defaultAppData(), name),
+);
+
+async function listing(dir: string): Promise<string[] | null> {
+  try {
+    return (await readdir(dir)).sort();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Records the real profile directories before a launch; `verify()` throws if a run created one or changed the
+ * names in it. (Electron creates the userData directory as soon as anything reads `app.getPath("userData")`.)
+ */
+export async function guardRealProfiles(): Promise<{ verify(): Promise<void> }> {
+  const before = await Promise.all(REAL_PROFILE_DIRS.map(listing));
+  return {
+    async verify() {
+      const after = await Promise.all(REAL_PROFILE_DIRS.map(listing));
+      REAL_PROFILE_DIRS.forEach((dir, i) => {
+        if (JSON.stringify(before[i]) !== JSON.stringify(after[i])) {
+          throw new Error(
+            `A test run touched the real profile directory ${dir}: before ${JSON.stringify(before[i])}, after ${JSON.stringify(after[i])}.`,
+          );
+        }
+      });
+    },
+  };
+}
+
 export interface Launched {
   app: ElectronApplication;
   /** The launcher window. */
@@ -97,6 +141,7 @@ export interface Launched {
 
 export async function launchApp(options: { userData?: string } = {}): Promise<Launched> {
   const userData = options.userData ?? (await mkdtemp(join(tmpdir(), "wg-e2e-")));
+  const profiles = await guardRealProfiles();
   const progressLab = await startProgressLab();
   let app: ElectronApplication;
   try {
@@ -119,6 +164,8 @@ export async function launchApp(options: { userData?: string } = {}): Promise<La
     await app.close().catch(() => undefined);
     await progressLab.stop();
     if (options.userData === undefined) await rm(userData, { recursive: true, force: true });
+    // Also covers second instances started during the test, which use the same environment.
+    await profiles.verify();
   };
   try {
     // The launcher window is created after the test hooks are installed.

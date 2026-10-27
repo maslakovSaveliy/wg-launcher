@@ -45,6 +45,10 @@ describe("prodDepsGuard", () => {
     expect(prodDepsGuard(pkgJson, prodClosure).name).toBe("wg-prod-deps-guard");
   });
 
+  it("applies to builds only, not to the dev server, which serves Vite's own client from node_modules", () => {
+    expect(prodDepsGuard(pkgJson, prodClosure).apply).toBe("build");
+  });
+
   it("checks in the transform hook and has no load hook another plugin could pre-empt", () => {
     const plugin: Record<string, unknown> = prodDepsGuard(pkgJson, prodClosure);
     expect(typeof plugin.transform).toBe("function");

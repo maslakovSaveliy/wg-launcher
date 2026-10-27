@@ -162,10 +162,13 @@ A release check reads the fuses of the packaged app and fails on any difference 
   require-trusted-types-for 'script'; trusted-types 'none'`. The renderer talks to main only through the bridge and
   loads no remote content; covers are local files. Development builds load from the Vite server with a looser CSP and
   check the sender against that origin, a build-time constant. The dev CSP (`apps/desktop/electron.vite.config.ts`,
-  sent by the Vite server) adds what Vite is expected to need: `'unsafe-inline'` for scripts (the React refresh
-  preamble) and styles, `connect-src` to the dev server's WebSocket, `img-src app://launcher` for covers, and no Trusted
-  Types (the Vite error overlay uses `innerHTML`); the test and prod builds never use it. Assumed: the dev flavor was
-  not run in Phase 1 Task 5. React 19.3.1 runs under the production
+  sent by the Vite server) adds what Vite needs: `'unsafe-inline'` for scripts (the React refresh preamble) and
+  styles, `connect-src` to the dev server's WebSocket, `img-src app://launcher` for covers, and no Trusted Types (the
+  Vite error overlay uses `innerHTML`); the test and prod builds never use it. Verified (2026-10-28, one
+  `electron-vite dev` run on macOS arm64 with a scratch `WG_USER_DATA`, read over CDP): the dev server sends exactly
+  that header, the launcher renders with the bridge connected, the HMR WebSocket connects, a reload logs no CSP
+  violation, `eval` is refused (`EvalError`), and a control image from another origin is blocked and logged as a
+  `security` error. That `'unsafe-inline'` is needed at all (the refresh preamble) is Assumed, not tested by removal. React 19.3.1 runs under the production
   CSP, `trusted-types 'none'` included, with no CSP or Trusted Types violation during start-up: Verified (2026-10-28,
   `apps/desktop/e2e/launcher.spec.ts` on Electron 45.0.0, macOS arm64; the test records every console message of the
   launcher from before its first load, and its control, an `innerHTML` assignment, is refused with a `TypeError` and

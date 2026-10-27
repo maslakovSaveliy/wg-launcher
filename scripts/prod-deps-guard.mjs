@@ -111,12 +111,16 @@ export function readProdClosure(cwd = process.cwd()) {
  * at all.
  * @param {PackageJsonDependencies} pkgJson
  * @param {ReadonlySet<string>} prodClosure
- * @returns {{ name: string, transform: (this: unknown, code: string, id: string) => null }}
+ *
+ * `apply: "build"`: the guard checks what is bundled, so it stays out of the dev server, which serves its own
+ * client (`vite/dist/client/client.mjs`, a devDependency) from `node_modules` and is never packaged.
+ * @returns {{ name: string, apply: "build", transform: (this: unknown, code: string, id: string) => null }}
  */
 export function prodDepsGuard(pkgJson, prodClosure) {
   const devOnly = new Set(Object.keys(pkgJson.devDependencies ?? {}));
   return {
     name: "wg-prod-deps-guard",
+    apply: "build",
     transform(_code, id) {
       const name = packageNameFromId(id);
       if (name !== null && !prodClosure.has(name)) {

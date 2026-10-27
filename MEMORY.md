@@ -70,8 +70,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   generator's `JSON.stringify(value, null, 2)`.
 - 2026-10-28 Phase 1 Task 5 (`apps/desktop` skeleton, Assumed unless noted): build flavors through `__WG_FLAVOR__`
   (`electron-vite build --mode test` = test, `electron-vite build` = prod, `electron-vite dev` = dev); the dev flavor
-  uses its own userData `<appData>/WGLauncher Dev`, the test flavor refuses to start without an absolute
-  `WG_USER_DATA`; the launcher session is the in-memory partition `launcher`; covers are named
+  uses `WG_USER_DATA` when set, else its own userData `<appData>/WGLauncher Dev`; the test flavor refuses to start
+  without an absolute `WG_USER_DATA` and never reads Electron's default userData; the bundling guard has
+  `apply: "build"` (the dev server serves Vite's own client from `node_modules`); the launcher session is the in-memory partition `launcher`; covers are named
   `<uuidv7>-<16 lowercase hex>.<png|jpg|webp>` (the protocol's `COVER_NAME`); the preload is CommonJS
   (`out/preload/launcher.cjs`, a sandboxed preload cannot be ESM); the launcher quits when its last window closes, on
   macOS too. `fixPartitioningSwitch` takes Electron's `app.commandLine`, not argv, because Playwright's loader appends
@@ -166,6 +167,19 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `ERR_PNPM_IGNORED_BUILDS`); lefthook needs an entry (`allowBuilds: {lefthook: true}` works in 12.15.0; without it
   `pnpm add` fails and writes no placeholder). Vitest 5 uses rolldown, so esbuild needs no entry. [V, 2026-10-24, pnpm
   12.11 docs and a 12.15.0 run]
+- Electron 45 creates the userData directory as soon as anything reads `app.getPath("userData")` (and
+  `app.getPath("crashDumps")` creates `<userData>/Crashpad`), even before `app.setPath("userData", ...)`; when nothing
+  reads them first, `setPath` before `ready` leaves the default directory uncreated and `sessionData` and `crashDumps`
+  follow the new userData. An early test-flavor build read the default and left an empty `WGLauncher` directory in the
+  real Application Support (removed with `rmdir`); the e2e harness now fails a run that creates or changes the real
+  `WGLauncher` or `WGLauncher Dev` directory. [V, 2026-10-28, a probe app on Electron 45.0.0, macOS arm64; desktop e2e
+  RED before the fix, GREEN after]
+- Under `vite serve`, plugin `transform` hooks also see Vite's client (`node_modules/vite/dist/client/client.mjs`), so a
+  bundling check must be `apply: "build"`. A reload of the launcher during its first `loadURL` rejects that call with
+  `ERR_ABORTED`, which `start()` treats as a start-up failure (exit 1); in a CDP check, wait for the first load before
+  reloading. CDP `Runtime.evaluate` defaults to `allowUnsafeEvalBlockedByCSP: true`, so an `eval` control needs it
+  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, reviewer's Vite 8.3.5 check
+  and the dev-flavor run]
 - `electron@45.0.0` has no install script, so it needs no `allowBuilds` entry (the older note that its binary download
   needs one was wrong for 45): `pnpm add -D electron@45.0.0` ran no script, and the binary is downloaded on the first
   `require("electron")` (which prints "Downloading Electron binary...") or by its `install-electron` bin, which CI calls.

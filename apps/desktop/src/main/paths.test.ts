@@ -48,27 +48,52 @@ describe("prepareAppPaths", () => {
 });
 
 describe("resolveUserData", () => {
-  const defaults = { userData: join("os", "WGLauncher"), appData: join("os") };
   const absolute = join(tmpdir(), "wg-e2e-x");
+  /** A stand-in for Electron's `app`: records every path it is asked for. */
+  function electronPaths() {
+    const read: string[] = [];
+    return {
+      read,
+      getPath(name: "userData" | "appData") {
+        read.push(name);
+        return name === "userData" ? join("os", "WGLauncher") : join("os");
+      },
+    };
+  }
 
   it("uses WG_USER_DATA in the test flavor", () => {
-    expect(resolveUserData("test", { WG_USER_DATA: absolute }, defaults)).toBe(absolute);
+    expect(resolveUserData("test", { WG_USER_DATA: absolute }, electronPaths())).toBe(absolute);
+  });
+
+  it("never asks Electron for a default path in the test flavor (reading userData creates it)", () => {
+    const paths = electronPaths();
+    resolveUserData("test", { WG_USER_DATA: absolute }, paths);
+    expect(() => resolveUserData("test", {}, paths)).toThrow();
+    expect(paths.read).toEqual([]);
   });
 
   it("refuses to start the test flavor without an absolute WG_USER_DATA", () => {
-    expect(() => resolveUserData("test", {}, defaults)).toThrow(/WG_USER_DATA/);
-    expect(() => resolveUserData("test", { WG_USER_DATA: "relative/dir" }, defaults)).toThrow(
-      /absolute/,
-    );
+    expect(() => resolveUserData("test", {}, electronPaths())).toThrow(/WG_USER_DATA/);
+    expect(() =>
+      resolveUserData("test", { WG_USER_DATA: "relative/dir" }, electronPaths()),
+    ).toThrow(/absolute/);
   });
 
   it("ignores WG_USER_DATA in the prod flavor", () => {
-    expect(resolveUserData("prod", { WG_USER_DATA: absolute }, defaults)).toBe(defaults.userData);
+    expect(resolveUserData("prod", { WG_USER_DATA: absolute }, electronPaths())).toBe(
+      join("os", "WGLauncher"),
+    );
   });
 
-  it("keeps the dev flavor out of the production userData", () => {
-    expect(resolveUserData("dev", { WG_USER_DATA: absolute }, defaults)).toBe(
-      join("os", "WGLauncher Dev"),
-    );
+  it("keeps the dev flavor out of the production userData, reading only appData", () => {
+    const paths = electronPaths();
+    expect(resolveUserData("dev", {}, paths)).toBe(join("os", "WGLauncher Dev"));
+    expect(paths.read).toEqual(["appData"]);
+  });
+
+  it("lets a dev run use WG_USER_DATA, so a check run leaves no real directory behind", () => {
+    const paths = electronPaths();
+    expect(resolveUserData("dev", { WG_USER_DATA: absolute }, paths)).toBe(absolute);
+    expect(paths.read).toEqual([]);
   });
 });
