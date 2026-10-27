@@ -103,10 +103,21 @@ test("a second instance exits and hands over to the first, which shows its windo
   const { app, launcher, userData } = launched;
   await expect(launcher.locator("h1")).toHaveText("WGLauncher");
 
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
+  // Under bare `xvfb-run` (Linux CI) no window manager runs, so minimize (iconify) is never applied (Assumed, standard
+  // X11 behavior): there the precondition is a hidden window, which the handover must show again. macOS and Windows
+  // keep minimize, which their window managers apply.
+  const hide = process.platform === "linux";
+  await app.evaluate(({ BrowserWindow }, hide) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (hide) window?.hide();
+    else window?.minimize();
+  }, hide);
   await expect
     .poll(() =>
-      app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized()),
+      app.evaluate(({ BrowserWindow }, hide) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        return hide ? window?.isVisible() === false : window?.isMinimized();
+      }, hide),
     )
     .toBe(true);
 

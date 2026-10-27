@@ -363,7 +363,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `--emptyOutDir`. [V, 2026-10-28, `lib-*.js` of electron-vite 6.0.0; `pnpm bundle:check`]
 - [A] Linux CI for the desktop suite: Electron runs under `xvfb-run` with Chromium's sandbox on, which on Ubuntu 24.04
   is assumed to need `sysctl kernel.apparmor_restrict_unprivileged_userns=0`, and its system libraries are installed with
-  `playwright install-deps chromium`. Not run: nothing was pushed (2026-10-28).
+  `playwright install-deps chromium`. The suite started and ran there in CI run 40591493314; its only failure was the
+  handover test below. [V, 2026-10-28, `gh run view 40591493314 --log-failed`; the sysctl need itself stays [A]]
+- Under bare `xvfb-run` no window manager runs, so `BrowserWindow.minimize()` is never applied: `isMinimized()` stayed
+  `false` for 5 s in CI run 40591493314 [V, 2026-10-28, `gh run view --log-failed`; the cause is [A], standard X11
+  behavior]. The handover e2e test hides the window on Linux instead and keeps minimize on macOS and Windows;
+  `focusLauncher` restores and shows, and the hide path fails without its `show()` [V, 2026-10-28, mutation run on
+  macOS arm64 with the hide path forced].
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]
