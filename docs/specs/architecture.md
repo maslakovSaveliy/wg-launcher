@@ -251,6 +251,16 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   one transaction that also sets `user_version`. Before migrating an existing database the main process copies it to
   `backups/library-v<n>-<time>.db`. A database whose `user_version` is newer than the app knows is opened read-only and
   the app shows an explicit error instead of writing. `Assumed`
+  - *How it is built (Phase 1 Task 6, `apps/desktop/src/main/db/`).* The SQL files are imported as strings with Vite's
+    `?raw` suffix, so electron-vite inlines them into the main bundle and Vitest reads them the same way; no file is
+    looked up at run time. `Assumed`. The copy before a migration is made with `VACUUM INTO` (a consistent copy of what
+    the connection sees, WAL content included, so no checkpoint or file copy of a live database is needed), written
+    as `.partial`, flushed and renamed, and never over an existing backup; its `<n>` is the `user_version` it holds.
+    A fresh database makes no copy. A database with a newer `user_version` is first opened with `readOnly: true`, so
+    even reading its version writes nothing to the main file. Verified (2026-10-28, Node 24.13.0, run locally:
+    `VACUUM INTO` kept `user_version` and wrote a rollback-journal copy; a read-only open of a WAL database created
+    empty `-wal` and `-shm` files and left the main file's bytes unchanged).
+  - A test compares `001-initial.sql` with the SQL block above, so the two cannot drift apart. `Assumed`
 - Statements are synchronous, so each must be small and indexed (section 13). The worker never opens the database.
 
 ## 8. Shortcuts and deep links

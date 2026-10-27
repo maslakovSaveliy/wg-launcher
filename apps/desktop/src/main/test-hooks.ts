@@ -3,6 +3,8 @@
 // the hooks through Playwright's `app.evaluate` as `globalThis.__wgTest`.
 
 import { BrowserWindow, session } from "electron";
+import type { Db } from "./db/database.js";
+import { readUserVersion } from "./db/migrate.js";
 import type { ConfirmSpec, Dialogs, OpenFileSpec, SaveFileSpec } from "./dialogs.js";
 import type { AppPaths } from "./paths.js";
 
@@ -17,6 +19,11 @@ export interface ConsoleRecord {
   sourceId: string;
 }
 
+export interface WarningRecord {
+  name: string;
+  message: string;
+}
+
 export interface TestHooks {
   flavor: "test";
   userData: string;
@@ -26,6 +33,10 @@ export interface TestHooks {
   /** Every console message of the launcher page, from before its first load. */
   launcherConsole: ConsoleRecord[];
   secondInstances: number;
+  /** Every process warning since the main module loaded (node:sqlite must add none in Electron 45). */
+  warnings: WarningRecord[];
+  /** The library database as opened by the main process, or null before it is open. */
+  database: { readOnly: boolean; userVersion: number } | null;
   /** Titles of the dialogs shown, in order. */
   dialogsShown: Array<{ kind: DialogKind; title: string }>;
   queueDialogAnswer(answer: DialogAnswer): void;
@@ -62,9 +73,11 @@ export function installTestHooks(init: {
   userData: string;
   paths: AppPaths;
   partitioning: { before: string; after: string } | null;
+  warnings: WarningRecord[];
 }): {
   dialogs: Dialogs;
   watchLauncher(window: BrowserWindow): void;
+  watchDatabase(db: Db): void;
   onSecondInstance(): void;
 } {
   const queue: DialogAnswer[] = [];
@@ -76,6 +89,8 @@ export function installTestHooks(init: {
     partitioning: init.partitioning,
     launcherConsole: [],
     secondInstances: 0,
+    warnings: init.warnings,
+    database: null,
     dialogsShown: [],
     queueDialogAnswer: (answer) => {
       queue.push(answer);
@@ -113,6 +128,9 @@ export function installTestHooks(init: {
           sourceId: event.sourceId,
         });
       });
+    },
+    watchDatabase(db) {
+      hooks.database = { readOnly: db.readOnly, userVersion: readUserVersion(db.raw) };
     },
     onSecondInstance() {
       hooks.secondInstances += 1;

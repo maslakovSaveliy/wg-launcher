@@ -49,6 +49,22 @@ async function filesWithMarker(dir) {
   return hits;
 }
 
+/**
+ * Workspace packages are TypeScript source that Electron cannot load, so no built main file may import one by name
+ * (electron-vite externalizes `dependencies` unless the config bundles the package).
+ * @param {string} dir @returns {Promise<string[]>}
+ */
+async function filesImportingWorkspacePackages(dir) {
+  const hits = [];
+  for (const file of await filesUnder(dir)) {
+    if (!file.endsWith(".js") && !file.endsWith(".cjs")) continue;
+    if (/(?:from|import\()\s*["']@wg-launcher\//.test(await readFile(file, "utf8"))) {
+      hits.push(relative(dir, file));
+    }
+  }
+  return hits;
+}
+
 const work = await mkdtemp(join(tmpdir(), "wg-bundle-check-"));
 try {
   const prodDir = join(work, "prod");
@@ -67,6 +83,17 @@ try {
   }
   if (prodHits.length > 0) {
     throw new Error(`The prod build contains ${MARKER} in: ${prodHits.join(", ")}`);
+  }
+  for (const { name, dir } of [
+    { name: "prod", dir: prodDir },
+    { name: "test", dir: testDir },
+  ]) {
+    const imports = await filesImportingWorkspacePackages(dir);
+    if (imports.length > 0) {
+      throw new Error(
+        `The ${name} build imports a workspace package by name (it must be bundled): ${imports.join(", ")}`,
+      );
+    }
   }
   console.log(
     `OK: ${MARKER} is in ${testHits.length} test-build file(s) and in none of ${prodFiles.length} prod-build files.`,

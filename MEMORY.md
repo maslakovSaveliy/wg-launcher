@@ -79,6 +79,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   its switches with `appendSwitch`. `pnpm test:e2e` runs the desktop suite first, so extra arguments reach the fixture
   only; CI runs `test:e2e:fixture --project=chromium` and a separate desktop job. Leaving react, react-dom and scheduler
   out of the packaged `node_modules` moves to Task 16 (no electron-builder config exists yet).
+- 2026-10-28 Phase 1 Task 6 (library database, Assumed unless noted): `apps/desktop/src/main/db/`; migrations are `.sql`
+  files imported with Vite's `?raw`, the pre-migration copy is made with `VACUUM INTO` (architecture.md section 7);
+  `snapshots.revision_id` stays the primary key and `addIfAbsent` adds no row for a stored revision (M8); the 5 ms budget
+  is checked by query plans, not by time (R18); repositories take the injected clock, never `Date.now()`; `Db` is a
+  union of `WritableDb` and `ReadOnlyDb`, and repositories accept only the writable one. Over 1 000 games, 5 sessions,
+  2 storage targets and 3 snapshots each, one call took 1.05 ms for `games.list` (1 000 rows) and 0.002 to 0.015 ms for
+  the indexed lookups [V, 2026-10-28, Node 24.13.0, mean of 200 calls, a throwaway script; not a product number].
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -321,6 +328,27 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   use `node:http`. [V, 2026-10-24]
 - zsh: `log` is a builtin, call the macOS unified log as `/usr/bin/log`; an unmatched glob aborts the whole command
   (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
+
+- Vitest's `execArgv` in the root `vitest.config.ts` passes `--disable-warning=ExperimentalWarning` to test workers,
+  because `node:sqlite` prints "SQLite is an experimental feature" in plain Node 24.13 (Electron 45's Node prints none:
+  the desktop e2e records process warnings and expects no SQLite one). The flag hides every ExperimentalWarning, not
+  only that one (the warning has no code to filter on); other warnings still print. [V, 2026-10-28, Vitest 5.0.5,
+  Node 24.13.0, run locally]
+- `node:sqlite` rows are objects with a null prototype (map them in repositories, do not compare them with
+  `toStrictEqual`); `DatabaseSync` has `isTransaction`; `PRAGMA user_version` set in a rolled-back transaction rolls
+  back too. [V, 2026-10-28, Node 24.13.0, `node` probe]
+- A workspace package that is TypeScript source (`@wg-launcher/shared`, `@wg-launcher/snapshot`) must be bundled into the
+  main build: electron-vite externalizes `dependencies`, so without `build.externalizeDeps: {exclude: [...]}` Electron
+  fails at load with `ERR_MODULE_NOT_FOUND` (`packages/shared/src/index.ts` importing `./errors.js`). `apps/desktop/
+  electron.vite.config.ts` lists them in `WORKSPACE_PACKAGES`. [V, 2026-10-28, desktop e2e RED before, GREEN after]
+- An ES-module main entry with a top-level `await app.whenReady()` never becomes ready (Electron waits for the module
+  before emitting `ready`): use `app.whenReady().then(...)`. [V, 2026-10-28, probe app on Electron 45.0.0]
+- Chromium's `--user-data-dir=<dir>` is honored by Electron 45: `app.getPath("userData")` and all of Chromium's files go
+  there and the default `<appData>/<productName>` is not created; without it they go to the default. The e2e harness
+  passes it for every launch (`appArgs`), and its guard (`e2e/real-profile-guard.ts`) compares full listings of the real
+  `WGLauncher` and `WGLauncher Dev` directories, after a failed launch as well. A module-load crash alone did not create
+  the default directory in a probe (the process only hung); the earlier contamination is therefore not explained
+  further. [V, 2026-10-28, probe apps under the session scratchpad, Playwright `_electron.launch`, macOS arm64]
 
 ## Open questions
 

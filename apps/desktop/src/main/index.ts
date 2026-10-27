@@ -4,6 +4,7 @@
 import { join } from "node:path";
 import { app, type BrowserWindow, session } from "electron";
 import { handleAppProtocol, LAUNCHER_URL, registerAppScheme } from "./app-protocol.js";
+import { type Db, openDatabase } from "./db/database.js";
 import { type Dialogs, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
 import {
@@ -22,6 +23,8 @@ export interface AppContext {
   paths: AppPaths;
   log: Logger;
   dialogs: Dialogs;
+  /** The library database; read-only when a newer app wrote it (the launcher must then show `reason`, not write). */
+  db: Db;
 }
 
 /** Start-up cannot continue: report on stderr (the log may not exist yet) and exit without a dialog. */
@@ -38,6 +41,16 @@ function chooseUserData(): string | null {
     fail("cannot choose the userData directory", error);
     return null;
   }
+}
+
+// Test flavor: record process warnings from the first moment, so a warning printed while a module loads (such as
+// node:sqlite's ExperimentalWarning in plain Node) is caught. ES module imports run before this body, but Node emits
+// a warning on the next tick, so the listener is in place in time (the e2e control run checks the recorder).
+const earlyWarnings: Array<{ name: string; message: string }> = [];
+if (__WG_FLAVOR__ === "test") {
+  process.on("warning", (warning) =>
+    earlyWarnings.push({ name: warning.name, message: warning.message }),
+  );
 }
 
 const partitioning = fixPartitioningSwitch(app.commandLine);
@@ -57,8 +70,16 @@ async function start(userData: string): Promise<AppContext> {
   });
 
   let launcher: BrowserWindow | null = null;
-  const hooks = testHooks?.installTestHooks({ userData, paths, partitioning }) ?? null;
+  const hooks =
+    testHooks?.installTestHooks({ userData, paths, partitioning, warnings: earlyWarnings }) ?? null;
   const dialogs = hooks?.dialogs ?? nativeDialogs(() => launcher);
+
+  // The main process is the only writer of the library database (AGENTS.md data-safety invariant 9).
+  const db = openDatabase(paths.db, { now: Date.now, backupDir: paths.backups });
+  if (db.readOnly) log.error("db.read-only", { reason: db.reason, userVersion: db.userVersion });
+  else log.info("db.open");
+  hooks?.watchDatabase(db);
+  app.on("will-quit", () => db.close());
 
   const launcherSession = session.fromPartition(LAUNCHER_PARTITION);
   setUpLauncherSession(launcherSession, log);
@@ -81,7 +102,7 @@ async function start(userData: string): Promise<AppContext> {
 
   const devUrl = FLAVOR === "dev" ? process.env.ELECTRON_RENDERER_URL : undefined;
   await window.loadURL(devUrl ?? LAUNCHER_URL);
-  return { paths, log, dialogs };
+  return { paths, log, dialogs, db };
 }
 
 const userData = chooseUserData();

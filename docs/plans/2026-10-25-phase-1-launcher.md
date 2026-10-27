@@ -261,12 +261,16 @@ play-sessions.ts,storage-targets.ts,snapshots.ts,restore-journal.ts,storage-chec
 `user_version` is newer); one repo object per table with small typed methods (e.g. `games.insert(row)`,
 `games.update(id, patch)`, `snapshots.listForGame(gameId, baseRevisionId)` implementing M8,
 `snapshots.findByRevision(id)`). Schema exactly architecture §7.
-- [ ] Tests (Vitest, `node:sqlite` in Node 24): migration from empty sets `user_version` 1; a failing migration leaves
+- [x] Tests (Vitest, `node:sqlite` in Node 24): migration from empty sets `user_version` 1; a failing migration leaves
   `user_version` 0 and the backup copy; newer version → read-only; M8 listing; `games` delete cascades window state and
   sessions but keeps `snapshots`, `storage_targets`; a statement-time budget check over 1 000 games stays under 5 ms per
   query (Assumed budget, recorded, not a product number).
-- [ ] Run failing, implement, run passing; check in e2e that the app opens the DB in Electron's main without a warning.
-- [ ] Commit `feat(desktop): add the library database`.
+- [x] Run failing, implement, run passing; check in e2e that the app opens the DB in Electron's main without a warning.
+- [x] Commit `feat(desktop): add the library database`.
+- Done as ruled: R18 (the 5 ms budget is checked by `EXPLAIN QUERY PLAN` on every hot-path statement, over 1 000
+  games, with no wall-clock assertion) and R19 (workspace packages are bundled into the main build; the e2e harness
+  passes `--user-data-dir` and its real-profile guard compares a full listing, also after a failed launch). The
+  harness hardening is its own commit, `test(desktop): keep e2e runs off the real userData even when start-up crashes`.
 
 ### Task 7a: Security policies as pure functions (M)
 **Files:** `src/main/policy/{site.ts,url-rules.ts,permissions.ts,deep-link.ts}`, tests.
