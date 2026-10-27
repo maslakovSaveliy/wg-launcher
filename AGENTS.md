@@ -70,14 +70,15 @@ version by itself inside the repo. `pnpm install` also installs the git hooks (t
 | `pnpm test` | Vitest unit tests (fast; also run by the pre-push hook) |
 | `pnpm test:e2e` | Playwright suite of the `progress-lab` fixture in bundled Chromium and, locally, installed Chrome (`--project=chromium` for Chromium only, as CI does). Needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once. Not part of `pnpm test` or `pnpm check` |
 | `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
+| `pnpm paths:check` | No machine-specific paths in tracked text files: home paths, macOS temp roots, the current user's home and user name (findings print `file:line:column kind`, never the text). `/home/web_user` (Emscripten IDBFS tests) is the only exception |
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
-| `pnpm check` | Runs lint, typecheck, test, licenses:check and docs:lint (not `test:e2e`) |
+| `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check and docs:lint (not `test:e2e`) |
 
 Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed copy.
 
 Git hooks (lefthook) run for you: pre-commit formats staged files with Biome (and re-stages them), scans them with
-secretlint and lints staged Markdown; commit-msg enforces Conventional Commits; pre-push runs `pnpm typecheck` and
-`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks on every pull request and also runs the fixture's
+secretlint, rejects machine-specific paths (`scripts/check-machine-paths.mjs`) and lints staged Markdown; commit-msg enforces Conventional Commits; pre-push runs `pnpm typecheck` and
+`pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks (including `pnpm paths:check`) on every pull request and also runs the fixture's
 Playwright suite (`pnpm test:e2e --project=chromium`) on Ubuntu and macOS.
 
 ## Hard rules

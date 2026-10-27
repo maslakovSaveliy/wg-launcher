@@ -53,11 +53,12 @@ naming the model.
 
 The git hooks (lefthook) run for you:
 
-- pre-commit formats staged files with Biome (and re-stages them), scans them with secretlint and lints staged Markdown;
+- pre-commit formats staged files with Biome (and re-stages them), scans them with secretlint, rejects machine-specific
+  paths (home directories, temporary roots, your own user name) and lints staged Markdown;
 - commit-msg enforces Conventional Commits;
 - pre-push runs `pnpm typecheck` and `pnpm test`.
 
-CI repeats the checks on every pull request (lint, typecheck, license gate, Markdown lint, unit tests on macOS and
+CI repeats the checks on every pull request (lint, typecheck, license gate, machine-path check, Markdown lint, unit tests on macOS and
 Windows, and the fixture's Playwright suite on Ubuntu and macOS), so skipping a hook only delays the failure.
 
 ## Definition of Done

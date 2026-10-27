@@ -24,8 +24,9 @@
     "test": "vitest run",
     "test:e2e": "pnpm --filter @wg-launcher/fixture-progress-lab run test:e2e",
     "licenses:check": "node scripts/check-licenses.mjs",
+    "paths:check": "node scripts/check-machine-paths.mjs",
     "docs:lint": "markdownlint-cli2 \"**/*.md\"",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm licenses:check && pnpm docs:lint"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm licenses:check && pnpm paths:check && pnpm docs:lint"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

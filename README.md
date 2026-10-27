@@ -46,7 +46,8 @@ pnpm check       # lint, typecheck, unit tests, license gate, Markdown lint
 | `pnpm test:e2e` | Playwright suite of the `progress-lab` fixture (CI runs `--project=chromium`; needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once). Not part of `pnpm check` |
 | `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
-| `pnpm check` | Runs lint, typecheck, test, licenses:check and docs:lint |
+| `pnpm paths:check` | No machine-specific paths (home directories, temporary roots) in tracked text files |
+| `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check and docs:lint |
 
 The workflow, commit rules, Definition of Done and dependency policy are in [CONTRIBUTING.md](CONTRIBUTING.md). The rules
 every contributor and AI agent follows are in [AGENTS.md](AGENTS.md).

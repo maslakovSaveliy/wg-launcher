@@ -59,6 +59,12 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   `pnpm test:e2e` script of the test game. License gate: production dependencies strict against the AGENTS.md
   allowlist (SPDX `OR`/`AND` understood), dev-only dependencies warn.
 - Execution style: subagent-driven development; test-first where code exists.
+- 2026-10-28 Owner: the rule "no absolute home paths, local usernames or other machine-specific paths" is enforced by
+  tooling, not only by instructions. `scripts/check-machine-paths.mjs` (`pnpm paths:check`, part of `pnpm check`) runs
+  in the lefthook pre-commit job on staged files and in the CI quality job on all tracked text files. It flags POSIX
+  and Windows home paths, macOS temp roots and (locally only) the current home directory and user name; findings print
+  `file:line:column kind`, never the text. `/home/web_user` (Emscripten IDBFS test path) is the only allowlisted path.
+  The user-name needle is off on CI (`CI=true`): a runner's generic user name would match ordinary words.
 - 2026-10-25 Phase 0 close-out (Task 9): `README.md`, `CONTRIBUTING.md` and the docs index `docs/README.md` exist, and
   the branch `phase-0-foundation` waits for the owner's review before any merge to `main`.
 - 2026-10-25 Task 3 (`.wgsnap` container, Assumed unless noted): the Node-only container is the package entry

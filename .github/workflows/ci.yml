@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   quality:
-    name: Lint, typecheck, licenses, docs (ubuntu)
+    name: Lint, typecheck, licenses, paths, docs (ubuntu)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -31,6 +31,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm licenses:check
+      - run: pnpm paths:check
       - run: pnpm docs:lint
 
   # Proves install and unit tests on these operating systems. It does not prove game compatibility.
