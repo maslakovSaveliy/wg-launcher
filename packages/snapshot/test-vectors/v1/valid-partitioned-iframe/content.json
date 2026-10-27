@@ -1,0 +1,86 @@
+{
+  "storageKeys": [
+    {
+      "origin": "http://127.0.0.1:4417",
+      "topLevelSite": "http://localhost",
+      "role": "frame",
+      "localStorage": [
+        [
+          "progress-lab:format",
+          "1"
+        ],
+        [
+          "progress-lab:state",
+          "{\"level\":1,\"coins\":10,\"inventory\":[],\"steps\":1}"
+        ]
+      ],
+      "indexedDB": [
+        {
+          "name": "progress-lab",
+          "version": 1,
+          "stores": [
+            {
+              "name": "profile",
+              "keyPath": "id",
+              "autoIncrement": false,
+              "keyGenerator": null,
+              "indexes": [
+                {
+                  "name": "by-level",
+                  "keyPath": "level",
+                  "unique": false,
+                  "multiEntry": false
+                }
+              ],
+              "records": [
+                [
+                  "player",
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "id",
+                        "player"
+                      ],
+                      [
+                        "level",
+                        1
+                      ],
+                      [
+                        "coins",
+                        10
+                      ],
+                      [
+                        "inventory",
+                        []
+                      ],
+                      [
+                        "updatedAt",
+                        {
+                          "$": "date",
+                          "v": 1767225660123
+                        }
+                      ]
+                    ]
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "origin": "http://localhost:4417",
+      "topLevelSite": null,
+      "role": "top",
+      "localStorage": [
+        [
+          "iframe-host:loaded",
+          "1"
+        ]
+      ],
+      "indexedDB": []
+    }
+  ]
+}

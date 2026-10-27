@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-absolute",
+  "description": "A regular file named /etc/escape after the manifest",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_ABSOLUTE_PATH"
+  }
+}

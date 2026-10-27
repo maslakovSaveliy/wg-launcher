@@ -1,0 +1,13 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-oversize-file",
+  "description": "data/0/local-storage.cbor has 1508 bytes in its header with maxEntryBytes 1024 (manifest.json is smaller); valid with the default limits",
+  "input": "input.wgsnap",
+  "limits": {
+    "maxEntryBytes": 1024
+  },
+  "expect": {
+    "ok": false,
+    "error": "SNAP_ENTRY_TOO_LARGE"
+  }
+}

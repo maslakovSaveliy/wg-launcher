@@ -1,0 +1,263 @@
+{
+  "storageKeys": [
+    {
+      "origin": "http://localhost:4417",
+      "topLevelSite": null,
+      "role": "top",
+      "localStorage": [
+        [
+          "surrogate",
+          {
+            "$": "str16",
+            "hex": "610000d8"
+          }
+        ]
+      ],
+      "indexedDB": [
+        {
+          "name": "special",
+          "version": 1,
+          "stores": [
+            {
+              "name": "values",
+              "keyPath": null,
+              "autoIncrement": false,
+              "keyGenerator": null,
+              "indexes": [],
+              "records": [
+                [
+                  "bigint",
+                  [
+                    {
+                      "$": "bigint",
+                      "v": "123456789012345678901234567890"
+                    },
+                    {
+                      "$": "bigint",
+                      "v": "-1"
+                    },
+                    {
+                      "$": "bigint",
+                      "v": "0"
+                    }
+                  ]
+                ],
+                [
+                  "boxed",
+                  [
+                    {
+                      "$": "boxed",
+                      "v": true
+                    },
+                    {
+                      "$": "boxed",
+                      "v": 42
+                    },
+                    {
+                      "$": "boxed",
+                      "v": "text"
+                    },
+                    {
+                      "$": "boxed",
+                      "v": {
+                        "$": "bigint",
+                        "v": "7"
+                      }
+                    }
+                  ]
+                ],
+                [
+                  "floats",
+                  [
+                    {
+                      "$": "f64",
+                      "hex": "8000000000000000"
+                    },
+                    {
+                      "$": "f64",
+                      "hex": "7ff8000000000000"
+                    },
+                    {
+                      "$": "f64",
+                      "hex": "7ff0000000000000"
+                    },
+                    {
+                      "$": "f64",
+                      "hex": "fff0000000000000"
+                    },
+                    {
+                      "$": "f64",
+                      "hex": "3fb999999999999a"
+                    },
+                    {
+                      "$": "f64",
+                      "hex": "3ff8000000000000"
+                    },
+                    {
+                      "$": "f64",
+                      "hex": "4340000000000000"
+                    }
+                  ]
+                ],
+                [
+                  "invalid-date",
+                  {
+                    "$": "date",
+                    "v": {
+                      "$": "f64",
+                      "hex": "7ff8000000000000"
+                    }
+                  }
+                ],
+                [
+                  "lone-surrogate",
+                  {
+                    "$": "str16",
+                    "hex": "610000d8"
+                  }
+                ],
+                [
+                  "map",
+                  {
+                    "$": "map",
+                    "entries": [
+                      [
+                        1,
+                        "number key"
+                      ],
+                      [
+                        "1",
+                        "string key"
+                      ],
+                      [
+                        {
+                          "$": "f64",
+                          "hex": "7ff8000000000000"
+                        },
+                        "NaN key"
+                      ],
+                      [
+                        {
+                          "$": "object",
+                          "entries": []
+                        },
+                        "object key"
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  "missing-vs-undefined",
+                  [
+                    {
+                      "$": "object",
+                      "entries": [
+                        [
+                          "a",
+                          1
+                        ],
+                        [
+                          "b",
+                          {
+                            "$": "undefined"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "$": "object",
+                      "entries": [
+                        [
+                          "a",
+                          1
+                        ]
+                      ]
+                    }
+                  ]
+                ],
+                [
+                  "object-keys",
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "2",
+                        "index key first"
+                      ],
+                      [
+                        "z",
+                        1
+                      ],
+                      [
+                        {
+                          "$": "str16",
+                          "hex": "00dc"
+                        },
+                        "lone surrogate key"
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  "regexp",
+                  {
+                    "$": "regexp",
+                    "source": "^wg(?<n>[0-9]+)$",
+                    "flags": "dgimsuy"
+                  }
+                ],
+                [
+                  "set",
+                  {
+                    "$": "set",
+                    "items": [
+                      1,
+                      "1",
+                      {
+                        "$": "f64",
+                        "hex": "7ff8000000000000"
+                      },
+                      null,
+                      {
+                        "$": "undefined"
+                      }
+                    ]
+                  }
+                ],
+                [
+                  "sparse",
+                  {
+                    "$": "sparse",
+                    "length": 5,
+                    "entries": [
+                      [
+                        "1",
+                        "b"
+                      ],
+                      [
+                        "3",
+                        {
+                          "$": "undefined"
+                        }
+                      ],
+                      [
+                        "extra",
+                        true
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  "undefined",
+                  {
+                    "$": "undefined"
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

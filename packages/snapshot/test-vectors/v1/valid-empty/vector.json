@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-empty",
+  "description": "No storage keys and no data files (a backup of an empty partition)",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "f0a7bacf4b0c6635010cd08de261d39cfca905317225dc3acc5a45a1d9a58759",
+    "content": "content.json"
+  }
+}

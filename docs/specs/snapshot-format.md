@@ -442,13 +442,15 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
   `value` gives `hex`, and decoding `hex` as a one-item sequence passes the value check and gives `value`. An invalid
   vector fails the decoder or the value check with `SNAP_RECORD_INVALID`. A later Rust codec MUST pass the same file.
   `Assumed`
-- Layout: `packages/snapshot/test-vectors/v1/index.json` (the ordered list of vector ids) and one directory per vector,
-  `packages/snapshot/test-vectors/v1/<id>/`, holding `vector.json`, `input.wgsnap` and, for valid vectors,
-  `content.json`. A runner fails on a listed directory that is missing and on an unlisted one. `Assumed`
-- Vectors are generated once by a script in `packages/snapshot`, committed, and frozen: an expected result changes only
-  with a new `formatVersion` or a reviewed correction. Invalid vectors are written as raw bytes, because a conforming
-  writer cannot produce them. A later Rust implementation passes the same directory (ADR-0003). `Owner` for shared
-  vectors, `Assumed` for the rest.
+- Layout: `packages/snapshot/test-vectors/v1/index.json` (the ordered list of vector ids, a JSON array of strings) and
+  one directory per vector, `packages/snapshot/test-vectors/v1/<id>/`, holding `vector.json`, `input.wgsnap` and, for
+  valid vectors, `content.json`, and nothing else. A runner fails on a listed directory that is missing and on an
+  unlisted one. A reader is given the file size of `input.wgsnap` as `compressedSize` (section 8). `Assumed`
+- Vectors are generated once by a script in `packages/snapshot` (`scripts/generate-vectors.ts`, which refuses to
+  overwrite an existing `v1/` without `--overwrite`), committed, and frozen: an expected result changes only with a new
+  `formatVersion` or a reviewed correction. Invalid vectors are written as raw bytes, because a conforming writer cannot
+  produce them; each changes one thing in a valid base, so it fails for its own reason and no earlier one. A later Rust
+  implementation passes the same directory (ADR-0003). `Owner` for shared vectors, `Assumed` for the rest.
 
 `vector.json` of an invalid vector:
 
@@ -487,7 +489,8 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
 | `valid-idbfs` | The progress-lab IDBFS shape: database `/home/web_user` version 21, store `FILE_DATA`, index `timestamp` | ok |
 | `valid-key-generator` | An `autoIncrement` store whose `keyGenerator` is above its highest key | ok |
 | `valid-empty` | No storage keys (a backup of an empty partition) | ok |
-| `invalid-truncated` | Archive cut inside an entry | `SNAP_TRUNCATED` |
+| `invalid-truncated` | The `input.wgsnap` of `valid-binary-types` cut to its first floor(length / 2) bytes: a cut inside the zstd frame, found by the frame walker (cut length in the vector's `description`) | `SNAP_TRUNCATED` |
+| `invalid-truncated-tar` | A complete checksummed zstd frame whose tar is the tar of `valid-binary-types` ending 100 bytes into the data of its second entry, found by the tar reader (cut length in the vector's `description`) | `SNAP_TRUNCATED` |
 | `invalid-not-zstd` | Bytes that are not a zstd frame | `SNAP_ZSTD_INVALID` |
 | `invalid-no-checksum` | zstd frame without content checksum | `SNAP_ZSTD_NO_CHECKSUM` |
 | `invalid-traversal` | `../escape.txt` | `SNAP_PATH_TRAVERSAL` |
@@ -511,6 +514,10 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
 | `invalid-noncanonical-record` | A float holding an integer | `SNAP_RECORD_INVALID` |
 | `invalid-unknown-tag` | Tag 33199 in a record | `SNAP_RECORD_INVALID` |
 | `invalid-trailing-data` | Non-zero bytes after the tar end blocks | `SNAP_TRAILING_DATA` |
+
+- The two truncation vectors and their cut rule are `Owner` (Phase 1 plan, M6); the other rows are `Assumed`. Because
+  zstd output depends on the library version, a regenerated `valid-binary-types` may have other compressed bytes, which
+  is why both cut lengths are recorded in the vectors themselves.
 
 ## Open questions
 

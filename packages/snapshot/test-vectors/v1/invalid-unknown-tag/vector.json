@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-unknown-tag",
+  "description": "data/0/idb/0/store-0.cbor holds the record [1, 33199(1)]: tag 33199 is not in the value model (bytes 82 01 d9 81 af 01); the manifest hashes match the bytes",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  }
+}

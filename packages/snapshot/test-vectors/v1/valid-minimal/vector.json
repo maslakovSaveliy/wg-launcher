@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-minimal",
+  "description": "One first-party storage key with two localStorage items",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "639265d93dbb42cfe66e22ecd82105e24fd3b26a310f8c291ea890756cd9c09d",
+    "content": "content.json"
+  }
+}

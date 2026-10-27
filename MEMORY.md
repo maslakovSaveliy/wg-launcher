@@ -71,6 +71,15 @@ All entries below are dated 2026-10-24 unless they say otherwise.
   `SNAP_FILE_TOO_LARGE`, shorter `SNAP_TRUNCATED`. A decompressor error is always `SNAP_ZSTD_INVALID` (R12). Count limits above the manifest's are `SNAP_RECORD_INVALID`, `storageKeys` above
   `maxStorageKeys` is `SNAP_MANIFEST_INVALID` (section 8). Manifest numbers are safe integers only, so JCS needs no
   float formatting (section 4).
+- 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): `packages/snapshot/test-vectors/v1/` holds the 31
+  vectors of snapshot-format.md section 10 plus `invalid-truncated-tar` (M6), generated once by
+  `scripts/generate-vectors.ts` and frozen; the runner is `src/vectors.test.ts`, and `test/content.ts` turns
+  `content.json` into data files and back for both. `index.json` is a JSON array of ids. The fixed manifest fields
+  (`VECTOR_FIELDS`: UUIDv7s with the 2026-01-01 timestamp, `createdAt` `2026-01-01T00:00:00.000Z`, exporter
+  `generic-web-storage` 1.0.0) make generation deterministic: two runs gave byte-identical files, zstd included, with
+  Node 24.13.0 [V, 2026-10-28, run locally]. `v1/` is excluded from Biome so the committed JSON stays byte-identical
+  to the generator's `JSON.stringify(value, null, 2)` output. The generator refuses an existing `v1/` without
+  `--overwrite`.
 - Controlled test game (Task 4): `fixtures/test-games/progress-lab`, a pnpm workspace package
   (`@wg-launcher/fixture-progress-lab`, private) with its own Playwright suite. The interface the spike depends on
   (server, element ids, `?ephemeral=1`, `/coi/`, `iframe-host.html`, `sw.js`, storage shapes, hash) is in its
@@ -435,6 +444,12 @@ All entries below are dated 2026-10-24 unless they say otherwise.
 - `pnpm exec biome check --write` also reformats JSON test vectors (line breaks only); the hex strings stay as written.
   [V, 2026-10-25, Biome 2.6.2]
 - In zsh an unmatched glob aborts the whole command (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
+- Running a TypeScript file of this repo with plain `node` (Node 24.13.0) fails twice: strip-only mode refuses
+  parameter properties (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`, `constructor(readonly original)` in
+  `src/container/inflate.ts`), and Node does not map the `.js` import specifiers to their `.ts` files
+  (`ERR_MODULE_NOT_FOUND`). `scripts/generate-vectors.ts` therefore runs with `--experimental-transform-types` (prints
+  an ExperimentalWarning) and registers a `module.registerHooks` resolve fallback from `.js` to `.ts` before it imports
+  the project modules dynamically; no dependency is needed. [V, 2026-10-28, Node 24.13.0, run locally]
 - Node's zstd does not report a truncated frame: a checksummed frame cut by 6 bytes decompressed without an error through
   `zlib.zstdDecompressSync` and through `zlib.createZstdDecompress` (the stream just ended). So the `.wgsnap` reader
   detects truncation itself (Phase 1 plan, M6). [V, 2026-10-25, Node 24.13.0, `node -e` run locally] Done by

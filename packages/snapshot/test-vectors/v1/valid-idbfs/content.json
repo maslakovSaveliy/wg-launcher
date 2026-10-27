@@ -1,0 +1,99 @@
+{
+  "storageKeys": [
+    {
+      "origin": "http://localhost:4417",
+      "topLevelSite": null,
+      "role": "top",
+      "localStorage": [],
+      "indexedDB": [
+        {
+          "name": "/home/web_user",
+          "version": 21,
+          "stores": [
+            {
+              "name": "FILE_DATA",
+              "keyPath": null,
+              "autoIncrement": false,
+              "keyGenerator": null,
+              "indexes": [
+                {
+                  "name": "timestamp",
+                  "keyPath": "timestamp",
+                  "unique": false,
+                  "multiEntry": false
+                }
+              ],
+              "records": [
+                [
+                  "/home/web_user",
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "timestamp",
+                        {
+                          "$": "date",
+                          "v": 1767225600123
+                        }
+                      ],
+                      [
+                        "mode",
+                        16877
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  "/home/web_user/save",
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "timestamp",
+                        {
+                          "$": "date",
+                          "v": 1767225960123
+                        }
+                      ],
+                      [
+                        "mode",
+                        16877
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  "/home/web_user/save/slot1.dat",
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "timestamp",
+                        {
+                          "$": "date",
+                          "v": 1767225960123
+                        }
+                      ],
+                      [
+                        "mode",
+                        33206
+                      ],
+                      [
+                        "contents",
+                        {
+                          "$": "view",
+                          "type": "Uint8Array",
+                          "hex": "504c414201020000003c000000060000000200000041f496af331a5c142570d1b4403a105e4c963e39b60b0a6ebeae70eb36f75f10"
+                        }
+                      ]
+                    ]
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

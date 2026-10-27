@@ -25,6 +25,8 @@ export interface RawHeader {
   name?: string | Uint8Array;
   prefix?: string | Uint8Array;
   typeflag?: string;
+  /** The 100-byte linkname field (offset 157), for link entries. */
+  linkname?: string;
   size?: number;
   /** The 12 raw bytes of the size field, replacing `size`. */
   sizeField?: string;
@@ -49,6 +51,9 @@ export function rawHeader(path: string, fields: RawHeader = {}): Uint8Array {
   put(block, 124, fields.sizeField ?? octal(fields.size ?? 0, 12));
   put(block, 136, "00000000000\0");
   put(block, 156, fields.typeflag ?? "0");
+  if (fields.linkname !== undefined) {
+    put(block, 157, fields.linkname);
+  }
   put(block, 257, fields.magic ?? "ustar\0");
   put(block, 263, fields.version ?? "00");
   if (fields.prefix !== undefined) {
@@ -88,6 +93,38 @@ export function tar(files: TarFile[], end = true): Uint8Array {
     return [rawHeader(file.path, { size: data.length, ...file.header }), padded(data)];
   });
   return concat(...parts, end ? new Uint8Array(1024) : new Uint8Array(0));
+}
+
+export interface ListedEntry {
+  path: string;
+  /** Offset of the header block in the tar stream. */
+  headerAt: number;
+  /** Offset of the first data byte. */
+  dataAt: number;
+  size: number;
+}
+
+/** The entries of a well-formed tar stream (name field only, octal sizes), up to the first zero block. */
+export function listTar(tarBytes: Uint8Array): ListedEntry[] {
+  const out: ListedEntry[] = [];
+  const decoder = new TextDecoder();
+  for (let at = 0; at + 512 <= tarBytes.length; ) {
+    const block = tarBytes.subarray(at, at + 512);
+    if (block.every((b) => b === 0)) {
+      break;
+    }
+    const field = block.subarray(0, 100);
+    const nul = field.indexOf(0);
+    const size = Number.parseInt(decoder.decode(block.subarray(124, 135)), 8);
+    out.push({
+      path: decoder.decode(nul < 0 ? field : field.subarray(0, nul)),
+      headerAt: at,
+      dataAt: at + 512,
+      size,
+    });
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  return out;
 }
 
 export const zstd = (bytes: Uint8Array, checksum = true) =>

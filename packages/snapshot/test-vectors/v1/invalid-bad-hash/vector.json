@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-bad-hash",
+  "description": "The last byte of data/0/local-storage.cbor changed (k to K in the value dark); the manifest is unchanged",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_ENTRY_HASH_MISMATCH"
+  }
+}

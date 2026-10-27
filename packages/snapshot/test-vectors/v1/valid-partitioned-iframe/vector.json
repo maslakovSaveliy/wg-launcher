@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-partitioned-iframe",
+  "description": "A partitioned key (http://127.0.0.1:4417 under http://localhost, role frame) with localStorage and IndexedDB, and a first-party key, like progress-lab variant c",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "eccc5874294f491e3cced6a26c163e383c8b48d8c7017e9a22b82d85e8d52ac3",
+    "content": "content.json"
+  }
+}

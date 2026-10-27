@@ -4,5 +4,5 @@
     // Float16Array (RFC 8746 tag 84) is ES2025; Node 24 and Chromium 156 ship it.
     "lib": ["ES2024", "ES2025.Float16"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"]
 }

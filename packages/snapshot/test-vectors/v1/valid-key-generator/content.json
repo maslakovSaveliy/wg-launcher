@@ -1,0 +1,96 @@
+{
+  "storageKeys": [
+    {
+      "origin": "http://localhost:4417",
+      "topLevelSite": null,
+      "role": "top",
+      "localStorage": [],
+      "indexedDB": [
+        {
+          "name": "progress-lab",
+          "version": 1,
+          "stores": [
+            {
+              "name": "inline",
+              "keyPath": "id",
+              "autoIncrement": true,
+              "keyGenerator": 4,
+              "indexes": [],
+              "records": [
+                [
+                  3,
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "id",
+                        3
+                      ]
+                    ]
+                  }
+                ]
+              ]
+            },
+            {
+              "name": "stepLog",
+              "keyPath": null,
+              "autoIncrement": true,
+              "keyGenerator": 9,
+              "indexes": [],
+              "records": [
+                [
+                  1,
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "step",
+                        1
+                      ],
+                      [
+                        "coinsGained",
+                        10
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  2,
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "step",
+                        2
+                      ],
+                      [
+                        "coinsGained",
+                        10
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  5,
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "step",
+                        5
+                      ],
+                      [
+                        "coinsGained",
+                        10
+                      ]
+                    ]
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

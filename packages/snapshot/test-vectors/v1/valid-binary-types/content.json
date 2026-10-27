@@ -1,0 +1,211 @@
+{
+  "storageKeys": [
+    {
+      "origin": "http://localhost:4417",
+      "topLevelSite": null,
+      "role": "top",
+      "localStorage": [],
+      "indexedDB": [
+        {
+          "name": "binary",
+          "version": 1,
+          "stores": [
+            {
+              "name": "values",
+              "keyPath": null,
+              "autoIncrement": false,
+              "keyGenerator": null,
+              "indexes": [],
+              "records": [
+                [
+                  1,
+                  {
+                    "$": "date",
+                    "v": 1767225600123
+                  }
+                ],
+                [
+                  {
+                    "$": "date",
+                    "v": 1767225600000
+                  },
+                  "a Date key"
+                ],
+                [
+                  "arraybuffer",
+                  {
+                    "$": "bytes",
+                    "hex": "00010203fffe"
+                  }
+                ],
+                [
+                  "blob",
+                  {
+                    "$": "blob",
+                    "type": "image/svg+xml",
+                    "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+                  }
+                ],
+                [
+                  "dataview",
+                  {
+                    "$": "view",
+                    "type": "DataView",
+                    "hex": "0a0b0c"
+                  }
+                ],
+                [
+                  "file",
+                  {
+                    "$": "file",
+                    "name": "slot1.dat",
+                    "lastModified": 1767225600000,
+                    "type": "application/octet-stream",
+                    "hex": "504c414220676f6c64656e20766563746f722066696c6520636f6e74656e743a2064657465726d696e6973746963206279746573206f6620612046696c652076616c75652c206c6f6e676572207468616e206f6e652068756e647265642062797465732e0a"
+                  }
+                ],
+                [
+                  "partial-view",
+                  {
+                    "$": "view",
+                    "type": "Uint16Array",
+                    "hex": "02030405",
+                    "bufferHex": "0001020304050607",
+                    "byteOffset": 2,
+                    "length": 2
+                  }
+                ],
+                [
+                  "typed-arrays",
+                  {
+                    "$": "object",
+                    "entries": [
+                      [
+                        "BigInt64Array",
+                        {
+                          "$": "view",
+                          "type": "BigInt64Array",
+                          "hex": "ffffffffffffffff"
+                        }
+                      ],
+                      [
+                        "BigUint64Array",
+                        {
+                          "$": "view",
+                          "type": "BigUint64Array",
+                          "hex": "0100000000000000"
+                        }
+                      ],
+                      [
+                        "Float16Array",
+                        {
+                          "$": "view",
+                          "type": "Float16Array",
+                          "hex": "003c"
+                        }
+                      ],
+                      [
+                        "Float32Array",
+                        {
+                          "$": "view",
+                          "type": "Float32Array",
+                          "hex": "0000803f"
+                        }
+                      ],
+                      [
+                        "Float64Array",
+                        {
+                          "$": "view",
+                          "type": "Float64Array",
+                          "hex": "000000000000f03f"
+                        }
+                      ],
+                      [
+                        "Int16Array",
+                        {
+                          "$": "view",
+                          "type": "Int16Array",
+                          "hex": "0080ffff"
+                        }
+                      ],
+                      [
+                        "Int32Array",
+                        {
+                          "$": "view",
+                          "type": "Int32Array",
+                          "hex": "ffffffff"
+                        }
+                      ],
+                      [
+                        "Int8Array",
+                        {
+                          "$": "view",
+                          "type": "Int8Array",
+                          "hex": "80ff"
+                        }
+                      ],
+                      [
+                        "Uint16Array",
+                        {
+                          "$": "view",
+                          "type": "Uint16Array",
+                          "hex": "0100ffff"
+                        }
+                      ],
+                      [
+                        "Uint32Array",
+                        {
+                          "$": "view",
+                          "type": "Uint32Array",
+                          "hex": "01000000"
+                        }
+                      ],
+                      [
+                        "Uint8Array",
+                        {
+                          "$": "view",
+                          "type": "Uint8Array",
+                          "hex": "00ff"
+                        }
+                      ],
+                      [
+                        "Uint8ClampedArray",
+                        {
+                          "$": "view",
+                          "type": "Uint8ClampedArray",
+                          "hex": "00ff"
+                        }
+                      ]
+                    ]
+                  }
+                ],
+                [
+                  {
+                    "$": "bytes",
+                    "hex": "00ff"
+                  },
+                  "a binary key"
+                ],
+                [
+                  [
+                    "slot",
+                    1,
+                    {
+                      "$": "date",
+                      "v": 1767225600000
+                    },
+                    {
+                      "$": "bytes",
+                      "hex": "01"
+                    }
+                  ],
+                  "an array key"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

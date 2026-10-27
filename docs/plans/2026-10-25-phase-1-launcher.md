@@ -203,18 +203,19 @@ string; sizeBytes: number}>` (`limits` for tests only; refused input writes noth
 
 ### Task 4: Golden vectors: generator, committed files, runner (M)
 **Files:** `packages/snapshot/scripts/generate-vectors.ts`, `test-vectors/v1/index.json` and one directory per vector,
-`src/vectors.test.ts`, `test/notation.ts` (test notation ⇄ `CborItem`).
-- [ ] Generator writes the 31 vectors of snapshot-format §10 plus `invalid-truncated-tar`; invalid ones as raw bytes.
+`src/vectors.test.ts`, `test/notation.ts` (test notation ⇄ `CborItem`); done with `test/content.ts` (`content.json` ⇄
+data files, shared by generator and runner) and an extended `test/wgsnap.ts` (`linkname`, `listTar`).
+- [x] Generator writes the 31 vectors of snapshot-format §10 plus `invalid-truncated-tar`; invalid ones as raw bytes.
   **M6 bytes:** `invalid-truncated` = the `input.wgsnap` of `valid-binary-types` with only its first
   `floor(length / 2)` bytes (a compressed file cut mid-frame; the walker gives `SNAP_TRUNCATED`);
   `invalid-truncated-tar` = a complete checksummed zstd frame whose tar ends 100 bytes into the data of the second
   entry (the tar reader gives `SNAP_TRUNCATED`). zstd output is not compared, so the cut length is recorded in
   `vector.json` `description`.
-- [ ] Runner: fails on a missing or an unlisted directory and on unknown `vector.json` members; valid vectors decode to
+- [x] Runner: fails on a missing or an unlisted directory and on unknown `vector.json` members; valid vectors decode to
   `content.json` and re-encode to the same entry paths, hashes and `contentHash`; invalid vectors give exactly their code.
-- [ ] Generate once, commit the files, run the runner twice (deterministic); `pnpm check`.
-- [ ] Docs: snapshot-format §10 table gains `invalid-truncated-tar` and the exact M6 cut rule.
-- [ ] Commit `test(snapshot): add frozen golden vectors`.
+- [x] Generate once, commit the files, run the runner twice (deterministic); `pnpm check`.
+- [x] Docs: snapshot-format §10 table gains `invalid-truncated-tar` and the exact M6 cut rule.
+- [x] Commit `test(snapshot): add frozen golden vectors`.
 
 ### Task 5: `apps/desktop` skeleton: build, flavors, app protocol, launcher window, logs, e2e harness, CI (L)
 **Files:** `apps/desktop/{package.json,tsconfig*.json,electron.vite.config.ts,playwright.config.ts}`,

@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-key-generator",
+  "description": "autoIncrement stores whose keyGenerator is above the highest key: stepLog (keys 1, 2, 5, generator 9) and inline with key path id (key 3, generator 4)",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "4e1fcaa657fe2ae20d6b9f7563da4b8e587a8fae9b6ef79882b24e1d9d94cb1a",
+    "content": "content.json"
+  }
+}

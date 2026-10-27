@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-noncanonical-record",
+  "description": "data/0/idb/0/store-0.cbor holds the record [1, 1] with the value written as the float f9 3c00 (1.0) instead of the integer 01 (bytes 82 01 f9 3c 00); the manifest hashes match the bytes",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_RECORD_INVALID"
+  }
+}

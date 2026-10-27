@@ -1,0 +1,12 @@
+{
+  "vectorFormat": 1,
+  "id": "valid-idbfs",
+  "description": "The progress-lab IDBFS shape: database /home/web_user version 21, store FILE_DATA without a key path, index timestamp, two directories and one 53-byte file",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": true,
+    "contentHash": "bc2f5e5d1bc98bf0101d0f8d50fc6f0bc2fac840e1525506a14b06092dccc82b",
+    "content": "content.json"
+  }
+}

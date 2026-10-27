@@ -1,0 +1,11 @@
+{
+  "vectorFormat": 1,
+  "id": "invalid-traversal",
+  "description": "A regular file named ../escape.txt after the manifest",
+  "input": "input.wgsnap",
+  "limits": {},
+  "expect": {
+    "ok": false,
+    "error": "SNAP_PATH_TRAVERSAL"
+  }
+}
