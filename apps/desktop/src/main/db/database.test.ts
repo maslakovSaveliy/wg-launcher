@@ -1,16 +1,10 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDatabase, type WritableDb } from "./database.js";
-import { fakeClock, tempDir } from "./testing.js";
+import type { WritableDb } from "./database.js";
+import { dbOptions, fakeClock, openDb, openTestDb, tempDir } from "./testing.js";
 
 function open(): WritableDb {
-  const dir = tempDir();
-  const db = openDatabase(join(dir, "library.db"), {
-    now: fakeClock().now,
-    backupDir: join(dir, "backups"),
-  });
-  if (db.readOnly) throw new Error(db.reason);
-  return db;
+  return openTestDb(tempDir());
 }
 
 const pragma = (db: WritableDb, name: string): unknown =>
@@ -65,12 +59,12 @@ describe("openDatabase", () => {
 
   it("survives a restart: what was written is there after closing and reopening", () => {
     const dir = tempDir();
-    const options = { now: fakeClock().now, backupDir: join(dir, "backups") };
-    const first = openDatabase(join(dir, "library.db"), options);
+    const options = dbOptions(dir, fakeClock());
+    const first = openDb(join(dir, "library.db"), options);
     if (first.readOnly) throw new Error(first.reason);
     first.raw.exec("INSERT INTO settings VALUES ('a', '1')");
     first.close();
-    const second = openDatabase(join(dir, "library.db"), options);
+    const second = openDb(join(dir, "library.db"), options);
     expect(second.readOnly).toBe(false);
     expect(second.raw.prepare("SELECT value FROM settings WHERE key = 'a'").get()).toMatchObject({
       value: "1",

@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { openDatabase } from "./database.js";
-import { MIGRATIONS, type Migration } from "./migrate.js";
-import { fakeClock, tempDir } from "./testing.js";
+import { backupDatabase, MIGRATIONS, type Migration } from "./migrate.js";
+import { dbOptions, fakeClock, openDb, tempDir } from "./testing.js";
 
 const ARCHITECTURE = join(import.meta.dirname, "../../../../../docs/specs/architecture.md");
 
@@ -39,10 +38,7 @@ function sha256(path: string): string {
 describe("migrations", () => {
   it("a fresh database is migrated to version 1 with exactly the tables and indexes of architecture.md section 7", () => {
     const dir = tempDir();
-    const db = openDatabase(join(dir, "library.db"), {
-      now: fakeClock().now,
-      backupDir: join(dir, "backups"),
-    });
+    const db = openDb(join(dir, "library.db"), dbOptions(dir, fakeClock()));
     if (db.readOnly) throw new Error(db.reason);
     expect(userVersion(db.raw)).toBe(1);
     expect(names(db.raw, "table")).toEqual([
@@ -60,6 +56,7 @@ describe("migrations", () => {
     expect(names(db.raw, "index")).toEqual(["play_sessions_by_game", "snapshots_by_game"]);
     // A fresh database has nothing to back up.
     expect(existsSync(join(dir, "backups"))).toBe(false);
+    expect(existsSync(join(dir, "tmp"))).toBe(false);
     db.close();
   });
 
@@ -81,7 +78,7 @@ describe("migrations", () => {
     const backupDir = join(dir, "backups");
     const clock = fakeClock();
 
-    const first = openDatabase(path, { now: clock.now, backupDir });
+    const first = openDb(path, dbOptions(dir, clock));
     if (first.readOnly) throw new Error(first.reason);
     first.raw.exec("INSERT INTO settings (key, value) VALUES ('k', '1')");
     first.close();
@@ -94,7 +91,7 @@ describe("migrations", () => {
         sql: "CREATE TABLE half_done (a INTEGER); INSERT INTO no_such_table VALUES (1);",
       },
     ];
-    expect(() => openDatabase(path, { now: clock.now, backupDir, migrations: broken })).toThrow(
+    expect(() => openDb(path, { ...dbOptions(dir, clock), migrations: broken })).toThrow(
       /migration 2.*broken/i,
     );
 
@@ -109,6 +106,7 @@ describe("migrations", () => {
 
     // The copy made before the attempt is a complete, readable database of the old version.
     const copies = readdirSync(backupDir);
+    expect(readdirSync(join(dir, "tmp"))).toEqual([]);
     expect(copies).toHaveLength(1);
     expect(copies[0]).toMatch(/^library-v1-\d{8}T\d{9}Z\.db$/);
     const copy = new DatabaseSync(join(backupDir, copies[0] ?? ""), { readOnly: true });
@@ -125,13 +123,9 @@ describe("migrations", () => {
     const broken: Migration[] = [
       { version: 1, name: "broken", sql: "CREATE TABLE half_done (a INTEGER); SELECT nope FROM;" },
     ];
-    expect(() =>
-      openDatabase(path, {
-        now: fakeClock().now,
-        backupDir: join(dir, "backups"),
-        migrations: broken,
-      }),
-    ).toThrow(/migration 1/i);
+    expect(() => openDb(path, { ...dbOptions(dir, fakeClock()), migrations: broken })).toThrow(
+      /migration 1/i,
+    );
     const check = new DatabaseSync(path);
     expect(userVersion(check)).toBe(0);
     expect(names(check, "table")).toEqual([]);
@@ -143,14 +137,14 @@ describe("migrations", () => {
     const path = join(dir, "library.db");
     const backupDir = join(dir, "backups");
     const clock = fakeClock();
-    const first = openDatabase(path, { now: clock.now, backupDir });
+    const first = openDb(path, dbOptions(dir, clock));
     first.close();
 
     const next: Migration[] = [
       ...MIGRATIONS,
       { version: 2, name: "add-note", sql: "ALTER TABLE orphans ADD COLUMN note TEXT;" },
     ];
-    const db = openDatabase(path, { now: clock.now, backupDir, migrations: next });
+    const db = openDb(path, { ...dbOptions(dir, clock), migrations: next });
     if (db.readOnly) throw new Error(db.reason);
     expect(userVersion(db.raw)).toBe(2);
     db.close();
@@ -167,14 +161,14 @@ describe("migrations", () => {
     const path = join(dir, "library.db");
     const backupDir = join(dir, "backups");
     const clock = fakeClock();
-    openDatabase(path, { now: clock.now, backupDir }).close();
+    openDb(path, dbOptions(dir, clock)).close();
     let migrations: Migration[] = [...MIGRATIONS];
     for (const version of [2, 3]) {
       migrations = [
         ...migrations,
         { version, name: `m${version}`, sql: `CREATE TABLE t${version} (a);` },
       ];
-      openDatabase(path, { now: clock.now, backupDir, migrations }).close();
+      openDb(path, { ...dbOptions(dir, clock), migrations }).close();
     }
     expect(readdirSync(backupDir)).toHaveLength(2);
   });
@@ -183,8 +177,8 @@ describe("migrations", () => {
     const dir = tempDir();
     const path = join(dir, "library.db");
     const backupDir = join(dir, "backups");
-    openDatabase(path, { now: fakeClock().now, backupDir }).close();
-    openDatabase(path, { now: fakeClock().now, backupDir }).close();
+    openDb(path, dbOptions(dir, fakeClock())).close();
+    openDb(path, dbOptions(dir, fakeClock())).close();
     expect(existsSync(backupDir)).toBe(false);
   });
 
@@ -199,7 +193,7 @@ describe("migrations", () => {
     newer.close();
     const before = sha256(path);
 
-    const db = openDatabase(path, { now: fakeClock().now, backupDir });
+    const db = openDb(path, dbOptions(dir, fakeClock()));
     expect(db.readOnly).toBe(true);
     if (!db.readOnly) throw new Error("expected read-only");
     expect(db.reason).toMatch(/version 99.*newer.*version 1/i);
@@ -210,5 +204,52 @@ describe("migrations", () => {
 
     expect(sha256(path)).toBe(before);
     expect(existsSync(backupDir)).toBe(false);
+  });
+
+  describe("the backup copy", () => {
+    function setUpBackup() {
+      const dir = tempDir();
+      const raw = new DatabaseSync(join(dir, "source.db"));
+      raw.exec("CREATE TABLE t (a); INSERT INTO t VALUES (1); PRAGMA user_version = 1");
+      return { dir, raw, backupDir: join(dir, "backups"), tmpDir: join(dir, "tmp") };
+    }
+
+    it("is written under a .partial name in tmp/ and renamed into backups/", () => {
+      const { raw, backupDir, tmpDir } = setUpBackup();
+      const statements: string[] = [];
+      const spy = {
+        exec(sql: string) {
+          statements.push(sql);
+          raw.exec(sql);
+        },
+      } as DatabaseSync;
+
+      const target = backupDatabase(spy, { backupDir, tmpDir }, 1, fakeClock().now);
+
+      const vacuum = statements.find((sql) => sql.startsWith("VACUUM INTO"));
+      expect(vacuum).toContain(tmpDir);
+      expect(vacuum).toMatch(/\.partial'$/);
+      expect(readdirSync(backupDir)).toEqual([target.split(/[\\/]/).pop()]);
+      expect(readdirSync(tmpDir)).toEqual([]);
+      raw.close();
+    });
+
+    // chmod does not stop a Windows process from renaming into a directory, so this case is for POSIX.
+    it.skipIf(process.platform === "win32")(
+      "leaves no .partial file in backups/ or tmp/ when it fails",
+      () => {
+        const { raw, backupDir, tmpDir } = setUpBackup();
+        mkdirSync(backupDir);
+        chmodSync(backupDir, 0o500); // the final rename into backups/ is refused
+        try {
+          expect(() => backupDatabase(raw, { backupDir, tmpDir }, 1, fakeClock().now)).toThrow();
+        } finally {
+          chmodSync(backupDir, 0o700);
+        }
+        expect(readdirSync(backupDir)).toEqual([]);
+        expect(readdirSync(tmpDir)).toEqual([]);
+        raw.close();
+      },
+    );
   });
 });

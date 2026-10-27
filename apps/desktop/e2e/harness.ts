@@ -99,9 +99,9 @@ export interface Launched {
 /**
  * The command-line arguments of an app process. `--user-data-dir` is Chromium's own switch: with it, even a crash
  * while the main module loads (before the app's `app.setPath("userData")` runs) cannot make Chromium write into
- * the real default userData. (Verified 2026-10-28 with a probe app on Electron 45.0.0: with the switch,
- * `app.getPath("userData")` and all of Chromium's files are in that directory and the default one is not created;
- * without it they go to `<appData>/<productName>`.)
+ * the real default userData. (Verified 2026-10-28, probe app on Electron 45.0.0: with the switch Chromium's files and
+ * `app.getPath("userData")` are in that directory and the default one is not created. `e2e/database.spec.ts` checks that
+ * every launch carries the switch.)
  */
 export function appArgs(userData: string): string[] {
   return [APP_DIR, `--user-data-dir=${userData}`];

@@ -1,19 +1,15 @@
 import { join } from "node:path";
 import { isUuidV7 } from "@wg-launcher/shared";
 import { describe, expect, it } from "vitest";
-import { openDatabase, type WritableDb } from "../database.js";
-import { fakeClock, tempDir } from "../testing.js";
+import type { WritableDb } from "../database.js";
+import { dbOptions, fakeClock, openDb, openTestDb, tempDir } from "../testing.js";
 import { createRepos, type Repos } from "./index.js";
 import type { NewSnapshot } from "./snapshots.js";
 
 function setUp() {
   const dir = tempDir();
   const clock = fakeClock();
-  const db = openDatabase(join(dir, "library.db"), {
-    now: clock.now,
-    backupDir: join(dir, "backups"),
-  });
-  if (db.readOnly) throw new Error(db.reason);
+  const db = openTestDb(dir, clock);
   return { db, clock, repos: createRepos(db), dir };
 }
 
@@ -72,15 +68,15 @@ function seedFullGame(db: WritableDb, repos: Repos, n: number) {
 describe("device", () => {
   it("is created once, as a UUIDv7, on the first open and kept on later opens", () => {
     const dir = tempDir();
-    const options = { now: fakeClock().now, backupDir: join(dir, "backups") };
-    const first = openDatabase(join(dir, "library.db"), options);
+    const options = dbOptions(dir, fakeClock());
+    const first = openDb(join(dir, "library.db"), options);
     if (first.readOnly) throw new Error(first.reason);
     const device = createRepos(first).device.get();
     first.close();
     expect(device).not.toBeNull();
     expect(isUuidV7(device?.id ?? "")).toBe(true);
 
-    const second = openDatabase(join(dir, "library.db"), options);
+    const second = openDb(join(dir, "library.db"), options);
     if (second.readOnly) throw new Error(second.reason);
     expect(createRepos(second).device.get()).toEqual(device);
     expect(second.raw.prepare("SELECT count(*) AS n FROM device").get()).toMatchObject({ n: 1 });

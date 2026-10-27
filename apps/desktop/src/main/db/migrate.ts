@@ -7,7 +7,7 @@
 // `MIGRATIONS`; never edit one that has shipped.
 
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, renameSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import initial from "./migrations/001-initial.sql?raw";
 
@@ -74,31 +74,39 @@ function compactUtc(ms: number): string {
 }
 
 /**
- * Copies the database to `<dir>/library-v<version>-<time>.db` (architecture.md section 3) with `VACUUM INTO`.
+ * Copies the database to `<backupDir>/library-v<version>-<time>.db` (architecture.md section 3) with `VACUUM INTO`.
  * That statement writes a complete, consistent copy of what the connection sees, WAL content included, so no
- * checkpoint or file-level copy of a live database is needed. The copy is written under a `.partial` name, flushed,
- * then renamed, and an existing backup is never overwritten (a numeric suffix is added instead). Returns the path.
+ * checkpoint or file-level copy of a live database is needed. The copy is written under a `.partial` name in
+ * `tmpDir` (section 3: unfinished files live in `tmp/`, which is emptied at start-up), flushed, then renamed into
+ * `backupDir`; both are under userData, so the rename stays on one volume (Assumed). A failure removes the partial
+ * file, and an existing backup is never overwritten (a numeric suffix is added instead). Returns the final path.
  */
 export function backupDatabase(
   raw: DatabaseSync,
-  dir: string,
+  dirs: { backupDir: string; tmpDir: string },
   version: number,
   now: () => number,
 ): string {
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dirs.backupDir, { recursive: true });
+  mkdirSync(dirs.tmpDir, { recursive: true });
   const stem = `library-v${version}-${compactUtc(now())}`;
-  let target = join(dir, `${stem}.db`);
-  for (let n = 1; existsSync(target); n += 1) target = join(dir, `${stem}-${n}.db`);
-  const partial = `${target}.partial`;
-  // VACUUM INTO refuses an existing file; a `.partial` can only be a leftover of a crash during an earlier backup.
-  rmSync(partial, { force: true });
-  raw.exec(`VACUUM INTO '${partial.replaceAll("'", "''")}'`);
-  const fd = openSync(partial, "r+");
+  let target = join(dirs.backupDir, `${stem}.db`);
+  for (let n = 1; existsSync(target); n += 1) target = join(dirs.backupDir, `${stem}-${n}.db`);
+  const partial = join(dirs.tmpDir, `${basename(target)}.partial`);
   try {
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
+    // VACUUM INTO refuses an existing file; start-up empties tmp/, so only a same-name file of this run can exist.
+    rmSync(partial, { force: true });
+    raw.exec(`VACUUM INTO '${partial.replaceAll("'", "''")}'`);
+    const fd = openSync(partial, "r+");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(partial, target);
+  } catch (error) {
+    rmSync(partial, { force: true });
+    throw error;
   }
-  renameSync(partial, target);
   return target;
 }

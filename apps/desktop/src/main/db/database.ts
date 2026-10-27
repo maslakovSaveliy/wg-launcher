@@ -45,6 +45,8 @@ export interface OpenOptions {
   now: () => number;
   /** Where the copy made before a migration goes: `<userData>/backups`. */
   backupDir: string;
+  /** Where that copy is written first, as a `.partial` file: `<userData>/tmp` (emptied at start-up). */
+  tmpDir: string;
   /** For tests; defaults to the migrations of this build. */
   migrations?: readonly Migration[];
 }
@@ -91,7 +93,7 @@ export function openDatabase(path: string, options: OpenOptions): Db {
       throw new Error(`Cannot enable WAL (journal mode is ${mode}).`);
     raw.exec("PRAGMA synchronous = FULL");
     migrate(raw, migrations, (fromVersion) =>
-      backupDatabase(raw, options.backupDir, fromVersion, options.now),
+      backupDatabase(raw, options, fromVersion, options.now),
     );
   } catch (error) {
     raw.close();

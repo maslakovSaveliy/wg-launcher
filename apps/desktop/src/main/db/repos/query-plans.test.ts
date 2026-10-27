@@ -2,10 +2,12 @@
 // by a wall-clock number. Each statement on a hot path must be served by an index or the primary key, with no full
 // table scan and no sort step, over a library of 1 000 games.
 
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDatabase, type WritableDb } from "../database.js";
-import { fakeClock, tempDir } from "../testing.js";
+import { dbOptions } from "../testing.js";
 import { GAMES_SQL } from "./games.js";
 import { createRepos } from "./index.js";
 import { PLAY_SESSIONS_SQL } from "./play-sessions.js";
@@ -20,13 +22,9 @@ function plan(db: WritableDb, sql: string, ...params: string[]): string[] {
   ).map((row) => row.detail);
 }
 
-function library(): WritableDb {
-  const dir = tempDir();
-  const clock = fakeClock();
-  const db = openDatabase(join(dir, "library.db"), {
-    now: clock.now,
-    backupDir: join(dir, "backups"),
-  });
+/** One library for all cases, built once and closed before its directory is removed (not by the per-test helper). */
+function library(dir: string): WritableDb {
+  const db = openDatabase(join(dir, "library.db"), dbOptions(dir));
   if (db.readOnly) throw new Error(db.reason);
   const repos = createRepos(db);
   db.transaction(() => {
@@ -65,7 +63,18 @@ const isUnindexed = (detail: string) =>
   /USE TEMP B-TREE/.test(detail);
 
 describe("hot-path statements use an index", () => {
-  const db = library();
+  let dir = "";
+  let dbPath = "";
+  let db: WritableDb;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "wg-plans-"));
+    dbPath = join(dir, "library.db");
+    db = library(dir);
+  });
+  afterAll(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
   const cases: Array<[string, string, string[], RegExp]> = [
     // Listing every game reads every row; it walks the primary-key index in order, so there is no sort.
     ["games.list", GAMES_SQL.list, [], /^SCAN games USING INDEX sqlite_autoindex_games_1/],
@@ -107,6 +116,8 @@ describe("hot-path statements use an index", () => {
     ],
   ];
   it.each(cases)("%s", (_name, sql, params, expected) => {
+    // The fixture must still be there: an earlier case's cleanup must not have removed its directory.
+    expect(existsSync(dbPath)).toBe(true);
     const details = plan(db, sql, ...params);
     expect(details.filter(isUnindexed), details.join(" | ")).toEqual([]);
     expect(

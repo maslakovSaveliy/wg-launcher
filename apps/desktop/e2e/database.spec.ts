@@ -13,6 +13,12 @@ test("the main process opens the library database at schema version 1 without a 
   launched = await launchApp();
   const { app, userData } = launched;
 
+  // The harness gives Chromium its own --user-data-dir (appArgs), so even a crash while the app loads cannot write
+  // into the real default profile. This is the regression test for that: the switch is on the command line.
+  expect(await app.evaluate(({ app }) => app.commandLine.getSwitchValue("user-data-dir"))).toBe(
+    userData,
+  );
+
   const { database, warnings } = await launched.hooks();
   expect(database).toEqual({ readOnly: false, userVersion: 1 });
   expect(existsSync(join(userData, "library.db"))).toBe(true);

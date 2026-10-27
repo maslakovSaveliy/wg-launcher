@@ -80,7 +80,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   only; CI runs `test:e2e:fixture --project=chromium` and a separate desktop job. Leaving react, react-dom and scheduler
   out of the packaged `node_modules` moves to Task 16 (no electron-builder config exists yet).
 - 2026-10-28 Phase 1 Task 6 (library database, Assumed unless noted): `apps/desktop/src/main/db/`; migrations are `.sql`
-  files imported with Vite's `?raw`, the pre-migration copy is made with `VACUUM INTO` (architecture.md section 7);
+  files imported with Vite's `?raw`, the pre-migration copy is made with `VACUUM INTO` into `tmp/` as a `.partial` file and renamed into `backups/` (architecture.md
+  section 7);
   `snapshots.revision_id` stays the primary key and `addIfAbsent` adds no row for a stored revision (M8); the 5 ms budget
   is checked by query plans, not by time (R18); repositories take the injected clock, never `Date.now()`; `Db` is a
   union of `WritableDb` and `ReadOnlyDb`, and repositories accept only the writable one. Over 1 000 games, 5 sessions,
@@ -329,11 +330,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - zsh: `log` is a builtin, call the macOS unified log as `/usr/bin/log`; an unmatched glob aborts the whole command
   (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
 
-- Vitest's `execArgv` in the root `vitest.config.ts` passes `--disable-warning=ExperimentalWarning` to test workers,
-  because `node:sqlite` prints "SQLite is an experimental feature" in plain Node 24.13 (Electron 45's Node prints none:
-  the desktop e2e records process warnings and expects no SQLite one). The flag hides every ExperimentalWarning, not
-  only that one (the warning has no code to filter on); other warnings still print. [V, 2026-10-28, Vitest 5.0.5,
-  Node 24.13.0, run locally]
+- Plain Node 24.13 prints "SQLite is an experimental feature" when `node:sqlite` loads. `scripts/vitest-setup.ts` (a
+  Vitest `setupFiles` entry, logic in `scripts/warning-filter.ts`) wraps `process.emitWarning` and drops only that message;
+  any other warning, including another ExperimentalWarning, still prints. The earlier `--disable-warning=ExperimentalWarning`
+  flag hid all of them and was removed. Electron 45's Node prints none (the desktop e2e records process warnings).
+  [V, 2026-10-28, Vitest 5.0.5, Node 24.13.0; `scripts/vitest-setup.test.ts`]
 - `node:sqlite` rows are objects with a null prototype (map them in repositories, do not compare them with
   `toStrictEqual`); `DatabaseSync` has `isTransaction`; `PRAGMA user_version` set in a rolled-back transaction rolls
   back too. [V, 2026-10-28, Node 24.13.0, `node` probe]
@@ -345,10 +346,12 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   before emitting `ready`): use `app.whenReady().then(...)`. [V, 2026-10-28, probe app on Electron 45.0.0]
 - Chromium's `--user-data-dir=<dir>` is honored by Electron 45: `app.getPath("userData")` and all of Chromium's files go
   there and the default `<appData>/<productName>` is not created; without it they go to the default. The e2e harness
-  passes it for every launch (`appArgs`), and its guard (`e2e/real-profile-guard.ts`) compares full listings of the real
+  passes it for every launch (`appArgs`; `e2e/database.spec.ts` asserts the switch is on the app's command line, and fails
+  without it), and its guard (`e2e/real-profile-guard.ts`) compares full listings of the real
   `WGLauncher` and `WGLauncher Dev` directories, after a failed launch as well. A module-load crash alone did not create
   the default directory in a probe (the process only hung); the earlier contamination is therefore not explained
-  further. [V, 2026-10-28, probe apps under the session scratchpad, Playwright `_electron.launch`, macOS arm64]
+  further. [V, 2026-10-28, Electron 45.0.0, macOS arm64: a throwaway probe app launched with and without the switch through
+  Playwright `_electron.launch`; regression test `apps/desktop/e2e/database.spec.ts`]
 
 ## Open questions
 

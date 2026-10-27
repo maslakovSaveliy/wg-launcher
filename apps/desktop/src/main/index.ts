@@ -75,7 +75,11 @@ async function start(userData: string): Promise<AppContext> {
   const dialogs = hooks?.dialogs ?? nativeDialogs(() => launcher);
 
   // The main process is the only writer of the library database (AGENTS.md data-safety invariant 9).
-  const db = openDatabase(paths.db, { now: Date.now, backupDir: paths.backups });
+  const db = openDatabase(paths.db, {
+    now: Date.now,
+    backupDir: paths.backups,
+    tmpDir: paths.tmp,
+  });
   if (db.readOnly) log.error("db.read-only", { reason: db.reason, userVersion: db.userVersion });
   else log.info("db.open");
   hooks?.watchDatabase(db);

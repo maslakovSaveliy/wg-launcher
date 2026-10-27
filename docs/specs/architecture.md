@@ -255,7 +255,8 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     `?raw` suffix, so electron-vite inlines them into the main bundle and Vitest reads them the same way; no file is
     looked up at run time. `Assumed`. The copy before a migration is made with `VACUUM INTO` (a consistent copy of what
     the connection sees, WAL content included, so no checkpoint or file copy of a live database is needed), written
-    as `.partial`, flushed and renamed, and never over an existing backup; its `<n>` is the `user_version` it holds.
+    as `.partial` in `tmp/` (section 3), flushed and renamed into `backups/` (same volume, `Assumed`), removed on a failure, and
+    never over an existing backup; its `<n>` is the `user_version` it holds.
     A fresh database makes no copy. A database with a newer `user_version` is first opened with `readOnly: true`, so
     even reading its version writes nothing to the main file. Verified (2026-10-28, Node 24.13.0, run locally:
     `VACUUM INTO` kept `user_version` and wrote a rollback-journal copy; a read-only open of a WAL database created
