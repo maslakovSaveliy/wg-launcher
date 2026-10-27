@@ -13,6 +13,10 @@
 //   characters such as "exa%2Emple.com", which the parser decodes into another host).
 // After parsing, a host with an empty label ("example..com", ".example.com") is refused: it is never a real site, and
 // tldts would give it a domain such as ".com" that merges unrelated hosts.
+// For a main-frame navigation target (`decideTopNavigation`) these shapes are refused in the scheme and authority
+// only: Chromium hands `will-navigate` a canonical URL that may keep a raw backslash in its path, query or fragment,
+// and the parser cannot move the end of the authority by repairing what comes after it (ruling R25). Entry URLs and
+// `isExternalUrlAllowed` stay strict everywhere: one is typed by the user, the other goes to another program.
 // Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen.
 
 import type { Result } from "@wg-launcher/shared";
@@ -45,9 +49,12 @@ interface ParsedWebUrl {
  * Parses an http or https URL whose raw text has none of the repaired shapes above, with a host and no user info.
  * Returns null for anything else (other schemes included). Never throws.
  */
-function parseWebUrl(input: unknown): ParsedWebUrl | null {
-  if (typeof input !== "string" || UNSAFE_CHARACTERS.test(input)) return null;
-  const authority = HIERARCHICAL.exec(input)?.[1];
+function parseWebUrl(input: unknown, scope: "whole" | "authority" = "whole"): ParsedWebUrl | null {
+  if (typeof input !== "string") return null;
+  const head = HIERARCHICAL.exec(input);
+  const authority = head?.[1];
+  // `whole`: the shapes are refused anywhere. `authority`: only in the scheme and authority, where the site is decided.
+  if (UNSAFE_CHARACTERS.test(scope === "whole" ? input : (head?.[0] ?? input))) return null;
   if (!authority || authority.includes("@") || authority.includes("%")) return null;
   let url: URL;
   try {
@@ -97,7 +104,9 @@ export function decideTopNavigation(
   flavor: Flavor,
 ): TopNavigationDecision {
   if (!(entryUrl instanceof URL) || !checkEntryUrl(entryUrl.href, flavor).ok) return "block";
-  const parsed = parseWebUrl(target);
+  // Chromium hands over canonical URLs whose path, query or fragment may keep a raw backslash (R25); the site comes
+  // from the authority alone, so the raw shapes are refused there only.
+  const parsed = parseWebUrl(target, "authority");
   if (!parsed) return "block";
   if (!isAllowedGameUrl(parsed, flavor)) return "ask-external";
   return siteOf(parsed.url.href) === siteOf(entryUrl.href) ? "allow" : "ask-external";

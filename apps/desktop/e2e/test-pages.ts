@@ -17,7 +17,8 @@ export interface TestPages {
 
 /**
  * Routes: `/<name>.html` from `e2e/pages`; `/redirect?to=<url>` answers 302 to `to`; `/download` sends an
- * attachment; `/slow?ms=<n>` answers a page after `n` ms (at most 10 000).
+ * attachment; `/slow?ms=<n>` answers a page after `n` ms (at most 10 000); `/never` accepts the request and never
+ * answers (until the server stops).
  */
 export async function startTestPages(): Promise<TestPages> {
   const server: Server = createServer(async (request, response) => {
@@ -37,6 +38,7 @@ export async function startTestPages(): Promise<TestPages> {
       });
       return;
     }
+    if (url.pathname === "/never") return;
     if (url.pathname === "/slow") {
       const ms = Math.min(Number(url.searchParams.get("ms") ?? "1000") || 0, 10_000);
       setTimeout(

@@ -138,7 +138,11 @@ A release check reads the fuses of the packaged app and fails on any difference 
 - **`shell.openExternal`** receives only a URL that passes `isExternalUrlAllowed`: it parses, the scheme is `https:` or
   `http:`, there is a host and no user info, and it is at most 2048 characters. The confirmation is a native dialog that
   shows the host in its punycode form, so a lookalike name is visible. One confirmation per window at a time; others
-  are dropped and logged. Never any other scheme (AGENTS.md security invariant 5). `Owner` for the rule, `Assumed` for
+  are dropped and logged; after a Cancel, that window's requests are dropped and logged for 10 s
+  (`EXTERNAL_COOLDOWN_MS`, Assumed), so a game cannot re-ask forever. `window.open` is not gated on a user gesture:
+  Electron 45's window-open handler details have no activation flag (Verified, 2026-10-25 `electron.d.ts`
+  `HandlerDetails`), and a `window.open` without a gesture reached the handler and was offered (Verified, 2026-10-28,
+  `apps/desktop/e2e/game-isolation.spec.ts`). Never any other scheme (AGENTS.md security invariant 5). `Owner` for the rule, `Assumed` for
   the details.
 - The unit tests (S-5) cover at least: `javascript:`, `file:`, `wglauncher:` and `app:` URLs; `https://user:pass@host`
   and `https://good.example@evil.example`; an IDN lookalike; `https://example.com.evil.net` and `https://evil-example.com`
@@ -153,8 +157,12 @@ A release check reads the fuses of the packaged app and fails on any difference 
     `https://evil.com\.example.com`), a scheme not followed by exactly `//` and a host (`https:evil.com`,
     `https:///evil.com`), and `@` or `%` in the authority (user info in any form, also an empty one such as
     `https://@evil.com`, which the parser drops silently; percent-encoded host characters such as `exa%2Emple.com`,
-    which the parser decodes into `exa.mple.com`). This applies to entry URLs, main-frame targets and
-    `isExternalUrlAllowed`, not to subframes (a `data:` frame URL may contain spaces).
+    which the parser decodes into `exa.mple.com`). This applies to the whole text of entry URLs and of
+    `isExternalUrlAllowed` (one is typed by the user, the other goes to another program), but only to the scheme and
+    authority of a main-frame target (ruling R25, Task 8): Chromium hands `will-navigate` a canonical URL that may
+    keep a raw backslash in its path, query or fragment, and repairing what comes after the authority cannot change
+    the host, so `?q=a\b%20c#x\y%20z` on the entry's site is allowed while `https://evil.com\.example.com/` is still
+    blocked. Not to subframes either (a `data:` frame URL may contain spaces).
   - After parsing, a host with an empty label (`example..com`, `.example.com`, `example.com..`) is refused: tldts
     7.4.19 gives such hosts a domain such as `.com`, which would merge unrelated hosts into one site. `siteOf` itself
     also uses the whole host for them.
@@ -174,8 +182,8 @@ A release check reads the fuses of the packaged app and fails on any difference 
   - Permissions: a `Set` lookup with exact case, so `Fullscreen`, `__proto__` or an empty name are denied.
 - **Wired in Phase 1 Task 8** (`apps/desktop/e2e/game-isolation.spec.ts`; Verified, 2026-10-28, Electron 45.0.0, macOS
   arm64, one machine, with the macOS screen locked):
-  - camera `getUserMedia` got no stream (`NotFoundError` on this run: Chromium offered no camera, because the check
-    handler denies `media`), `permissions.query({name: "microphone"})` gave `denied` (the check handler; no
+  - camera `getUserMedia` got no stream (`NotFoundError` on this run; the cause, that Chromium offered no camera
+    because the check handler denies `media`, is Assumed), `permissions.query({name: "microphone"})` gave `denied` (the check handler; no
     `getUserMedia` for audio is ever made in e2e, so no OS prompt can appear), geolocation error code 1, notifications
     `denied`, display capture and `getScreenDetails` `NotAllowedError`; each name was logged once
     (`game.permission-denied`, origin only), `media` once although it was requested and checked. Chromium also checks
@@ -186,10 +194,9 @@ A release check reads the fuses of the packaged app and fails on any difference 
   - an off-site link and a `window.open` to an https URL were prevented and offered through the queued dialog; only
     the confirmed one reached the `shell.openExternal` stub; `window.open("file:...")` asked nothing; a download was
     cancelled and logged; a same-site redirect at start loaded and a cross-site one was offered and ended the launch.
-  - **Open finding (Task 7a carry):** Chromium escapes spaces in the query and fragment before `will-navigate`
-    (`?q=a%20b#x%20y`, allowed) but hands over a backslash there raw (`?q=a\b%20c#x\y%20z`), so the raw-shape rule
-    blocks such a same-site navigation (`block`, logged, no dialog). Reported to the owner; the policy is unchanged and
-    the e2e test pins today's behavior.
+  - Task 7a carry: Chromium escapes spaces in the query and fragment before `will-navigate` (`?q=a%20b#x%20y`) but
+    hands over a backslash there raw (`?q=a\b%20c#x\y%20z`). The first Task 8 run showed the raw-shape rule
+    blocking such a same-site navigation; after ruling R25 (rule above) the e2e test loads both.
 
 ## 6. Launcher renderer
 

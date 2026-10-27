@@ -46,15 +46,24 @@ export interface ExternalOpenerDeps {
   /** `shell.openExternal` in production; the test flavor records instead. */
   openExternal(url: string): Promise<void>;
   log: Logger;
+  /** Milliseconds; injected for the cooldown test. */
+  now?: () => number;
 }
+
+/** After a Cancel, a window's further requests are dropped for this long, so a game cannot re-ask forever (Assumed). */
+export const EXTERNAL_COOLDOWN_MS = 10_000;
 
 /**
  * "Open in browser?" for one game window (security.md section 5, `shell.openExternal`): only a URL that passes
  * `isExternalUrlAllowed` is offered; the confirmation names the punycode host; one confirmation at a time, others are
- * dropped and logged; only the parsed `href` is opened, and only after a yes.
+ * dropped and logged; after a Cancel, requests are dropped and logged for `EXTERNAL_COOLDOWN_MS`; only the parsed
+ * `href` is opened, and only after a yes. Electron 45's window-open details carry no user-activation flag, so
+ * `window.open` is not gated on a gesture here (the cooldown is the limit).
  */
 export function createExternalOpener(deps: ExternalOpenerDeps): (url: string) => Promise<void> {
+  const now = deps.now ?? Date.now;
   let pending = false;
+  let quietUntil = Number.NEGATIVE_INFINITY;
   return async (url) => {
     if (!isExternalUrlAllowed(url)) {
       deps.log.warn("game.external-refused", { gameId: deps.gameId, length: String(url).length });
@@ -63,6 +72,10 @@ export function createExternalOpener(deps: ExternalOpenerDeps): (url: string) =>
     const target = new URL(url);
     if (pending) {
       deps.log.warn("game.external-dropped", { gameId: deps.gameId, origin: target.origin });
+      return;
+    }
+    if (now() < quietUntil) {
+      deps.log.warn("game.external-cooldown", { gameId: deps.gameId, origin: target.origin });
       return;
     }
     pending = true;
@@ -74,7 +87,10 @@ export function createExternalOpener(deps: ExternalOpenerDeps): (url: string) =>
         confirmLabel: "Open in browser",
         cancelLabel: "Cancel",
       });
-      if (!yes) return;
+      if (!yes) {
+        quietUntil = now() + EXTERNAL_COOLDOWN_MS;
+        return;
+      }
       deps.log.info("game.external-opened", { gameId: deps.gameId, origin: target.origin });
       await deps.openExternal(target.href);
     } catch (error) {

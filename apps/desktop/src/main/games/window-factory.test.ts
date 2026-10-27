@@ -107,6 +107,37 @@ describe("createExternalOpener (S-5, AGENTS.md security invariant 5)", () => {
     expect(openExternal).toHaveBeenCalledWith("https://one.example/");
   });
 
+  it("after a Cancel the window is not asked again for 10 s; requests then are dropped and logged (R26)", async () => {
+    let now = 1_000;
+    const answers = [false, true, true, true];
+    const confirm = vi.fn(async (_spec: object) => answers.shift() ?? false);
+    const openExternal = vi.fn(async () => undefined);
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
+    const open = createExternalOpener({
+      dialogs: { confirm },
+      openExternal,
+      log,
+      gameId: GAME,
+      now: () => now,
+    });
+    await open("https://one.example/");
+    expect(confirm).toHaveBeenCalledTimes(1);
+    now += 9_999;
+    await open("https://two.example/");
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith("game.external-cooldown", {
+      gameId: GAME,
+      origin: "https://two.example",
+    });
+    now += 1;
+    await open("https://three.example/");
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(openExternal).toHaveBeenLastCalledWith("https://three.example/");
+    // A yes starts no cooldown.
+    await open("https://four.example/");
+    expect(confirm).toHaveBeenCalledTimes(3);
+  });
+
   it("a failing dialog opens nothing", async () => {
     const confirm = vi.fn(async () => {
       throw new Error("no dialog");

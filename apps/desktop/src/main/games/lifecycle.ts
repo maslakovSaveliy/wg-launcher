@@ -1,6 +1,8 @@
 // The game session lifecycle of architecture.md section 4: idle → launching → running → closing → exited, and
 // running → crashed. One window per game (F-5): a launch while the game is launching or running focuses its window;
-// while it is closing nothing new opens (Assumed: showing a window that already shows about:blank would help no one).
+// while it is closing nothing opens or shows and the result says `closing` (Assumed: showing a window that already
+// shows about:blank would help no one). A window that has not painted after `LAUNCH_SHOW_TIMEOUT_MS` is shown anyway
+// (state `running`), so a page that never answers is visible, in its real state, and can be closed (Assumed).
 // A game's session lock (`LockManager`, kind `session`) is held from the launch until the window is gone.
 //
 // Exited and crashed are reported until the next launch, so the library can show a crash; both count as idle for a
@@ -55,7 +57,12 @@ export interface RuntimeDeps {
   openWindow(request: OpenWindowRequest): GameWindow;
   /** The close procedure (`closeGameWindow`), run after the window's `close` event was prevented. */
   closeWindow(window: GameWindow, gameId: string): Promise<CloseOutcome>;
+  /** For tests; defaults to `LAUNCH_SHOW_TIMEOUT_MS`. */
+  launchShowTimeoutMs?: number;
 }
+
+/** A launching window is shown after this long even without `ready-to-show` (Assumed). */
+export const LAUNCH_SHOW_TIMEOUT_MS = 15_000;
 
 export type LaunchCode =
   | "INVALID_ARGUMENT"
@@ -66,7 +73,8 @@ export type LaunchCode =
   | "NEEDS_RECOVERY"
   | "INTERNAL";
 
-export type LaunchResult = Result<{ window: "opened" | "focused" }, LaunchCode>;
+/** `closing`: the game is going through the close procedure; nothing was opened or shown (relaunch afterwards). */
+export type LaunchResult = Result<{ window: "opened" | "focused" | "closing" }, LaunchCode>;
 
 interface Entry {
   state: GameState;
@@ -117,8 +125,9 @@ export class GameRuntime {
     if (!isUuidV7(gameId)) return fail("INVALID_ARGUMENT");
     const existing = this.#entries.get(gameId);
     if (existing && ACTIVE.has(existing.state)) {
+      log.info("game.launch-while-active", { gameId, state: existing.state });
+      if (existing.state === "closing") return { ok: true, data: { window: "closing" } };
       this.focus(gameId);
-      log.info("game.launch-focused", { gameId, state: existing.state });
       return { ok: true, data: { window: "focused" } };
     }
     const game = this.#deps.games.get(gameId);
@@ -208,13 +217,21 @@ export class GameRuntime {
 
   #watch(gameId: string, entry: Entry, window: GameWindow): void {
     const { log, dialogs } = this.#deps;
-    window.once("ready-to-show", () => {
+    const showNow = () => {
       if (entry.state !== "launching" || window.isDestroyed()) return;
       entry.state = "running";
       log.info("game.running", { gameId });
       window.show();
       window.focus();
-    });
+    };
+    window.once("ready-to-show", showNow);
+    const waitMs = this.#deps.launchShowTimeoutMs ?? LAUNCH_SHOW_TIMEOUT_MS;
+    const timer = setTimeout(() => {
+      if (entry.state !== "launching" || window.isDestroyed()) return;
+      log.warn("game.show-timeout", { gameId, waitedMs: waitMs });
+      showNow();
+    }, waitMs);
+    entry.done.promise.then(() => clearTimeout(timer));
     window.on("close", (event: { preventDefault(): void }) => {
       event.preventDefault();
       if (entry.state === "closing") return;

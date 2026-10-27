@@ -143,7 +143,11 @@ async function start(userData: string): Promise<AppContext> {
     event.preventDefault();
     quitting = true;
     log.info("app.quit-closing-games", { count: games.runtime.openGames().length });
-    void games.runtime.closeAll(3000).finally(() => app.quit());
+    // The log is flushed first, so the records of the procedure survive the exit.
+    void games.runtime
+      .closeAll(3000)
+      .then(() => log.flush())
+      .finally(() => app.quit());
   });
 
   const launcherSession = session.fromPartition(LAUNCHER_PARTITION);

@@ -69,6 +69,39 @@ test("Play twice, or a launch while the game is launching, opens exactly one win
   expect(launches).toHaveLength(1);
 });
 
+test("a game whose page never answers is shown after the launching timeout and can be closed (fix round 1)", async () => {
+  test.setTimeout(60_000);
+  launched = await launchApp();
+  if (!pages) throw new Error("no pages");
+  const id = await addGame(launched, `${pages.origin}/never`, "never");
+  const launchedAt = Date.now();
+  expect(await launchGame(launched, id)).toEqual({ ok: true, data: { window: "opened" } });
+  const visible = async () => {
+    const cid = await contentsIdOf(id);
+    return (launched as Launched).app.evaluate(({ BrowserWindow, webContents }, cid) => {
+      const contents = cid === null ? null : webContents.fromId(cid);
+      return contents ? (BrowserWindow.fromWebContents(contents)?.isVisible() ?? null) : null;
+    }, cid);
+  };
+  expect(await gameState(launched, id)).toBe("launching");
+  expect(await visible()).toBe(false);
+  // Before the timeout, a second Play shows nothing and opens nothing.
+  expect(await launchGame(launched, id)).toEqual({ ok: true, data: { window: "focused" } });
+  expect(await visible()).toBe(false);
+
+  // LAUNCH_SHOW_TIMEOUT_MS is 15 s.
+  await expect.poll(() => gameState(launched as Launched, id), { timeout: 25_000 }).toBe("running");
+  expect(Date.now() - launchedAt).toBeGreaterThanOrEqual(14_000);
+  expect(await visible()).toBe(true);
+  expect((await eventsNamed(launched, "game.show-timeout")).map((line) => line.gameId)).toEqual([
+    id,
+  ]);
+
+  expect(await closeGame(launched, id)).toBe(true);
+  await expectState(launched, id, "exited");
+  expect(await windowCount(launched)).toBe(1);
+});
+
 test("a beforeunload trap asks through the dialog and cannot keep the window (S-7)", async () => {
   launched = await launchApp();
   if (!pages) throw new Error("no pages");
@@ -238,6 +271,16 @@ test("no process of a game remains 5 s after its window closes or the app quits 
   const quitAt = Date.now();
   await launched.app.close();
   record.quitMs = Date.now() - quitAt;
+  // The quit ran the close procedure for the open game before the process went (exiting would kill the children
+  // anyway, so the process list alone proves nothing about the procedure): its records are in the log.
+  expect((await eventsNamed(launched, "app.quit-closing-games")).map((line) => line.count)).toEqual(
+    [1],
+  );
+  expect((await eventsNamed(launched, "game.closing")).map((line) => line.gameId)).toEqual([
+    id,
+    id,
+  ]);
+  expect((await eventsNamed(launched, "game.exited")).map((line) => line.gameId)).toEqual([id, id]);
   await sleep(5000);
   const bundlePids = [...atQuit.map((p) => p.pid), ...(mainPid ? [mainPid] : [])];
   record.aliveAfterQuit5s = bundlePids.filter(alive);

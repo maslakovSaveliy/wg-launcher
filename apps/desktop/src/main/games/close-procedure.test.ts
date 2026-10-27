@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { type ClosableWindow, closeGameWindow } from "./close-procedure.js";
 
 const GAME = "0190a5b2-7c3d-7e4f-8a1b-2c3d4e5f6a7b";
-const FAST = { unloadMs: 50, workersMs: 60, pollMs: 5 };
+const FAST = { unloadMs: 50, workersMs: 60, pollMs: 5, commandMs: 40 };
 
 interface FakeOptions {
   /** Version ids of running service workers before the close. */
@@ -17,13 +17,19 @@ interface FakeOptions {
   /** loadURL never settles (a hanging unload handler). */
   hang?: boolean;
   attachThrows?: boolean;
+  /** `ServiceWorker.stopAllWorkers` rejects. */
+  stopAllThrows?: boolean;
+  /** Version ids whose `ServiceWorker.stopWorker` never answers. */
+  stopWorkerHangs?: string[];
+  /** The window was destroyed before the close procedure started. */
+  destroyed?: boolean;
 }
 
 function fakeWindow(options: FakeOptions = {}) {
   const calls: string[] = [];
   let running = new Set(options.workers ?? []);
   const contents = new EventEmitter();
-  let destroyed = false;
+  let destroyed = options.destroyed ?? false;
   const window: ClosableWindow = {
     hide: () => calls.push("hide"),
     show: () => calls.push("show"),
@@ -65,6 +71,15 @@ function fakeWindow(options: FakeOptions = {}) {
         },
         async sendCommand(method: string, params?: { versionId?: string }) {
           calls.push(params ? `${method} ${JSON.stringify(params)}` : method);
+          if (method === "ServiceWorker.stopAllWorkers" && options.stopAllThrows) {
+            throw new Error("Protocol error (ServiceWorker.stopAllWorkers): Internal error");
+          }
+          if (
+            method === "ServiceWorker.stopWorker" &&
+            options.stopWorkerHangs?.includes(params?.versionId ?? "")
+          ) {
+            return new Promise<object>(() => undefined);
+          }
           if (method === "ServiceWorker.stopAllWorkers")
             running = new Set(options.afterStopAll ?? []);
           if (method === "ServiceWorker.stopWorker" && options.stopWorkerWorks !== false) {
@@ -173,6 +188,42 @@ describe("closeGameWindow: the close procedure of architecture.md section 4 (AC-
       waitedMs: FAST.unloadMs,
     });
     expect(fake.calls.at(-1)).toBe("destroy");
+  });
+});
+
+describe("closeGameWindow: SW_STOP_FAILED whatever failed on the way (fix round 1)", () => {
+  it("tries each stopWorker on its own: the first hangs, the second is still stopped, the rest is reported", async () => {
+    const fake = fakeWindow({ workers: [3, 9], afterStopAll: [3, 9], stopWorkerHangs: ["3"] });
+    const setup = deps();
+    expect(await closeGameWindow(fake.window, setup.deps)).toBe("closed");
+    expect(fake.calls).toContain('ServiceWorker.stopWorker {"versionId":"9"}');
+    expect(fake.running()).toEqual([3]);
+    expect(setup.log.error).toHaveBeenCalledWith("SW_STOP_FAILED", { gameId: GAME, running: 1 });
+    expect(fake.calls.at(-1)).toBe("destroy");
+  });
+
+  it("still stops each version when stopAllWorkers fails", async () => {
+    const fake = fakeWindow({ workers: [4], afterStopAll: [4], stopAllThrows: true });
+    const setup = deps();
+    expect(await closeGameWindow(fake.window, setup.deps)).toBe("closed");
+    expect(fake.calls).toContain('ServiceWorker.stopWorker {"versionId":"4"}');
+    expect(fake.running()).toEqual([]);
+    expect(setup.log.error).not.toHaveBeenCalledWith("SW_STOP_FAILED", expect.anything());
+  });
+
+  it("logs SW_STOP_FAILED when the debugger cannot attach and workers keep running", async () => {
+    const fake = fakeWindow({ workers: [5], attachThrows: true });
+    const setup = deps();
+    expect(await closeGameWindow(fake.window, setup.deps)).toBe("closed");
+    expect(setup.log.error).toHaveBeenCalledWith("SW_STOP_FAILED", { gameId: GAME, running: 1 });
+    expect(fake.calls.at(-1)).toBe("destroy");
+  });
+
+  it("does nothing to a window that is already destroyed", async () => {
+    const fake = fakeWindow({ destroyed: true });
+    const setup = deps();
+    expect(await closeGameWindow(fake.window, setup.deps)).toBe("closed");
+    expect(fake.calls).toEqual([]);
   });
 });
 

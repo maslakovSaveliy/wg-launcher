@@ -61,7 +61,12 @@ class FakeWindow extends EventEmitter {
 }
 
 function setUp(
-  options: { game?: object | null; closeOutcome?: "closed" | "stayed"; answers?: boolean[] } = {},
+  options: {
+    game?: object | null;
+    closeOutcome?: "closed" | "stayed";
+    answers?: boolean[];
+    launchShowTimeoutMs?: number;
+  } = {},
 ) {
   const windows: FakeWindow[] = [];
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
@@ -90,6 +95,9 @@ function setUp(
       return window as unknown as GameWindow;
     },
     closeWindow,
+    ...(options.launchShowTimeoutMs === undefined
+      ? {}
+      : { launchShowTimeoutMs: options.launchShowTimeoutMs }),
   });
   return { runtime, windows, locks, log, confirm, closeWindow };
 }
@@ -187,13 +195,42 @@ describe("GameRuntime: closing, crash and hang", () => {
     expect(locks.holder(GAME)).toBe("session");
   });
 
-  it("a launch while closing opens no second window", async () => {
+  it("a launch while closing opens no second window and says the game is closing", async () => {
     const { runtime, windows } = setUp({ closeOutcome: "stayed" });
     await runtime.launch(GAME);
     windows[0]?.emit("ready-to-show");
     windows[0]?.close();
-    expect(await runtime.launch(GAME)).toEqual({ ok: true, data: { window: "focused" } });
+    expect(await runtime.launch(GAME)).toEqual({ ok: true, data: { window: "closing" } });
     expect(windows).toHaveLength(1);
+    // Only the focus of ready-to-show: the closing window is neither shown nor focused.
+    expect(windows[0]?.calls.filter((call) => call === "focus" || call === "show")).toEqual([
+      "show",
+      "focus",
+    ]);
+  });
+
+  it("a window that never paints is shown after the launching timeout and can then be closed", async () => {
+    const { runtime, windows, log } = setUp({ launchShowTimeoutMs: 20 });
+    await runtime.launch(GAME);
+    const [window] = windows;
+    expect(window?.visible).toBe(false);
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("running"));
+    expect(window?.calls).toEqual([`loadURL ${URL_OF_GAME}`, "show", "focus"]);
+    expect(log.warn).toHaveBeenCalledWith("game.show-timeout", { gameId: GAME, waitedMs: 20 });
+    // A late ready-to-show changes nothing.
+    window?.emit("ready-to-show");
+    expect(window?.calls.filter((call) => call === "show")).toHaveLength(1);
+    window?.close();
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("exited"));
+  });
+
+  it("the launching timeout does nothing once the window was shown", async () => {
+    const { runtime, windows, log } = setUp({ launchShowTimeoutMs: 20 });
+    await runtime.launch(GAME);
+    windows[0]?.emit("ready-to-show");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(windows[0]?.calls.filter((call) => call === "show")).toHaveLength(1);
+    expect(log.warn).not.toHaveBeenCalledWith("game.show-timeout", expect.anything());
   });
 
   it("render-process-gone ends the session as crashed and frees the lock", async () => {

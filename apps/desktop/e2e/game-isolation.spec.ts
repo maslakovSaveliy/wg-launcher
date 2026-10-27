@@ -265,6 +265,16 @@ test("navigation, new windows and downloads are refused or routed to the browser
   const page = await openGame(launched, id);
   const shown = async () => (await hooks()).dialogsShown.length;
 
+  // window.open without a user gesture still reaches the handler and is offered (observed 2026-10-28): Electron 45's
+  // window-open details carry no activation flag, so only the cooldown after a Cancel limits a game (R26).
+  await queueConfirm(launched, true);
+  await page.evaluate(() => {
+    window.open("https://gestureless.example/");
+  });
+  await expect
+    .poll(async () => (await hooks()).externalOpened)
+    .toEqual(["https://gestureless.example/"]);
+
   // Off-site link: prevented, asked through the queued dialog, opened only through the stub, once.
   await queueConfirm(launched, true);
   await page.evaluate(
@@ -272,7 +282,9 @@ test("navigation, new windows and downloads are refused or routed to the browser
     `${lab.local}/`,
   );
   await trustedClick(page, "#link");
-  await expect.poll(async () => (await hooks()).externalOpened).toEqual([`${lab.local}/`]);
+  await expect
+    .poll(async () => (await hooks()).externalOpened)
+    .toEqual(["https://gestureless.example/", `${lab.local}/`]);
   expect(page.url()).toBe(entry);
 
   // window.open: always denied; an http(s) target is offered, here declined.
@@ -300,8 +312,21 @@ test("navigation, new windows and downloads are refused or routed to the browser
     .poll(() => page.evaluate(() => (window as unknown as { popupResult?: string }).popupResult))
     .toBe("null");
   expect(await shown()).toBe(before + 1);
-  expect((await hooks()).externalOpened).toEqual([`${lab.local}/`]);
+  expect((await hooks()).externalOpened).toEqual(["https://gestureless.example/", `${lab.local}/`]);
   expect(await windowCount(launched)).toBe(2);
+
+  // Within 10 s of that Cancel the window is not asked again (R26): dropped and logged.
+  await page.evaluate(() => {
+    (window as unknown as { popupTarget: string; popupResult?: string }).popupTarget =
+      "https://again.example/";
+    (window as unknown as { popupResult?: string | undefined }).popupResult = undefined;
+  });
+  await trustedClick(page, "#popup");
+  await expect
+    .poll(async () => (await eventsNamed(launched as Launched, "game.external-cooldown")).length)
+    .toBe(1);
+  expect(await shown()).toBe(before + 1);
+  expect((await hooks()).externalOpened).toEqual(["https://gestureless.example/", `${lab.local}/`]);
 
   // A download is cancelled and logged; the page stays.
   await trustedClick(page, "#download");
@@ -310,10 +335,9 @@ test("navigation, new windows and downloads are refused or routed to the browser
     .toBe(1);
   expect(page.url()).toBe(entry);
 
-  // Carry from Task 7a: does a raw-shape refusal of decideTopNavigation block a legitimate same-site navigation?
-  // Chromium hands will-navigate a canonical URL: spaces in the query and fragment arrive as %20 (allowed), but a
-  // backslash there arrives raw (`?q=a\b%20c#x\y%20z`, observed 2026-10-28), so the policy blocks it. This pins the
-  // observed behavior; it is reported to the owner, not loosened here.
+  // Task 7a carry, ruling R25: Chromium hands will-navigate a canonical URL that escapes spaces (%20) but keeps a
+  // backslash raw in the query and fragment (`?q=a\b%20c#x\y%20z`, observed 2026-10-28). Raw shapes are now refused
+  // in the scheme and authority only, so both same-site navigations load.
   await page.evaluate(
     (href) => (window as unknown as { setLink(h: string): void }).setLink(href),
     "/navigation.html?q=a b#x y",
@@ -322,13 +346,10 @@ test("navigation, new windows and downloads are refused or routed to the browser
   await expect.poll(() => page.url()).toBe(`${pages.origin}/navigation.html?q=a%20b#x%20y`);
   await page.evaluate(
     (href) => (window as unknown as { setLink(h: string): void }).setLink(href),
-    "/navigation.html?q=a\\b",
+    "/navigation.html?q=a\\b c#x\\y z",
   );
   await trustedClick(page, "#link");
-  await expect
-    .poll(async () => (await eventsNamed(launched as Launched, "game.navigation-refused")).length)
-    .toBe(2);
-  expect(page.url()).toBe(`${pages.origin}/navigation.html?q=a%20b#x%20y`);
+  await expect.poll(() => page.url()).toBe(`${pages.origin}/navigation.html?q=a\\b%20c#x\\y%20z`);
 
   // An ordinary same-site navigation is allowed.
   await page.evaluate(
@@ -341,7 +362,6 @@ test("navigation, new windows and downloads are refused or routed to the browser
   const refused = await eventsNamed(launched, "game.navigation-refused");
   expect(refused.map((line) => [line.kind, line.decision, line.target])).toEqual([
     ["navigate", "ask-external", lab.local],
-    ["navigate", "block", pages.origin],
   ]);
 });
 

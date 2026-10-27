@@ -99,7 +99,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - 2026-10-28 Phase 1 Task 8 (game windows, Assumed unless noted): files and rules in architecture.md sections 4 and 5
   ("Close procedure details", "Runtime details", "Lock details", "Implementation (Phase 1 Task 8)") and security.md
   section 5 ("Wired in Phase 1 Task 8"). In short: a cancelled background lease not released within 2 s refuses the
-  launch with `INTERNAL`; a launch while `closing` opens and shows nothing; the unload step waits at most 2 s; a
+  launch with `INTERNAL`; a launch while `closing` returns `{window: "closing"}`; a window not painted after 15 s is
+  shown anyway; after a Cancel of "Open in browser?" that window is not asked again for 10 s (fix round 1, R26); the
+  unload step waits at most 2 s; a
   `will-prevent-unload` is answered by cancelling, asking, then reloading `about:blank` with the trap ignored. The test
   flavor records `shell.openExternal` calls (`externalOpened`) instead of opening; e2e pages are served by
   `apps/desktop/e2e/test-pages.ts` on `127.0.0.1`.
@@ -396,15 +398,19 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   removed): 1 worker running and the renderer alive 5 s after the close (H16). So open check 1 needs no fallback. [V,
   2026-10-28, `e2e/game-lifecycle.spec.ts`, Electron 45.0.0, macOS arm64]
 - Chromium canonicalizes a renderer-initiated URL before `will-navigate`: spaces in the query and fragment arrive as
-  `%20`, a backslash there arrives raw (`?q=a\b%20c#x\y%20z`), so `decideTopNavigation`'s raw-shape rule blocks
-  such a same-site navigation. Owner question (Open questions). [V, 2026-10-28, `e2e/game-isolation.spec.ts`]
-- With the game session's check handler denying `media`, a camera `getUserMedia` failed with `NotFoundError` (no
-  device offered), not `NotAllowedError` as in the spike; `permissions.query({name: "microphone"})` reaches the check
+  `%20`, a backslash there arrives raw (`?q=a\b%20c#x\y%20z`). [V, 2026-10-28, `e2e/game-isolation.spec.ts`] Ruling
+  R25 (2026-10-28): raw shapes in a main-frame target are refused in its scheme and authority only (security.md
+  section 5); entry URLs and `isExternalUrlAllowed` stay strict.
+- With the game session's check handler denying `media`, a camera `getUserMedia` failed with `NotFoundError`, not
+  `NotAllowedError` as in the spike ([A] the cause: Chromium offered no device because the check denies `media`); `permissions.query({name: "microphone"})` reaches the check
   handler (`denied`) without touching a device. `requestFullscreen()` also triggers a check for `automatic-fullscreen`.
   [V, 2026-10-28, `e2e/game-isolation.spec.ts`, screen locked]
 - Under Playwright, a hung game page produced no `unresponsive` event within 90 s of input ([A] Chromium skips the
   hang report while a debugger is attached), so the e2e test emits the event itself against a really hung renderer;
   `forcefullyCrashRenderer` then ends it with `render-process-gone`. [V, 2026-10-28, `e2e/game-lifecycle.spec.ts`]
+- Electron 45 does not stop a `window.open` without a user gesture before the window-open handler (it reached the
+  handler and was offered), and `HandlerDetails` has no activation flag. [V, 2026-10-28, `e2e/game-isolation.spec.ts`;
+  `electron.d.ts`]
 - Playwright `page.click` and locators wait for "scheduled navigations" to finish, and a navigation the app prevented
   never does (30 s timeout): click through `page.mouse.click` at coordinates read with `page.evaluate`. [V, 2026-10-28,
   Playwright 1.64.1, `e2e/game-isolation.spec.ts` `trustedClick`]
@@ -454,6 +460,3 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
   presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
-- Task 8 finding: a same-site game navigation whose query or fragment contains a backslash is blocked by the raw-shape
-  rule, because Chromium leaves the backslash raw (Gotchas). Allow a backslash after the authority for main-frame
-  targets, or keep blocking? Default: keep blocking (owner decision; the e2e test pins today's behavior).

@@ -7,7 +7,8 @@
 //    ignored. An unload that does not finish within `unloadMs` cannot block closing (Assumed bound: 2 s);
 // 3. attach `webContents.debugger`, send `ServiceWorker.enable` and `ServiceWorker.stopAllWorkers`, wait until the
 //    session has no running service worker (at most `workersMs`, 2 s), then `ServiceWorker.stopWorker` for each
-//    version still running, and log `SW_STOP_FAILED` if that does not help either;
+//    version still running, each tried on its own; `SW_STOP_FAILED` is logged whenever workers are still running at
+//    the end, whatever failed on the way (attach, a command, a timeout);
 // 4. destroy the window.
 
 import type { Dialogs } from "../dialogs.js";
@@ -43,11 +44,16 @@ export interface CloseTiming {
   unloadMs: number;
   workersMs: number;
   pollMs: number;
+  /** A CDP command that does not answer within this time is given up (a hung renderer must not block closing). */
+  commandMs: number;
 }
 
-export const CLOSE_TIMING: CloseTiming = { unloadMs: 2000, workersMs: 2000, pollMs: 50 };
-/** A CDP command that does not answer within this time is given up (a hung renderer must not block closing). */
-const COMMAND_TIMEOUT_MS = 1000;
+export const CLOSE_TIMING: CloseTiming = {
+  unloadMs: 2000,
+  workersMs: 2000,
+  pollMs: 50,
+  commandMs: 1000,
+};
 
 export interface CloseDeps {
   gameId: string;
@@ -124,8 +130,12 @@ async function unload(window: ClosableWindow, deps: CloseDeps, timing: CloseTimi
   }
 }
 
-/** Step 3. */
+/**
+ * Step 3. Every CDP call is tried on its own, so one that fails or hangs never skips the rest, and whatever happened
+ * on the way, workers still running at the end are logged as `SW_STOP_FAILED`.
+ */
 async function stopServiceWorkers(window: ClosableWindow, deps: CloseDeps, timing: CloseTiming) {
+  const { gameId, log } = deps;
   const contents = window.webContents;
   const running = () => Object.keys(contents.session.serviceWorkers.getAllRunning());
   const waitForNone = async (ms: number) => {
@@ -134,26 +144,36 @@ async function stopServiceWorkers(window: ClosableWindow, deps: CloseDeps, timin
     return running();
   };
   const debug = contents.debugger;
-  const send = async (method: string, params?: object) => {
-    const result = await within(debug.sendCommand(method, params), COMMAND_TIMEOUT_MS);
-    if (result === "timeout") throw new Error(`${method} did not answer`);
+  /** True when the command answered; a failure or a timeout is logged and returns false. */
+  const send = async (method: string, params?: object): Promise<boolean> => {
+    try {
+      const result = await within(debug.sendCommand(method, params), timing.commandMs);
+      if (result !== "timeout") return true;
+      log.warn("game.close.command-timeout", { gameId, method, waitedMs: timing.commandMs });
+    } catch (error) {
+      log.warn("game.close.command-failed", { gameId, method, error });
+    }
+    return false;
   };
+
   let attached = false;
   try {
     debug.attach("1.3");
     attached = true;
-    await send("ServiceWorker.enable");
-    await send("ServiceWorker.stopAllWorkers");
-    let left = await waitForNone(timing.workersMs);
-    if (left.length > 0) {
-      deps.log.warn("game.close.workers-left", { gameId: deps.gameId, running: left.length });
+  } catch (error) {
+    log.error("game.close.debugger-failed", { gameId, error });
+  }
+  let left: string[];
+  try {
+    if (attached && (await send("ServiceWorker.enable"))) {
+      await send("ServiceWorker.stopAllWorkers");
+    }
+    left = await waitForNone(timing.workersMs);
+    if (left.length > 0 && attached) {
+      log.warn("game.close.workers-left", { gameId, running: left.length });
       for (const versionId of left) await send("ServiceWorker.stopWorker", { versionId });
       left = await waitForNone(timing.workersMs);
-      if (left.length > 0)
-        deps.log.error("SW_STOP_FAILED", { gameId: deps.gameId, running: left.length });
     }
-  } catch (error) {
-    deps.log.error("game.close.debugger-failed", { gameId: deps.gameId, error });
   } finally {
     if (attached) {
       try {
@@ -163,6 +183,7 @@ async function stopServiceWorkers(window: ClosableWindow, deps: CloseDeps, timin
       }
     }
   }
+  if (left.length > 0) log.error("SW_STOP_FAILED", { gameId, running: left.length });
 }
 
 export async function closeGameWindow(
@@ -170,9 +191,9 @@ export async function closeGameWindow(
   deps: CloseDeps,
 ): Promise<CloseOutcome> {
   const timing = deps.timing ?? CLOSE_TIMING;
+  if (window.isDestroyed()) return "closed";
   window.hide();
   deps.stopPlaytime?.();
-  if (window.isDestroyed()) return "closed";
 
   if ((await unload(window, deps, timing)) === "stayed") {
     if (!window.isDestroyed()) window.show();

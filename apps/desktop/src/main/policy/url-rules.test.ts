@@ -80,6 +80,9 @@ const HOSTILE_EVERYWHERE: readonly string[] = [
   urlOfLength(MAX_URL_LENGTH + 1),
 ];
 
+/** Hostile inputs whose only raw shape comes after the authority of `https://example.com`. */
+const TAIL_ONLY = ["https://example.com/ ", "https://example.com/\n", "https://example.com/\u007f"];
+
 describe("MAX_URL_LENGTH", () => {
   it("is 2048 characters", () => {
     expect(MAX_URL_LENGTH).toBe(2048);
@@ -254,7 +257,9 @@ describe("decideTopNavigation", () => {
   });
 
   it("blocks every other scheme and every malformed or credential-carrying target", () => {
-    const blocked = HOSTILE_EVERYWHERE.filter((t) => t.length <= MAX_URL_LENGTH);
+    const blocked = HOSTILE_EVERYWHERE.filter(
+      (t) => t.length <= MAX_URL_LENGTH && !TAIL_ONLY.includes(t),
+    );
     for (const flavor of FLAVORS) {
       for (const target of blocked) {
         expect(
@@ -262,6 +267,34 @@ describe("decideTopNavigation", () => {
           `${flavor}: ${JSON.stringify(target)}`,
         ).toBe("block");
       }
+    }
+  });
+
+  it("ignores raw shapes after the authority of a target: Chromium keeps a backslash there (R25)", () => {
+    for (const flavor of FLAVORS) {
+      // What Chromium handed will-navigate for a same-site link (Task 8 e2e, 2026-10-28).
+      expect(
+        decideTopNavigation(
+          entry,
+          "https://example.com/navigation.html?q=a\\b%20c#x\\y%20z",
+          flavor,
+        ),
+      ).toBe("allow");
+      expect(decideTopNavigation(entry, "https://example.com/a\\b/c d?e f#g h", flavor)).toBe(
+        "allow",
+      );
+      for (const target of TAIL_ONLY) {
+        expect(decideTopNavigation(entry, target, flavor), JSON.stringify(target)).toBe("allow");
+      }
+      // Another site with such a tail is still only offered; the external gate stays strict.
+      expect(decideTopNavigation(entry, "https://other.example/q?a\\b", flavor)).toBe(
+        "ask-external",
+      );
+      expect(isExternalUrlAllowed("https://other.example/q?a\\b")).toBe(false);
+      // In the authority the shapes still block.
+      expect(decideTopNavigation(entry, "https://evil.com\\.example.com/", flavor)).toBe("block");
+      expect(decideTopNavigation(entry, "https://exa mple.com/", flavor)).toBe("block");
+      expect(decideTopNavigation(entry, "https://example.com\\@evil.net/", flavor)).toBe("block");
     }
   });
 

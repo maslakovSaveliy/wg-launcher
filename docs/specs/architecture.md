@@ -97,8 +97,12 @@ stateDiagram-v2
   exited --> idle
 ```
 
-- **One window per game.** A launch while the game is `launching`, `running` or `closing` focuses that window (shows and
-  restores it if minimized) instead of opening another (F-5). `Owner` for the session, `Assumed` for the focus rule.
+- **One window per game.** A launch while the game is `launching` or `running` focuses that window (shows and restores
+  it if minimized) instead of opening another (F-5); a launch while it is `closing` opens and shows nothing and returns
+  `{window: "closing"}`, so the caller can say so. A window that has not reached `ready-to-show` after 15 s
+  (`LAUNCH_SHOW_TIMEOUT_MS`) is shown anyway and the game is `running`, so a page that never answers is visible in its
+  real state and can be closed like any other. `Owner` for the session, `Assumed` for the focus, closing and timeout
+  rules.
 - **Per-game lock** in the main process: `none`, `session` (any state but `idle`), `task` (export, import, delete local
   saves, clear cache) or `needs_recovery`. A launch is refused with `GAME_BUSY` or `NEEDS_RECOVERY` while a task or a
   recovery holds it; a task is refused with `GAME_RUNNING` while the session holds it (AC-11). `Assumed`
@@ -125,17 +129,21 @@ stateDiagram-v2
   quitting with the game open (the quit took 240 to 258 ms) no process of the bundle remained. With step 3 removed (a mutation
   run of the same test) the worker was still running and the game's renderer still alive 5 s after the close, as in
   H16. Verified (2026-10-28, Electron 45.0.0, macOS arm64, one machine; `pnpm test:e2e:desktop`). App quit runs the
-  same procedure for every open game window in parallel, at most 3 s, then quits (`before-quit` in
-  `apps/desktop/src/main/index.ts`).
+  same procedure for every open game window in parallel, at most 3 s, flushes the log, then quits (`before-quit` in
+  `apps/desktop/src/main/index.ts`); the e2e test checks the procedure's records after the quit, and fails with that
+  wiring removed (Verified, 2026-10-28, mutation run).
 - **Close procedure details** (`apps/desktop/src/main/games/close-procedure.ts`, `Assumed`): step 2 waits at most 2 s
   for `about:blank` (a hanging `unload` cannot block closing); a `will-prevent-unload` is not answered in the event
   (the native dialog is asynchronous): the unload is cancelled, the user is asked, and on "Leave" (or when the dialog
-  fails) `about:blank` is loaded again with the trap ignored; each CDP command is given up after 1 s; a debugger that
-  cannot attach is logged (`game.close.debugger-failed`) and the window is still destroyed. Chromium runs a
+  fails) `about:blank` is loaded again with the trap ignored; each CDP command is tried on its own and given up after
+  1 s, so one that fails or hangs never skips the others (each `stopWorker` included); a debugger that cannot attach is
+  logged (`game.close.debugger-failed`); whatever failed on the way, workers still running at the end of step 3 are
+  logged as `SW_STOP_FAILED`, and the window is destroyed. A window already destroyed is left alone. Chromium runs a
   `beforeunload` prompt only for a page that had a user gesture.
 - **Runtime details** (`apps/desktop/src/main/games/lifecycle.ts`, `Assumed`): the `launching` state is claimed before
   the first `await`, so two launches in the same turn open one window (Review Focus 3, e2e); a launch while the game is
-  `closing` opens nothing and shows nothing (the window already shows `about:blank`); a load that fails while
+  `closing` returns `closing` (the window already shows `about:blank`); a never-answering entry server is shown after
+  the launching timeout (e2e, `/never` test page); a load that fails while
   `launching` (a refused cross-site redirect, a network error) destroys the window (`launching → exited`); `exited` and
   `crashed` are reported until the next launch, which treats both as `idle`. A launch also refuses a library entry
   whose stored URL this build does not allow (`URL_NOT_ALLOWED`) and an entry marked `needs_recovery` in the database.
