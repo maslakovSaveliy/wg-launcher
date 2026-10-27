@@ -317,19 +317,22 @@ progress-lab cannot serve the case (permissions, popups, downloads).
 `closeGameWindow(win, deps)` = the 4-step close procedure (about:blank, debugger `ServiceWorker.enable` +
 `stopAllWorkers`, wait `getAllRunning()` empty ≤ 2 s, `stopWorker` per version, `SW_STOP_FAILED`, destroy);
 `recordFrames(webContents, repo)` (`did-frame-navigate` → `storage_targets`).
-- [ ] Unit: `gameWebPreferences` asserts every value (S-1); `LockManager` matrix incl. M5 (background cancelled with
+- [x] Unit: `gameWebPreferences` asserts every value (S-1); `LockManager` matrix incl. M5 (background cancelled with
   `CANCELLED`, no `GAME_BUSY`; task holds → `GAME_BUSY`; recovery → `NEEDS_RECOVERY`).
-- [ ] e2e: AC-2/S-3 (two entries with the same URL: localStorage, IndexedDB and cookie markers not shared; launcher
+- [x] e2e: AC-2/S-3 (two entries with the same URL: localStorage, IndexedDB and cookie markers not shared; launcher
   session distinct); AC-3/S-2 (`typeof require`, `typeof process`, bridge `undefined`); AC-4/S-4 (five denied and logged,
   three allowed, each after its own injected click, pointer lock first, focus checked); AC-5/S-5 (off-site navigation,
   `window.open` → deny + confirm dialog queued, download cancelled); Review Focus 1 and 3 (double Play, deep link during
   `launching` → one window); S-7 (a `beforeunload` trap asks through the queued dialog and cannot block closing;
   `unresponsive` → "Force close" via `forcefullyCrashRenderer`; `render-process-gone` → `crashed`); AC-13/S-9 (process list before, with the game open, 5 s after close, 5 s after quit; with
-  progress-lab's service worker registered).
-- [ ] Run failing, implement, run passing. If `stopAllWorkers` through `webContents.debugger` does not stop the worker
-  (open check 1), stop, record the evidence, and ask the owner which fallback to take.
-- [ ] MEMORY.md and architecture §4: the AC-13 outcome [V].
-- [ ] Commit `feat(desktop): add isolated game windows and their lifecycle`.
+  progress-lab's service worker registered). Limits of the 2026-10-28 run: pointer lock success was not verified
+  (the macOS screen was locked, so it failed with `WrongDocumentError`, which the test then expects); `unresponsive`
+  is emitted by the test against a really hung page (Chromium sent none while Playwright was attached); www ↔ apex is
+  covered by the unit tests, the e2e redirects use development origins (`127.0.0.1` same-site, `localhost` cross-site).
+- [x] Run failing, implement, run passing. If `stopAllWorkers` through `webContents.debugger` does not stop the worker
+  (open check 1), stop, record the evidence, and ask the owner which fallback to take. (It does.)
+- [x] MEMORY.md and architecture §4: the AC-13 outcome [V].
+- [x] Commit `feat(desktop): add isolated game windows and their lifecycle`.
 
 ### Task 9: IPC contract, launcher bridge, library UI (L; UI functional only, no design work)
 **Files:** `packages/shared/src/ipc.ts` (channel table of architecture §6 as zod schemas + types), `src/main/ipc/{register.ts,
@@ -492,7 +495,7 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 
 | # | Check (where it is settled) | Fallback if it fails |
 | --- | --- | --- |
-| 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window |
+| 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window. **Settled in Task 8: it works** (worker and renderer gone about 110 ms after the close; architecture.md section 4) |
 | 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference |
 | 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION` |
 | 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types |

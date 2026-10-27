@@ -119,12 +119,35 @@ stateDiagram-v2
      each version id and log `SW_STOP_FAILED` if that does not help;
   4. destroy the window and record `exited`.
 
-  That this works through `webContents.debugger` in Electron 45 and covers the whole session is Unverified; the AC-13
-  e2e test (process list before, with the game open, 5 s after close and 5 s after quit) MUST pass before AC-13 is
-  claimed. App quit runs the same procedure for every open game window in parallel, at most 3 s, then quits; 5 s after
-  quitting no process of the bundle remained in the spike. Verified (2026-10-24, RESULTS.md H16).
+  It works through `webContents.debugger` in Electron 45: in the AC-13 e2e test (`apps/desktop/e2e/game-lifecycle.spec.ts`,
+  progress-lab on `localhost` with its service worker running) the session had no running worker and the game's
+  renderer process was gone 107 to 110 ms after the close (two runs), no process of the game remained 5 s after the close, and 5 s after
+  quitting with the game open (the quit took 240 to 258 ms) no process of the bundle remained. With step 3 removed (a mutation
+  run of the same test) the worker was still running and the game's renderer still alive 5 s after the close, as in
+  H16. Verified (2026-10-28, Electron 45.0.0, macOS arm64, one machine; `pnpm test:e2e:desktop`). App quit runs the
+  same procedure for every open game window in parallel, at most 3 s, then quits (`before-quit` in
+  `apps/desktop/src/main/index.ts`).
+- **Close procedure details** (`apps/desktop/src/main/games/close-procedure.ts`, `Assumed`): step 2 waits at most 2 s
+  for `about:blank` (a hanging `unload` cannot block closing); a `will-prevent-unload` is not answered in the event
+  (the native dialog is asynchronous): the unload is cancelled, the user is asked, and on "Leave" (or when the dialog
+  fails) `about:blank` is loaded again with the trap ignored; each CDP command is given up after 1 s; a debugger that
+  cannot attach is logged (`game.close.debugger-failed`) and the window is still destroyed. Chromium runs a
+  `beforeunload` prompt only for a page that had a user gesture.
+- **Runtime details** (`apps/desktop/src/main/games/lifecycle.ts`, `Assumed`): the `launching` state is claimed before
+  the first `await`, so two launches in the same turn open one window (Review Focus 3, e2e); a launch while the game is
+  `closing` opens nothing and shows nothing (the window already shows `about:blank`); a load that fails while
+  `launching` (a refused cross-site redirect, a network error) destroys the window (`launching → exited`); `exited` and
+  `crashed` are reported until the next launch, which treats both as `idle`. A launch also refuses a library entry
+  whose stored URL this build does not allow (`URL_NOT_ALLOWED`) and an entry marked `needs_recovery` in the database.
+- **Lock details** (`apps/desktop/src/main/games/locks.ts`, `Assumed`): when a cancelled background lease is not
+  released within 2 s the launch is refused with `INTERNAL` (logged `locks.background-not-released`), because the job
+  may still be touching the game's storage; while the launch waits the game counts as held by the session; a task
+  request never cancels a background lease (`GAME_BUSY`).
 - **Crash and hang.** `render-process-gone` ends the session as `crashed` and the library shows it; `unresponsive`
-  offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`
+  offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. The e2e test crashes a game
+  with `forcefullyCrashRenderer` and force-closes a really hung page; it emits the window's `unresponsive` event itself,
+  because no such event came within 90 s of input to the hung page while Playwright was attached (Verified,
+  2026-10-28, same run); that Chromium suppresses it while a debugger is attached is Assumed.
 
 ## 5. Game windows and sessions
 
@@ -156,7 +179,14 @@ stateDiagram-v2
   Playwright 1.64.1, macOS arm64). Playwright adds that loader only when `_electron.launch` gets no `executablePath`.
   Verified (2026-10-28, `coreBundle.js` of `playwright-core` 1.64.1).
 - **Frames are recorded.** `did-frame-navigate` with an http or https URL adds `(top origin, frame origin)` to
-  `storage_targets` ([save-transfer.md](save-transfer.md#2-storage-keys)).
+  `storage_targets` ([save-transfer.md](save-transfer.md#2-storage-keys)), once per key and window
+  (`apps/desktop/src/main/games/frames.ts`).
+- **Implementation (Phase 1 Task 8).** `apps/desktop/src/main/games/`: `window-factory.ts` (`gameWebPreferences`,
+  unit-tested value by value with `toStrictEqual`, S-1; the navigation and window-open wiring; the "Open in browser?"
+  opener), `game-session.ts` (`gameSession`, `installBaselineHandlers`), `lifecycle.ts`, `locks.ts`,
+  `close-procedure.ts`, `frames.ts`. Main-frame navigations are decided on `will-navigate` and `will-redirect`,
+  subframes on `will-frame-navigate` and subframe redirects; log lines name only the origin (or the scheme) of a URL a
+  game chose. `Assumed`
 
 ## 6. IPC contract
 

@@ -167,11 +167,29 @@ A release check reads the fuses of the packaged app and fails on any difference 
   - Development origins are only the literal hosts `localhost` and `127.0.0.1` in the raw text (any port), in dev and
     test builds; other spellings that the parser maps to `127.0.0.1` (`2130706433`, `0x7f.0.0.1`, `127.1`), `[::1]`,
     `localhost.` and `sub.localhost` are not. A production-flavor call refuses them all (Verified, 2026-10-28,
-    `url-rules.test.ts`); Task 8 passes the compile-time `FLAVOR` (Assumed until wired); the dev-origin strings are
+    `url-rules.test.ts`); Task 8 passes the compile-time `FLAVOR` (`apps/desktop/src/main/index.ts` and `games/lifecycle.ts`); the dev-origin strings are
     still in the prod bundle, because the flavor is a parameter, so `pnpm bundle:check` asserts nothing about them.
   - Subframes: `about:blank` and `about:srcdoc` are matched on the parsed path, so a query or fragment does not
     matter; `about:BLANK` and every other `about:` page are blocked.
   - Permissions: a `Set` lookup with exact case, so `Fullscreen`, `__proto__` or an empty name are denied.
+- **Wired in Phase 1 Task 8** (`apps/desktop/e2e/game-isolation.spec.ts`; Verified, 2026-10-28, Electron 45.0.0, macOS
+  arm64, one machine, with the macOS screen locked):
+  - camera `getUserMedia` got no stream (`NotFoundError` on this run: Chromium offered no camera, because the check
+    handler denies `media`), `permissions.query({name: "microphone"})` gave `denied` (the check handler; no
+    `getUserMedia` for audio is ever made in e2e, so no OS prompt can appear), geolocation error code 1, notifications
+    `denied`, display capture and `getScreenDetails` `NotAllowedError`; each name was logged once
+    (`game.permission-denied`, origin only), `media` once although it was requested and checked. Chromium also checks
+    `automatic-fullscreen` on `requestFullscreen()`; it is denied like any other name and fullscreen still works.
+  - fullscreen and keyboard lock succeeded after their own clicks; pointer lock failed with `WrongDocumentError`
+    because the screen was locked (MEMORY.md, H13), so pointer lock success is not verified by this run; the test
+    checks the locked-screen outcome then and the success otherwise.
+  - an off-site link and a `window.open` to an https URL were prevented and offered through the queued dialog; only
+    the confirmed one reached the `shell.openExternal` stub; `window.open("file:...")` asked nothing; a download was
+    cancelled and logged; a same-site redirect at start loaded and a cross-site one was offered and ended the launch.
+  - **Open finding (Task 7a carry):** Chromium escapes spaces in the query and fragment before `will-navigate`
+    (`?q=a%20b#x%20y`, allowed) but hands over a backslash there raw (`?q=a\b%20c#x\y%20z`), so the raw-shape rule
+    blocks such a same-site navigation (`block`, logged, no dialog). Reported to the owner; the policy is unchanged and
+    the e2e test pins today's behavior.
 
 ## 6. Launcher renderer
 

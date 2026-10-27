@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- e2e page (not a game): a beforeunload trap. Chromium asks only after a user gesture, so the test clicks first. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>trap</title>
+  </head>
+  <body>
+    <button id="arm" type="button">arm</button>
+    <button id="hang" type="button">hang</button>
+    <script>
+      window.addEventListener("beforeunload", (event) => {
+        event.preventDefault();
+        event.returnValue = "";
+      });
+      document.getElementById("arm").addEventListener("click", () => {
+        document.title = "armed";
+      });
+      document.getElementById("hang").addEventListener("click", () => {
+        setTimeout(() => {
+          for (;;) {}
+        }, 0);
+      });
+    </script>
+  </body>
+</html>

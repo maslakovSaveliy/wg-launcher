@@ -2,11 +2,18 @@
 // before anything else, and the app:// scheme is registered before `ready`.
 
 import { join } from "node:path";
-import { app, type BrowserWindow, session } from "electron";
+import { app, type BrowserWindow, session, shell } from "electron";
 import { handleAppProtocol, LAUNCHER_URL, registerAppScheme } from "./app-protocol.js";
-import { type Db, openDatabase } from "./db/database.js";
+import { type Db, openDatabase, type WritableDb } from "./db/database.js";
+import { createRepos } from "./db/repos/index.js";
 import { type Dialogs, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
+import { closeGameWindow } from "./games/close-procedure.js";
+import { recordFrames } from "./games/frames.js";
+import { gameSession, installBaselineHandlers } from "./games/game-session.js";
+import { GameRuntime } from "./games/lifecycle.js";
+import { LockManager } from "./games/locks.js";
+import { createExternalOpener, createGameWindow } from "./games/window-factory.js";
 import {
   createLauncherWindow,
   focusLauncher,
@@ -25,6 +32,8 @@ export interface AppContext {
   dialogs: Dialogs;
   /** The library database; read-only when a newer app wrote it (the launcher must then show `reason`, not write). */
   db: Db;
+  /** The game windows and their lifecycle; null while the database is read-only (nothing can be launched). */
+  games: GameRuntime | null;
 }
 
 /** Start-up cannot continue: report on stderr (the log may not exist yet) and exit without a dialog. */
@@ -55,13 +64,52 @@ if (__WG_FLAVOR__ === "test") {
 
 const partitioning = fixPartitioningSwitch(app.commandLine);
 
+/** The game runtime with the real windows, sessions and close procedure (architecture.md sections 4 and 5). */
+function createGames(
+  db: WritableDb,
+  log: Logger,
+  dialogs: Dialogs,
+  openExternal: (url: string) => Promise<void>,
+) {
+  const repos = createRepos(db);
+  const runtime = new GameRuntime({
+    games: repos.games,
+    locks: new LockManager({ log }),
+    log,
+    dialogs,
+    flavor: FLAVOR,
+    openWindow: ({ gameId, title, entryUrl }) => {
+      // The session's handlers exist before the window, so the page never meets Electron's allow-all default.
+      gameSession(gameId, { log });
+      const askExternal = createExternalOpener({ gameId, dialogs, openExternal, log });
+      const window = createGameWindow({
+        gameId,
+        title,
+        entryUrl,
+        flavor: FLAVOR,
+        log,
+        askExternal: (url) => void askExternal(url),
+      });
+      recordFrames(window.webContents, gameId, repos.storageTargets, log);
+      return window;
+    },
+    closeWindow: (window, gameId) =>
+      closeGameWindow(window as BrowserWindow, { gameId, log, dialogs }),
+  });
+  return { runtime, repos };
+}
+
 async function start(userData: string): Promise<AppContext> {
   const testHooks = __WG_FLAVOR__ === "test" ? await import("./test-hooks.js") : null;
+  // Before ready, so the default session (created at ready) gets the deny-all baseline too.
+  let logger: Logger | null = null;
+  installBaselineHandlers(app, { warn: (event, fields) => logger?.warn(event, fields) });
   await app.whenReady();
 
   const paths = appPaths(userData);
   await prepareAppPaths(paths);
   const log = createLogger(paths.logs);
+  logger = log;
   log.info("app.start", {
     flavor: FLAVOR,
     version: app.getVersion(),
@@ -85,6 +133,19 @@ async function start(userData: string): Promise<AppContext> {
   hooks?.watchDatabase(db);
   app.on("will-quit", () => db.close());
 
+  const openExternal = hooks?.openExternal ?? ((url: string) => shell.openExternal(url));
+  const games = db.readOnly ? null : createGames(db, log, dialogs, openExternal);
+  if (games) hooks?.watchGames(games);
+  // App quit runs the close procedure of every open game window in parallel, at most 3 s (architecture.md 4).
+  let quitting = false;
+  app.on("before-quit", (event) => {
+    if (quitting || !games || games.runtime.openGames().length === 0) return;
+    event.preventDefault();
+    quitting = true;
+    log.info("app.quit-closing-games", { count: games.runtime.openGames().length });
+    void games.runtime.closeAll(3000).finally(() => app.quit());
+  });
+
   const launcherSession = session.fromPartition(LAUNCHER_PARTITION);
   setUpLauncherSession(launcherSession, log);
   handleAppProtocol(launcherSession, join(import.meta.dirname, "../renderer"), paths.covers);
@@ -106,7 +167,7 @@ async function start(userData: string): Promise<AppContext> {
 
   const devUrl = FLAVOR === "dev" ? process.env.ELECTRON_RENDERER_URL : undefined;
   await window.loadURL(devUrl ?? LAUNCHER_URL);
-  return { paths, log, dialogs, db };
+  return { paths, log, dialogs, db, games: games?.runtime ?? null };
 }
 
 const userData = chooseUserData();

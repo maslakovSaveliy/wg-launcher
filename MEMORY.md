@@ -96,6 +96,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   production dependency of `apps/desktop`. The settled details (raw shapes refused before parsing, literal dev hosts
   only, whole host as the site where no registrable domain exists, two launch arguments are invalid): security.md
   section 5 "Implementation", architecture.md sections 5, 8 and 12.
+- 2026-10-28 Phase 1 Task 8 (game windows, Assumed unless noted): files and rules in architecture.md sections 4 and 5
+  ("Close procedure details", "Runtime details", "Lock details", "Implementation (Phase 1 Task 8)") and security.md
+  section 5 ("Wired in Phase 1 Task 8"). In short: a cancelled background lease not released within 2 s refuses the
+  launch with `INTERNAL`; a launch while `closing` opens and shows nothing; the unload step waits at most 2 s; a
+  `will-prevent-unload` is answered by cancelling, asking, then reloading `about:blank` with the trap ignored. The test
+  flavor records `shell.openExternal` calls (`externalOpened`) instead of opening; e2e pages are served by
+  `apps/desktop/e2e/test-pages.ts` on `127.0.0.1`.
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -382,6 +389,28 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   behavior]. The handover e2e test hides the window on Linux instead and keeps minimize on macOS and Windows;
   `focusLauncher` restores and shows, and the hide path fails without its `show()` [V, 2026-10-28, mutation run on
   macOS arm64 with the hide path forced].
+- AC-13 holds on Electron 45 with the close procedure: `ServiceWorker.enable` + `ServiceWorker.stopAllWorkers` over
+  `webContents.debugger` (attached to the game's `webContents` after it loaded `about:blank`) stopped progress-lab's
+  worker; the session had no running worker and the game's renderer was gone 107 to 110 ms after the close (two runs), nothing of the game
+  was left 5 s after the close, nothing of the bundle 5 s after a quit with the game open. Mutation control (step 3
+  removed): 1 worker running and the renderer alive 5 s after the close (H16). So open check 1 needs no fallback. [V,
+  2026-10-28, `e2e/game-lifecycle.spec.ts`, Electron 45.0.0, macOS arm64]
+- Chromium canonicalizes a renderer-initiated URL before `will-navigate`: spaces in the query and fragment arrive as
+  `%20`, a backslash there arrives raw (`?q=a\b%20c#x\y%20z`), so `decideTopNavigation`'s raw-shape rule blocks
+  such a same-site navigation. Owner question (Open questions). [V, 2026-10-28, `e2e/game-isolation.spec.ts`]
+- With the game session's check handler denying `media`, a camera `getUserMedia` failed with `NotFoundError` (no
+  device offered), not `NotAllowedError` as in the spike; `permissions.query({name: "microphone"})` reaches the check
+  handler (`denied`) without touching a device. `requestFullscreen()` also triggers a check for `automatic-fullscreen`.
+  [V, 2026-10-28, `e2e/game-isolation.spec.ts`, screen locked]
+- Under Playwright, a hung game page produced no `unresponsive` event within 90 s of input ([A] Chromium skips the
+  hang report while a debugger is attached), so the e2e test emits the event itself against a really hung renderer;
+  `forcefullyCrashRenderer` then ends it with `render-process-gone`. [V, 2026-10-28, `e2e/game-lifecycle.spec.ts`]
+- Playwright `page.click` and locators wait for "scheduled navigations" to finish, and a navigation the app prevented
+  never does (30 s timeout): click through `page.mouse.click` at coordinates read with `page.evaluate`. [V, 2026-10-28,
+  Playwright 1.64.1, `e2e/game-isolation.spec.ts` `trustedClick`]
+- Pointer lock fails with `WrongDocumentError` while the macOS screen is locked (`ioreg -n Root -d1 -a` shows
+  `CGSSessionScreenIsLocked` true); the permissions e2e test checks that outcome then and annotates "pointer lock not
+  verified". [V, 2026-10-28, run with the owner away]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]
@@ -425,3 +454,6 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
   presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
+- Task 8 finding: a same-site game navigation whose query or fragment contains a backslash is blocked by the raw-shape
+  rule, because Chromium leaves the backslash raw (Gotchas). Allow a backslash after the authority for main-frame
+  targets, or keep blocking? Default: keep blocking (owner decision; the e2e test pins today's behavior).
