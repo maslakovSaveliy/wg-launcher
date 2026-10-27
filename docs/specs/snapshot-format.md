@@ -43,8 +43,8 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   second frame and any other byte after the frame, and MUST decode with `windowLogMax` 27 (codes in section 8). `Assumed`
 - Truncation is detected by the reader's own frame walker, not by the decompressor, because zstd versions differ on a
   cut frame: Node 24.13.0 decompresses a cut checksummed frame without any error, Node 24.22.1 fails it with
-  `Z_BUF_ERROR` "unexpected end of file". Verified (2026-10-25 and 2026-10-28, Node 24.13.0 and 24.22.1, scratch
-  script, [MEMORY.md](../../MEMORY.md)).
+  `Z_BUF_ERROR` "unexpected end of file". Verified (2026-10-25 and 2026-10-28, Node 24.13.0 and 24.22.1, the `node -e`
+  commands in [MEMORY.md](../../MEMORY.md) "Node, zstd and the snapshot codec").
   The walker follows RFC 8878 sections 3.1.1, 3.1.1.1 and 3.1.1.2: the magic `28 b5 2f fd` (a skippable-frame magic
   `0x184D2A50` to `0x184D2A5F` first is `SNAP_ZSTD_INVALID`), then the frame header descriptor checked in this order:
   reserved bit 3 set, a dictionary id flag, no checksum flag (`SNAP_ZSTD_NO_CHECKSUM`); then a window above 2^27 (for a
@@ -52,12 +52,15 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   size above 128 KiB are `SNAP_ZSTD_INVALID`; an RLE block carries one byte) and the 4-byte checksum. Input that ends
   before the last block and the checksum is `SNAP_TRUNCATED`. The decompressor still checks block contents and the
   checksum value. `Assumed` (Phase 1 plan, M6)
-- Every verdict is tied to a byte position, so the code does not depend on chunking or read-ahead. A container defect
+- Every verdict is tied to a byte position, so the code does not depend on chunking or read-ahead, except for the
+  corrupt-block case below. A container defect
   found on the compressed bytes (a walker code above, or a source longer or shorter than its declared size, section 8)
   stops reading at the bad byte; the bytes before it are still decompressed and checked, and the container code is
   reported only if they pass. So a cut file is `SNAP_TRUNCATED` unless the data before the cut is itself invalid. The
   reader ends the decompressor only after a frame the walker completed; a frame the walker stopped is flushed instead,
-  so the bytes before the verdict decode the same on every zstd version. `Assumed` (Ruling R23, 2026-10-28)
+  so no version-specific end-of-input error stops it and everything the library decodes from the bytes before the
+  verdict is checked. The uncompressed limits (`SNAP_RATIO_EXCEEDED`, `SNAP_TOTAL_TOO_LARGE`) fail at the exact tar
+  byte that crosses them, after the bytes before it were checked. `Assumed` (Ruling R23, 2026-10-28)
 - Decompressor errors (Ruling R23, 2026-10-28, which replaces R12 "a decompressor error is always
   `SNAP_ZSTD_INVALID`"): the code MUST be the same on every zstd library and version. On a decompressor error the reader
   stops decompressing but keeps feeding the remaining compressed bytes, up to `compressedSize`, to the frame walker
@@ -65,10 +68,12 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   reserved bit or block type, a skippable or second frame, trailing data, a source longer or shorter than declared),
   that verdict is reported, under the deferral rule above: a defect the tar, manifest or record checks already found in
   the bytes decompressed before the error still comes first. Only when the walker saw a complete, structurally valid
-  frame is the result `SNAP_ZSTD_INVALID` (corrupt block content or a checksum mismatch). How much a corrupt block emits
-  before that error depends on the zstd library, so a corrupt file may instead fail with a code of the content it
-  decoded to. The uncompressed limits (`SNAP_RATIO_EXCEEDED`, `SNAP_TOTAL_TOO_LARGE`) fail at the exact tar byte that
-  crosses them, after the bytes before it were checked. `Assumed`
+  frame is the result `SNAP_ZSTD_INVALID` (corrupt block content or a checksum mismatch). `Assumed`
+- Corrupt-block carve-out (Ruling R24, 2026-10-28): for a file whose zstd block content is corrupt, the code may
+  depend on the zstd library and on chunking. How much a corrupt block emits before the error is library-defined, and
+  the output the library decoded in the same call that fails is discarded, so a defect in roughly the last input chunk
+  decoded before the corrupt block may be reported as its own code or as the decompressor or walker verdict above. The
+  file is always rejected. Such files are kept out of the golden vectors (section 10). `Assumed`
 - Tar: ustar headers (magic `ustar\0`, version `00`), sizes in octal only. Writers emit only regular files with mode
   0644, uid and gid 0, empty user and group names, mtime 0, the whole path in the `name` field and an empty `prefix`,
   then two zero blocks. Readers join `prefix` and `name` with `/` when `prefix` is set, accept zero padding after the

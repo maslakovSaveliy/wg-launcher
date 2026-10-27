@@ -725,6 +725,27 @@ describe("validateSnapshot: limits and codes do not depend on chunking", () => {
     }
   });
 
+  it("rejects a tar defect right before a corrupt block at every chunk size, whatever the code (Ruling R24)", async () => {
+    // The reviewer's probe: `../escape.txt` is the last tar entry, then a garbage block. The output zlib decoded in
+    // the call that fails is discarded, so the code depends on chunking here (section 2, corrupt-block carve-out).
+    const tarBytes = snapshotTar(files(), {
+      layout: (m, rest) => [m, ...rest, { path: "../escape.txt" }],
+    });
+    const corrupt = handFrame([...rawBlocks(tarBytes, false), garbageBlock()]);
+    for (const bytes of [
+      corrupt,
+      corrupt.subarray(0, corrupt.length - 2),
+      concat(corrupt, Uint8Array.of(7)),
+    ]) {
+      for (const size of [64, 1024, 4096, Number.MAX_SAFE_INTEGER]) {
+        expect(
+          await codeOfAsync(() => validate(bytes, {}, size)),
+          `${size}-byte chunks`,
+        ).toBeDefined();
+      }
+    }
+  });
+
   it("reports a tar defect before the byte where maxTotalBytes is crossed, at every chunk size", async () => {
     const bad = withExtra([{ path: "../escape.txt" }]);
     for (const size of SIZES) {

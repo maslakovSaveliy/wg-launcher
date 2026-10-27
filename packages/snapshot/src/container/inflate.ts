@@ -1,7 +1,8 @@
 // The container stage of the reader (snapshot-format.md sections 2 and 8): compressed bytes through the frame walker
 // into Node's zstd decompressor, with the size and ratio limits. Async throughout, so the snapshot worker stays
 // responsive; backpressure keeps at most a few chunks in memory. Every verdict is tied to a byte position, so the
-// result does not depend on how the source is chunked or how far Node reads ahead.
+// result does not depend on how the source is chunked or how far Node reads ahead, except for corrupt block content
+// (snapshot-format.md section 2, Ruling R24).
 import { Readable, type Transform } from "node:stream";
 import { finished } from "node:stream/promises";
 import { constants, createZstdDecompress } from "node:zlib";
@@ -40,9 +41,10 @@ class SourceError extends Error {
  * and yielded, and the verdict is thrown where the stream would have ended. So a defect in the frame content (which the
  * tar reader finds) is reported first, and a cut file never reaches the tar reader as a clean end.
  *
- * The result does not depend on the zstd library (Ruling R23): Node 24.13.0 ends a cut frame silently, 24.22.1 fails
- * it. The decompressor is ended only after a frame the walker completed; otherwise it is flushed, so every byte before
- * the walker's verdict is still decompressed and yielded. When the decompressor fails anyway (corrupt data, a wrong
+ * The result does not depend on the zstd library (Ruling R23; corrupt block content is the exception, R24): Node
+ * 24.13.0 ends a cut frame silently, 24.22.1 fails it. The decompressor is ended only after a frame the walker
+ * completed; otherwise it is flushed, so everything the library decodes from the bytes before the walker's verdict is
+ * yielded. When the decompressor fails anyway (corrupt data, a wrong
  * checksum, a library that rejects a prefix), decompression stops, the walker alone reads the rest of the source up
  * to `compressedSize`, and its verdict is thrown if it has one; only after a complete, structurally valid frame is the
  * failure `SNAP_ZSTD_INVALID`. A defect the tar reader found in the bytes yielded before the failure still comes first.
@@ -137,7 +139,9 @@ export async function* inflate(
       decompressor.end();
     } else {
       // A frame the walker stopped is incomplete: ending it would make some zstd versions fail the prefix. Flushing
-      // emits everything the bytes before the verdict decode to, the same on every version.
+      // emits everything the library decodes from the bytes before the verdict. `push(null)` from outside is
+      // off-contract (Node reserves `push` for implementers), but safe here: the flush write callback fires only after
+      // the Transform pushed all output of the earlier writes, no write follows, and `finally` destroys both streams.
       decompressor.flush(() => decompressor.push(null));
     }
   });

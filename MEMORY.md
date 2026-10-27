@@ -63,7 +63,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   "Node, zstd and the snapshot codec" gotcha below.
 - 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): rulings R10 (Node-only entry
   `@wg-launcher/snapshot/container`), R11 (exact `compressedSize`, ratio bound), R12 (a decompressor error is always
-  `SNAP_ZSTD_INVALID`; replaced on 2026-10-28 by R23 below), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
+  `SNAP_ZSTD_INVALID`; replaced on 2026-10-28 by R23 above), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
   Task 3. The container entry is never re-exported from `src/index.ts` (`src/web-only.test.ts` walks its import graph); zod 4.6.7 (MIT)
   is a production dependency of `packages/snapshot`.
 - 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): layout, the 31 vectors plus `invalid-truncated-tar`
@@ -173,7 +173,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - [V] Project rules are `.cursor/rules/*.mdc` with frontmatter `description`, `globs`, `alwaysApply`; Cursor reads
   `AGENTS.md` natively. <https://cursor.com/docs/context/rules>
 - [V] Dev machine: macOS 27.0.1 on arm64 (MacBook Air M3 `Mac15,12`, fanless, Metal 4, 60 Hz display); Node 24.13.0 via
-  nvm; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
+  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins (R22); Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
   lefthook 2.1.15. No Windows or Linux machine: those platforms are **unverified** until CI or a real run says otherwise.
 
 ## Gotchas
@@ -266,11 +266,23 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   Node 24.22.1: the same cut (and a cut at half, and the `invalid-truncated` vector) fails in both APIs with code
   `Z_BUF_ERROR`, errno -5, message "unexpected end of file", raised by `end()` after the decodable output was emitted;
   a frame without the checksum flag still decompresses, and `flush()` on a cut frame does not fail on either version
-  [V, 2026-10-28, Node 24.13.0 and 24.22.1, scratch script]. The `.wgsnap` reader therefore detects truncation itself
+  [V, 2026-10-28, Node 24.13.0 and 24.22.1: `nvm exec <v> node -e` with
+  `const z=require("node:zlib");const f=z.zstdCompressSync(Buffer.alloc(300000).map((_,i)=>i*7919%251),{params:{[z.constants.ZSTD_c_checksumFlag]:1}});try{console.log("out",z.zstdDecompressSync(f.subarray(0,f.length-6)).length)}catch(e){console.log(e.code,e.errno,e.message)}`
+  printed `out 262144` on 24.13.0 and `Z_BUF_ERROR -5 unexpected end of file` on 24.22.1]. The `.wgsnap` reader therefore detects truncation itself
   (plan M6, `ZstdFrameWalker` in `packages/snapshot/src/container/zstd-frame.ts`), never ends the decompressor on a
   frame the walker stopped, and lets the walker's verdict win over a decompressor error (Ruling R23,
   snapshot-format.md section 2). Ending instead of flushing lost buffered output on 24.22.1, so a tar defect before the
-  cut was missed (mutation run of `reader.test.ts` and `inflate.test.ts`).
+  cut was missed [V, 2026-10-28: with `decompressor.end()` in place of the flush in `inflate.ts`, `nvm exec 24.22.1
+  pnpm exec vitest run packages/snapshot` failed "reports a defect inside the frame before a later container defect,
+  for chunks of 64 bytes" while 24.13.0 passed; the fake-decompressor test in `src/container/inflate.test.ts` fails
+  under the same mutation on 24.13.0].
+- `inflate.ts` ends the readable side of a flushed decompressor with `decompressor.push(null)` from outside the
+  Transform. That is off-contract (Node reserves `push` for stream implementers) but safe there: the `flush()` write
+  callback fires only after the Transform pushed all output of the bytes written before it, no write follows, and the
+  `finally` destroys both streams. [V, 2026-10-28, Node 24.13.0 and 24.22.1: `nvm exec <v> node -e` with the frame `f`
+  above and
+  `const d=z.createZstdDecompress();let n=0;d.on("data",c=>n+=c.length);d.on("error",e=>console.log("error",e.code));d.on("end",()=>console.log("end",n));d.write(f.subarray(0,f.length-6));d.flush(()=>{console.log("flushed",n);d.push(null)})`
+  printed `flushed 262144` and `end 262144`, no error, on both]
 - Node's streaming zstd compressor can append a second, empty frame (`28b52ffd 24 00 01 00 00` plus checksum):
   `lib/zlib.js` gives `ZSTD_e_end` to a chunk still queued at `end()`, then `_flush` finishes again. Three chunks piped from
   `Readable.from` gave two frames; awaiting each `write()` callback before `end()` (what the writer does) gave one. [V,
