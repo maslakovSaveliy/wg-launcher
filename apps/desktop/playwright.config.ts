@@ -4,6 +4,8 @@ import { defineConfig } from "@playwright/test";
 // a fresh temporary userData directory. One worker: each launch opens real windows on the machine.
 export default defineConfig({
   testDir: "e2e",
+  // *.test.ts files in e2e are Vitest unit tests of the harness itself.
+  testMatch: "**/*.spec.ts",
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

@@ -3,13 +3,14 @@
 // profile), and the progress-lab fixture server on a free port.
 
 import { spawn } from "node:child_process";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { _electron, type ElectronApplication, type Page } from "@playwright/test";
 import type { TestHooks } from "../src/main/test-hooks.js";
+import { guardRealProfiles } from "./real-profile-guard.js";
 
 export const APP_DIR = join(import.meta.dirname, "..");
 const PROGRESS_LAB_SERVER = join(APP_DIR, "../../fixtures/test-games/progress-lab/server.mjs");
@@ -84,50 +85,6 @@ export function appEnv(userData: string): Record<string, string> {
   return env;
 }
 
-/**
- * Electron's default `appData` directory on this OS (where the real app keeps its userData), computed without
- * starting Electron.
- */
-function defaultAppData(): string {
-  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support");
-  if (process.platform === "win32")
-    return process.env.APPDATA ?? join(homedir(), "AppData", "Roaming");
-  return process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
-}
-
-/** The userData directories of the real app (prod) and of the dev flavor. Tests must never create or change them. */
-export const REAL_PROFILE_DIRS = ["WGLauncher", "WGLauncher Dev"].map((name) =>
-  join(defaultAppData(), name),
-);
-
-async function listing(dir: string): Promise<string[] | null> {
-  try {
-    return (await readdir(dir)).sort();
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Records the real profile directories before a launch; `verify()` throws if a run created one or changed the
- * names in it. (Electron creates the userData directory as soon as anything reads `app.getPath("userData")`.)
- */
-export async function guardRealProfiles(): Promise<{ verify(): Promise<void> }> {
-  const before = await Promise.all(REAL_PROFILE_DIRS.map(listing));
-  return {
-    async verify() {
-      const after = await Promise.all(REAL_PROFILE_DIRS.map(listing));
-      REAL_PROFILE_DIRS.forEach((dir, i) => {
-        if (JSON.stringify(before[i]) !== JSON.stringify(after[i])) {
-          throw new Error(
-            `A test run touched the real profile directory ${dir}: before ${JSON.stringify(before[i])}, after ${JSON.stringify(after[i])}.`,
-          );
-        }
-      });
-    },
-  };
-}
-
 export interface Launched {
   app: ElectronApplication;
   /** The launcher window. */
@@ -137,6 +94,17 @@ export interface Launched {
   /** Reads the test hooks of the running app (a JSON copy). */
   hooks(): Promise<Omit<TestHooks, "queueDialogAnswer" | "openTestWindow">>;
   close(): Promise<void>;
+}
+
+/**
+ * The command-line arguments of an app process. `--user-data-dir` is Chromium's own switch: with it, even a crash
+ * while the main module loads (before the app's `app.setPath("userData")` runs) cannot make Chromium write into
+ * the real default userData. (Verified 2026-10-28 with a probe app on Electron 45.0.0: with the switch,
+ * `app.getPath("userData")` and all of Chromium's files are in that directory and the default one is not created;
+ * without it they go to `<appData>/<productName>`.)
+ */
+export function appArgs(userData: string): string[] {
+  return [APP_DIR, `--user-data-dir=${userData}`];
 }
 
 export async function launchApp(options: { userData?: string } = {}): Promise<Launched> {
@@ -149,7 +117,7 @@ export async function launchApp(options: { userData?: string } = {}): Promise<La
       // No executablePath: only then does Playwright add its loader (`-r loader.js`), which also appends
       // `--disable-features=...,ThirdPartyStoragePartitioning,...`; the app must undo that (architecture.md section
       // 5), and the partitioning test checks that it does. Playwright resolves the `electron` package itself.
-      args: [APP_DIR],
+      args: appArgs(userData),
       // Playwright adds --no-sandbox on Linux unless this is set; the app's windows rely on the sandbox.
       chromiumSandbox: true,
       cwd: APP_DIR,
@@ -158,6 +126,10 @@ export async function launchApp(options: { userData?: string } = {}): Promise<La
     });
   } catch (error) {
     await progressLab.stop();
+    // A failed launch (a crash while the app starts) is exactly when the real profile is most at risk.
+    await profiles.verify().catch((violation: Error) => {
+      throw new Error(`${violation.message} (the launch had failed: ${String(error)})`);
+    });
     throw error;
   }
   const close = async () => {
@@ -187,7 +159,7 @@ export async function launchApp(options: { userData?: string } = {}): Promise<La
 /** Starts the app once more on the same userData without Playwright and resolves with its exit code. */
 export function runSecondInstance(userData: string, timeoutMs = 20_000): Promise<number | null> {
   return new Promise((resolveExit, reject) => {
-    const child = spawn(ELECTRON_PATH, [APP_DIR], {
+    const child = spawn(ELECTRON_PATH, appArgs(userData), {
       cwd: APP_DIR,
       env: appEnv(userData),
       stdio: "ignore",
