@@ -60,7 +60,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): rulings R10 (Node-only entry
   `@wg-launcher/snapshot/container`), R11 (exact `compressedSize`, ratio bound), R12 (a decompressor error is always
   `SNAP_ZSTD_INVALID`), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
-  Task 3. The container entry is never re-exported from `src/index.ts`; zod 4.6.7 (MIT) is a production dependency.
+  Task 3. The container entry is never re-exported from `src/index.ts` (`src/web-only.test.ts` walks its import graph); zod 4.6.7 (MIT)
+  is a production dependency of `packages/snapshot`.
 - 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): layout, the 31 vectors plus `invalid-truncated-tar`
   (M6), `--overwrite` and freezing: snapshot-format.md section 10, plan Task 4. `VECTOR_FIELDS` in
   `scripts/generate-vectors.ts` (UUIDv7s at 2026-01-01, `createdAt` `2026-01-01T00:00:00.000Z`, exporter
@@ -90,23 +91,26 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   export libraries, Node zstd) section 5; packaging and crate versions section 7. [V, 2026-10-24]
 - Runtime spike, Electron 45 (H1 to H16), Chrome (H19), Chrome `--app` (H20), Safari proxy, demos (H21), the Windows CI
   job not added: [RESULTS.md](spikes/runtime-compat/RESULTS.md) "Summary" and per-hypothesis sections, machine under
-  "Run"; matrix [docs/compat/matrix.md](docs/compat/matrix.md). [V, 2026-10-24, run locally] In short: WebGPU without a
-  switch (H5; Electron 24 features, Chrome 155 and bundled Chromium 23); H12 environment-dependent; H9 and H13 INVALID;
-  H16 FAIL (the renderer lived 27.8 s, until the service worker stopped); H2b SIGKILL lost a persistent cookie only.
+  "Run"; matrix [docs/compat/matrix.md](docs/compat/matrix.md). [V, 2026-10-24, run locally, one machine] In short:
+  WebGPU without a switch on this Mac (H5; Electron 24 features, Chrome 155 and bundled Chromium 23; [U] on other OSes
+  and GPUs: runtime-and-storage.md section 2.5); H12 environment-dependent; H9 and H13 INVALID; H16 FAIL (the closed
+  window's renderer exited 27.8 s after the close, when the service worker stopped; cause Assumed); H2b: SIGKILL 5 s
+  after the writes lost a persistent cookie, while localStorage, IndexedDB, Cache Storage and OPFS survived.
 
-### Tooling versions (2026-10-24; the living list runtime-and-storage.md section 7 points to)
+### Tooling versions (`npm view`, 2026-10-24; the living list runtime-and-storage.md section 7 points to)
 
 - [V] electron 45.0.0, electron-vite 6.0.0, vite 8.3.5, react 19.3.1, typescript 7.0.2 (6.0.3 is the last 6.x),
   @biomejs/biome 2.6.2, vitest 5.0.5, @playwright/test 1.64.1, zod 4.6.7, lefthook 2.2.2, @commitlint/cli 21.2.4,
   secretlint 13.0.7, markdownlint-cli2 0.24.0, @types/node 24.19.2 (24.x line), pnpm 12.15.0; installed exactly so.
-- [V, run locally] TypeScript 7.0.2 works with the whole toolchain, no fallback to 6.0.3: `tsc -b` checks `.ts` and
+- [V, 2026-10-24, run locally] TypeScript 7.0.2 works with the whole toolchain, no fallback to 6.0.3: `tsc -b` checks `.ts` and
   checked `.mjs` (`allowJs`, `checkJs`) with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and
   `verbatimModuleSyntax`, and fails on a deliberate type error; Vitest, Biome, commitlint (`.mjs` config), secretlint and
   markdownlint-cli2 run on Node 24.13. TS 7 is a native binary (optional `@typescript/typescript-<platform>` package).
-- [V, run locally] Biome 2.6.2 also formats Markdown and YAML by default (`biome check .` rewrote `AGENTS.md` tables; its
+- [V, 2026-10-24, run locally] Biome 2.6.2 also formats Markdown and YAML by default (`biome check .` rewrote `AGENTS.md` tables; its
   schema has `markdown`, `yaml`, `html`, `graphql`), so `biome.json` whitelists JS, TS, JSON and CSS in `files.includes`.
 - [V] `node:sqlite` is release candidate since Node 25.7, needs no flag since 22.13
-  (<https://nodejs.org/api/sqlite.html>), and runs in Electron 45 main and `utilityProcess` without a warning (RESULTS.md H10).
+  (<https://nodejs.org/api/sqlite.html>), and runs in Electron 45 main and `utilityProcess` without a warning on this Mac
+  (RESULTS.md H10). [U] Its stability label in Node 24.22 (Open questions).
 
 ### Test fixture and record layer
 
@@ -222,8 +226,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 
 ### Electron, Chromium and the spike
 
-- Electron approves every permission request unless a handler denies it (runtime-and-storage.md section 2.3). CDP
-  IndexedDB can read and delete but has no put or add, so restore cannot use CDP (section 5.1; `IndexedDB.pdl`).
+- Electron approves every permission request unless a handler denies it. CDP IndexedDB can read and delete but has no
+  put or add, so restore cannot use CDP. [V, 2026-10-24, Electron session docs and `IndexedDB.pdl`; runtime-and-storage.md
+  sections 2.3 and 5.1]
 - Playwright 1.64.1 (also `_electron.launch`) disables `ThirdPartyStoragePartitioning` (issue 32230): a cross-site
   iframe shares storage with the top level. `--enable-features=...` changes nothing; a later `--disable-features` list
   without that entry restores partitioning (last switch wins), as `playwright.config.ts` does and the app must
@@ -232,9 +237,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `http://127.0.0.1:4417/^0http://localhost`); CDP `Storage.clearDataForStorageKey` does; `ses.clearStorageData()`
   without options clears everything. [V, 2026-10-24, RESULTS.md H14 wipe probes]
 - Main-process `WebFrameMain` has no isolated-world execution: for a subframe use a preload (`nodeIntegrationInSubFrames`)
-  calling `webFrame.executeJavaScriptInIsolatedWorld`. A registered service worker controls a stub navigation unless CDP
-  `Network.setBypassServiceWorker` is on; export after the game's worker stopped. [V, 2026-10-24, RESULTS.md H14,
-  "Deviations" 2 and 3]
+  calling `webFrame.executeJavaScriptInIsolatedWorld`. A registered service worker controls a top-level stub navigation
+  unless CDP `Network.setBypassServiceWorker` is on ([A] that the bypass also covers subframes: no iframe control was
+  run); export after the game's worker stopped. [V, 2026-10-24, RESULTS.md H14, "Deviations" 2 and 3]
 - `requestPointerLock()` right after `requestFullscreen()` in one handler fails ("A user gesture is required"); call it
   alone or first. `navigator.keyboard.lock()` needs no gesture. [V, 2026-10-24, RESULTS.md H13; [A] fullscreen consumes
   the transient activation]
@@ -251,7 +256,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   the packaged launcher must not (security.md section 5), and electron-vite's example `electron-builder.yml` adds camera
   and microphone ones, so do not copy it. [V, 2026-10-25, `plutil -p` of `electron@45.0.0`; ADR-0004]
 - `app.setAsDefaultProtocolClient` leaves a LaunchServices `LSHandlers` entry that outlives `lsregister -u` and the
-  deleted app; location and removal recipe: RESULTS.md H15. [V, 2026-10-24]
+  deleted app; location and removal recipe: RESULTS.md H15. [V, 2026-10-24, Electron 45 spike]
 - Chrome `--app` keeps the browser process alive after its last window closes (a launcher must quit it), and a fresh
   profile shows a Google Translate bubble in the app window. [V, 2026-10-24, RESULTS.md H20]
 - CDP `IndexedDB.requestData` fails with "Could not get index" for an empty `indexName`: omit it to read the store
@@ -272,7 +277,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   Harmony wording, such as the UN Convention exclusion in section 6.1, and the moral-rights waiver fit Russian law is for
   the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal address or another
   contact beyond the GitHub account? Default: the lawyer decides.
-- Does Electron pass H7 on the launcher (condition of ADR-0002 and ADR-0005)? Chrome 156 is not installed, so a result
+- Does Electron pass H7 on the launcher (condition of ADR-0002 and ADR-0005)? Chrome 156 is not installed on the dev machine, so a result
   against Chrome 155 carries "version mismatch". Default until measured: Electron stays the runtime.
 - Spike leftovers (RESULTS.md): the `node:sqlite` stability label in Node 24.22 (H10); why Electron reports one extra
   WebGPU feature, `texture-compression-unaligned` (H19); Electron 44.x cross-origin isolation, untested because 45.0.0
