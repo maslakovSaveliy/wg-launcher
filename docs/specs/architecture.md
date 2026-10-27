@@ -143,7 +143,7 @@ stateDiagram-v2
   the host itself for IP addresses and `localhost`). The PSL dependency is `tldts` 7.4.19 (MIT, with `tldts-core`,
   MIT) with `allowPrivateDomains: true`, so `a.github.io` and `b.github.io` are different sites, as Chromium's
   schemeful site is assumed to treat them. Where no registrable domain exists (a bare public suffix such as `co.uk`, a
-  single-label host, a host with a trailing dot) the whole host is the site, so different hosts never share one; ports
+  single-label host, a host with a trailing dot or an empty label such as `example..com`) the whole host is the site, so different hosts never share one; ports
   never matter. Implemented in `apps/desktop/src/main/policy/site.ts`. `Assumed`
 - **Storage partitioning stays on.** Playwright's Electron loader appends `ThirdPartyStoragePartitioning` to
   `--disable-features`, which makes a cross-site iframe share storage with the top level; re-appending the list without
@@ -364,8 +364,12 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 
 - **Add (F-2, AC-17).** The URL is parsed with the WHATWG URL parser; it must be `https`, have a host and no user info,
   and be at most 2048 characters; it is stored as `url.href`. Development and test builds also accept
-  `http://localhost` and `http://127.0.0.1` on any port, behind a build-time constant that production builds do not
-  contain (PRD OQ-3, proposal adopted). Anything else is `URL_NOT_ALLOWED`. `Assumed`. Only the literal hosts count
+  `http://localhost` and `http://127.0.0.1` on any port (PRD OQ-3, proposal adopted). The rule takes the build flavor
+  as a parameter and a production-flavor call refuses both; the app passes the compile-time `FLAVOR`
+  (`src/main/flavor.ts`), so a production build always decides as production. The dev-origin strings stay in the
+  production bundle (they are not compiled out). `Assumed` for the design (Task 8 wires the call); the refusal of a
+  production-flavor call is Verified (2026-10-28, `apps/desktop/src/main/policy/url-rules.test.ts`). Anything else is
+  `URL_NOT_ALLOWED`. `Assumed`. Only the literal hosts count
   (not `2130706433` or `127.1`), the input is not trimmed (the renderer may trim visibly before sending), and the raw
   shapes the parser would repair are refused: [security.md](security.md#5-permission-and-navigation-policy),
   "Implementation". `Assumed`

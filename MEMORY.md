@@ -278,6 +278,14 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `example.com.` (trailing dot), `null` for `co.uk`, `github.io`, `localhost`, `intranet` and IP literals (`isIp`
   true, also for `[::1]`), `a.github.io` for `a.github.io`, and falls back to the last label for an unknown TLD
   (`domain.unknown`, `sub.localhost`). `siteOf` handles the trailing dot itself. [V, 2026-10-28, same script]
+- tldts 7.4.19 gives domain `.com` for `example..com`, `.co.uk` for `a..co.uk`, `.github.io` for `x.a..github.io` and
+  `example.com` for `.example.com`, while `new URL` keeps those hosts as they are; so `url-rules.ts` refuses hosts with
+  an empty label and `siteOf` uses the whole host for them (Task 7a fix round 1). [V, 2026-10-28, Node 24.13.0,
+  `node -e` with `parse(host, {allowPrivateDomains: true, extractHostname: false})`]
+- tldts 7.4.19 does not list `itch.io` as a private suffix: `a.itch.io` gives domain `itch.io`, suffix `io`,
+  `isPrivate` false, so `a.itch.io` and `b.itch.io` are one site for our policy. [V, 2026-10-28, same `node -e`
+  probe] Whether Chromium's schemeful site agrees is Unverified. The PSL snapshot ages with the tldts version, so
+  updating tldts is part of dependency upkeep.
 
 ### Electron, Chromium and the spike
 

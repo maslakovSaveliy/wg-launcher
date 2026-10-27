@@ -59,7 +59,7 @@ privilege. `Assumed` for the analysis; the mitigations cite where they are speci
 | T18 | 1, 6 | S: a game frame or stub sends IPC as if it were the launcher | Sender frame and origin checks; quiescent nonce handshake | S-10 |
 | T19 | 9 | I: logs leak tokens, cookies, save contents | Redaction (section 9) | AC-20, S-12 |
 | T20 | — | E: the installed app is modified or run as Node | Fuses (section 4); code signing later (section 10) | S-14 |
-| T21 | 8 | I/T: other local pages talk to development servers | Loopback only; the spike server needs a per-run token and checks `Origin`; dev origins compiled out of production | S-18 |
+| T21 | 8 | I/T: other local pages talk to development servers | Loopback only; the spike server needs a per-run token and checks `Origin`; dev origins refused by every production-flavor policy call, which receives the compile-time `FLAVOR` (Assumed design; the refusal is unit-tested, section 5 "Implementation") | S-18 |
 | T22 | 7 | S: TLS errors bypassed or a client certificate leaked | Certificate errors never overridden; no client certificate selected (section 5) | S-5 |
 | T23 | — | E: a malicious dependency | Dependency policy, exact versions, `allowBuilds`, few dependencies in security code (section 10) | `pnpm licenses:check` |
 | T24 | — | R: nobody can tell what happened to a save | Restore journal, logged job steps without content, backups kept | AC-8 |
@@ -155,6 +155,9 @@ A release check reads the fuses of the packaged app and fails on any difference 
     `https://@evil.com`, which the parser drops silently; percent-encoded host characters such as `exa%2Emple.com`,
     which the parser decodes into `exa.mple.com`). This applies to entry URLs, main-frame targets and
     `isExternalUrlAllowed`, not to subframes (a `data:` frame URL may contain spaces).
+  - After parsing, a host with an empty label (`example..com`, `.example.com`, `example.com..`) is refused: tldts
+    7.4.19 gives such hosts a domain such as `.com`, which would merge unrelated hosts into one site. `siteOf` itself
+    also uses the whole host for them.
   - Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen. A
     same-site main-frame target has no length limit; only entry URLs and external opening do.
   - `decideTopNavigation` returns `allow`, `ask-external` (another http or https site, or plain http other than a
@@ -163,7 +166,8 @@ A release check reads the fuses of the packaged app and fails on any difference 
     production build never navigates a stored development entry).
   - Development origins are only the literal hosts `localhost` and `127.0.0.1` in the raw text (any port), in dev and
     test builds; other spellings that the parser maps to `127.0.0.1` (`2130706433`, `0x7f.0.0.1`, `127.1`), `[::1]`,
-    `localhost.` and `sub.localhost` are not. A production-flavor call refuses them all; the dev-origin strings are
+    `localhost.` and `sub.localhost` are not. A production-flavor call refuses them all (Verified, 2026-10-28,
+    `url-rules.test.ts`); Task 8 passes the compile-time `FLAVOR` (Assumed until wired); the dev-origin strings are
     still in the prod bundle, because the flavor is a parameter, so `pnpm bundle:check` asserts nothing about them.
   - Subframes: `about:blank` and `about:srcdoc` are matched on the parsed path, so a query or fragment does not
     matter; `about:BLANK` and every other `about:` page are blocked.

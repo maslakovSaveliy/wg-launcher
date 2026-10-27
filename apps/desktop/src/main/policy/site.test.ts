@@ -66,6 +66,17 @@ describe("siteOf", () => {
     expect(siteOf("https://evil-example.com")).toBe("https://evil-example.com");
   });
 
+  it("uses the whole host when a label is empty (tldts would give `.com` for `example..com`)", () => {
+    expect(siteOf("https://example..com")).toBe("https://example..com");
+    expect(siteOf("https://example..com")).not.toBe(siteOf("https://evil..com"));
+    expect(siteOf("https://a..co.uk")).not.toBe(siteOf("https://b..co.uk"));
+    expect(siteOf("https://x.a..github.io")).not.toBe(siteOf("https://y.b..github.io"));
+    // A leading empty label must not merge with the name after it.
+    expect(siteOf("https://.example.com")).toBe("https://.example.com");
+    expect(siteOf("https://.example.com")).not.toBe(siteOf("https://example.com"));
+    expect(siteOf("https://example.com..")).toBe("https://example.com..");
+  });
+
   it("treats a host with a trailing dot as its own site (tldts would give `com.`)", () => {
     expect(siteOf("https://example.com.")).toBe("https://example.com.");
     expect(siteOf("https://www.example.com.")).toBe("https://www.example.com.");

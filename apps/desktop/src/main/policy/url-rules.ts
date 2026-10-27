@@ -11,11 +11,13 @@
 // - a scheme not followed by exactly "//" and a host ("https:evil.com", "https:///evil.com");
 // - "@" or "%" in the authority (user info in any form, also empty as in "https://@evil.com"; percent-encoded host
 //   characters such as "exa%2Emple.com", which the parser decodes into another host).
+// After parsing, a host with an empty label ("example..com", ".example.com") is refused: it is never a real site, and
+// tldts would give it a domain such as ".com" that merges unrelated hosts.
 // Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen.
 
 import type { Result } from "@wg-launcher/shared";
 import type { Flavor } from "../flavor.js";
-import { siteOf } from "./site.js";
+import { hasEmptyLabel, siteOf } from "./site.js";
 
 export const MAX_URL_LENGTH = 2048;
 
@@ -55,6 +57,7 @@ function parseWebUrl(input: unknown): ParsedWebUrl | null {
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return null;
   if (url.hostname === "" || url.username !== "" || url.password !== "") return null;
+  if (hasEmptyLabel(url.hostname)) return null;
   return { url, devHost: DEV_AUTHORITY.test(authority) && DEV_HOSTS.has(url.hostname) };
 }
 

@@ -7,7 +7,9 @@
 // - IPv4 and bracketed IPv6 addresses, and `localhost`;
 // - a bare public suffix (`co.uk`, `github.io`) or a single-label host (`intranet`);
 // - a host with a trailing dot (`example.com.`): tldts 7.4.19 reports its domain as `com.`, which would merge every
-//   trailing-dot host under one TLD, so such a host is kept whole (stricter than Chromium; Assumed harmless).
+//   trailing-dot host under one TLD, so such a host is kept whole (stricter than Chromium; Assumed harmless);
+// - a host with an empty label (`example..com`, `.example.com`): tldts 7.4.19 reports `.com` and `example.com`, which
+//   would merge them with other hosts. `url-rules.ts` refuses such hosts anyway; this keeps `siteOf` safe on its own.
 // The host is the WHATWG parser's normalized ASCII host (lower case, punycode, IPv4 in dotted decimal).
 
 import { parse } from "tldts";
@@ -17,12 +19,20 @@ const PSL_OPTIONS = { allowPrivateDomains: true, extractHostname: false } as con
 /** WHATWG serializes every IPv4 host as four dotted decimal numbers, whatever notation the input used. */
 const IPV4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
+/** True for a host with an empty label, such as `example..com`, `.example.com`, `example.com..` or `.`. */
+export function hasEmptyLabel(host: string): boolean {
+  if (host.startsWith("[")) return false;
+  const name = host.endsWith(".") ? host.slice(0, -1) : host;
+  return name.split(".").includes("");
+}
+
 function hostSite(host: string): string {
   if (host.startsWith("[") || IPV4.test(host) || host === "localhost" || host.endsWith("."))
     return host;
+  if (hasEmptyLabel(host)) return host;
   const result = parse(host, PSL_OPTIONS);
-  if (result.isIp) return host;
-  return result.domain ?? host;
+  if (result.isIp || !result.domain || result.domain.startsWith(".")) return host;
+  return result.domain;
 }
 
 /**

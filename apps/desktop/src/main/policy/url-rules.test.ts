@@ -55,6 +55,15 @@ const HOSTILE_EVERYWHERE: readonly string[] = [
   // Reads as a subdomain of example.com but parses as host evil.com with path "/.example.com"; only the backslash
   // refusal catches it.
   "https://evil.com\\.example.com/",
+  // Hosts with an empty label: tldts gives domain `.com` for `example..com`, which would merge such hosts.
+  "https://example..com/",
+  "https://evil..com/",
+  "https://.example.com/",
+  "https://example.com../",
+  "https://a..co.uk/",
+  "https://x.a..github.io/",
+  "https://./",
+  "https://../",
   "https:evil.com",
   "https:///evil.com",
   "https://exa%2Emple.com/",
@@ -273,6 +282,21 @@ describe("decideTopNavigation", () => {
     // A production build never navigates a game to a development origin, even from a stored dev entry.
     expect(decideTopNavigation(dev, "http://localhost:4417/next", "prod")).toBe("block");
     expect(decideTopNavigation(entry, "http://localhost:4417/", "prod")).toBe("ask-external");
+  });
+
+  it("never lets empty-label hosts share a site, whatever the entry", () => {
+    for (const flavor of FLAVORS) {
+      expect(
+        decideTopNavigation(new URL("https://example..com/"), "https://evil..com/", flavor),
+      ).toBe("block");
+      expect(decideTopNavigation(new URL("https://a..co.uk/"), "https://b..co.uk/", flavor)).toBe(
+        "block",
+      );
+      expect(
+        decideTopNavigation(new URL("https://x.a..github.io/"), "https://y.b..github.io/", flavor),
+      ).toBe("block");
+      expect(decideTopNavigation(entry, "https://.example.com/", flavor)).toBe("block");
+    }
   });
 
   it("blocks everything when the entry itself is not an allowed entry URL", () => {
