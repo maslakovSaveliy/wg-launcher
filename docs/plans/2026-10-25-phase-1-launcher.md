@@ -295,10 +295,10 @@ length: number} | {kind: "none"}` (one argument that is a whole deep link or `--
 (architecture §11; `BadgeRecord = {supportMode; lastCheck: {hasData; checkedAt} | null; verifiedExporterVersions: string[];
 runningExporterVersion}`); `restoreBounds(saved: SavedWindow | null, displays: DisplayArea[]): Bounds` (100 × 50 overlap,
 default 1280 × 800 centered on the primary).
-- [ ] Tests: AC-15 with a fake clock (blur, minimize, suspend, lock each stop; 9 999 ms dropped, 10 000 kept); AC-14 each
+- [x] Tests: AC-15 with a fake clock (blur, minimize, suspend, lock each stop; 9 999 ms dropped, 10 000 kept); AC-14 each
   badge in each state, "Compatibility not verified" always; off-screen guard cases (display removed, partly visible).
-- [ ] Run failing, implement, run passing.
-- [ ] Commit `feat(desktop): add playtime, badge and window-state rules`.
+- [x] Run failing, implement, run passing.
+- [x] Commit `feat(desktop): add playtime, badge and window-state rules`.
 
 ### Task 8: Game windows, sessions, lifecycle, locks, close procedure (L)
 **Files:** `src/main/games/{window-factory.ts,game-session.ts,lifecycle.ts,locks.ts,close-procedure.ts,frames.ts}`, e2e

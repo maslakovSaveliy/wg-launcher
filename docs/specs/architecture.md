@@ -296,6 +296,11 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
 - **Off-screen guard:** saved bounds are used only if they overlap the work area of a connected display by at least
   100 by 50 pixels; otherwise the window opens at the default size (1280 by 800) centered on the primary display. Then
   maximized and fullscreen are re-applied. `Assumed`
+- The guard (`restoreBounds`, `apps/desktop/src/main/policy/window-guard.ts`) checks the overlap against each display's
+  work area on its own, so the saved display id is only a hint and an overlap with another display is accepted. A
+  saved bounds record with no x or y, or a size that is not a positive finite number, counts as unusable and gets the
+  default; the default is clamped to a work area smaller than 1280 by 800. The maximized and fullscreen flags are
+  re-applied by the caller whether or not the saved bounds were used. `Assumed`
 - **Fullscreen toggle:** the window menu item with role `togglefullscreen` (macOS Ctrl+Cmd+F, Windows F11) and a UI
   control (F-6). `Assumed`
 - **Esc stays with the game.** The launcher never consumes Esc: no accelerator on it and no `preventDefault` on it in
@@ -320,6 +325,10 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
 - A session is one window lifetime. Active time is checkpointed every 60 s; at close a session with less than 10 000 ms
   of active time is deleted, as is an unfinished one found at start-up below that. "Under 10 s" is read as active time.
   `last_launched_at` is set at every launch. `Assumed`
+- The machine (`createPlaytime`, `apps/desktop/src/main/policy/playtime.ts`) starts with the window neither visible nor
+  focused, so a window that is already up must be replayed to it as `show` and `focus`. Every event is idempotent,
+  events after `closed` are ignored, and a clock that steps backwards counts as zero elapsed time (the machine then
+  continues from the new reading; time not yet banked by an earlier event is lost). `Assumed`
 
 ## 11. Badges
 
