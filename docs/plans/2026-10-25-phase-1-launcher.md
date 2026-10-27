@@ -199,6 +199,10 @@ string; sizeBytes: number}>` (`limits` for tests only; refused input writes noth
   some suites passed at once and were mutation-checked after the fact; see the Task 3 report.)
 - [x] MEMORY.md: Node zstd truncation gotcha [V, 2026-10-25]; snapshot-format §2 and §8 state that truncation is detected
   by the frame walker (M6).
+- [x] 2026-10-28 CI fix 1: R12 ("a decompressor error is always `SNAP_ZSTD_INVALID`") rested on Node 24.13.0 never
+  failing a prefix; Node 24.22.1 fails a cut frame ("unexpected end of file"). Ruling R23 replaces it: the walker reads
+  the rest of the input after a decompressor error and its verdict wins; the decompressor is flushed, not ended, on a
+  frame the walker stopped (snapshot-format §2, `src/container/inflate.test.ts`). Ruling R22 pins `.nvmrc` to 24.22.1.
 - [x] Commit `feat(snapshot): add the wgsnap container reader and writer`.
 
 ### Task 4: Golden vectors: generator, committed files, runner (M)

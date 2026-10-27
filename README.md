@@ -28,7 +28,7 @@ progress, export a snapshot, restore it in a clean session and see the same prog
 
 ## Quick start for contributors
 
-Prerequisites: Git, Node 24 (the version in `.nvmrc`; `nvm use` selects it) and pnpm. The `packageManager` field in
+Prerequisites: Git, Node 24.22.1 (the version in `.nvmrc`; `nvm install` once, then `nvm use` selects it) and pnpm. The `packageManager` field in
 `package.json` pins the pnpm version, and pnpm switches to it by itself inside the repository.
 
 ```sh

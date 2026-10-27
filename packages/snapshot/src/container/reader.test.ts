@@ -255,8 +255,8 @@ describe("validateSnapshot: container codes (snapshot-format.md section 8)", () 
     const wrongChecksum = bytes.slice();
     wrongChecksum[wrongChecksum.length - 1] = (wrongChecksum.at(-1) as number) ^ 0x01;
     expect(await codeOf(wrongChecksum)).toBe("SNAP_ZSTD_INVALID");
-    // The frame is complete, so its checksum mismatch comes before the byte after it.
-    expect(await codeOf(concat(wrongChecksum, Uint8Array.of(1)))).toBe("SNAP_ZSTD_INVALID");
+    // Ruling R23: a frame-walker verdict (here the byte after the frame) wins over a decompressor error.
+    expect(await codeOf(concat(wrongChecksum, Uint8Array.of(1)))).toBe("SNAP_TRAILING_DATA");
   });
 
   it("SNAP_ZSTD_NO_CHECKSUM for a frame without the checksum flag", async () => {
@@ -711,15 +711,16 @@ describe("validateSnapshot: limits and codes do not depend on chunking", () => {
     }
   });
 
-  it("reports a decompressor error as SNAP_ZSTD_INVALID even when the frame is also cut or followed by bytes", async () => {
+  it("reports a decompressor error as SNAP_ZSTD_INVALID only when the frame is neither cut nor followed by bytes", async () => {
+    // Ruling R23: once the decompressor fails, the walker still reads the rest, and its verdict wins.
     const corrupt = handFrame([...rawBlocks(snapshotTar(files()), false), garbageBlock()]);
     for (const size of [64, 4096, Number.MAX_SAFE_INTEGER]) {
       expect(await codeOfAsync(() => validate(corrupt, {}, size))).toBe("SNAP_ZSTD_INVALID");
       expect(
         await codeOfAsync(() => validate(corrupt.subarray(0, corrupt.length - 2), {}, size)),
-      ).toBe("SNAP_ZSTD_INVALID");
+      ).toBe("SNAP_TRUNCATED");
       expect(await codeOfAsync(() => validate(concat(corrupt, Uint8Array.of(7)), {}, size))).toBe(
-        "SNAP_ZSTD_INVALID",
+        "SNAP_TRAILING_DATA",
       );
     }
   });

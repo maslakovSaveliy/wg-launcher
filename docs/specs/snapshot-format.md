@@ -41,8 +41,10 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
 - Writers MUST set the content checksum flag and MUST NOT need a window larger than 2^27 bytes. Readers MUST reject a
   frame without the checksum flag (bit 2 of the frame header descriptor) or with a dictionary id, skippable frames, a
   second frame and any other byte after the frame, and MUST decode with `windowLogMax` 27 (codes in section 8). `Assumed`
-- Truncation is detected by the reader's own frame walker, not by the decompressor: Node's zstd decompresses a cut
-  checksummed frame without any error. Verified (2026-10-25, Node 24.13.0, `node -e`, [MEMORY.md](../../MEMORY.md)).
+- Truncation is detected by the reader's own frame walker, not by the decompressor, because zstd versions differ on a
+  cut frame: Node 24.13.0 decompresses a cut checksummed frame without any error, Node 24.22.1 fails it with
+  `Z_BUF_ERROR` "unexpected end of file". Verified (2026-10-25 and 2026-10-28, Node 24.13.0 and 24.22.1, scratch
+  script, [MEMORY.md](../../MEMORY.md)).
   The walker follows RFC 8878 sections 3.1.1, 3.1.1.1 and 3.1.1.2: the magic `28 b5 2f fd` (a skippable-frame magic
   `0x184D2A50` to `0x184D2A5F` first is `SNAP_ZSTD_INVALID`), then the frame header descriptor checked in this order:
   reserved bit 3 set, a dictionary id flag, no checksum flag (`SNAP_ZSTD_NO_CHECKSUM`); then a window above 2^27 (for a
@@ -53,10 +55,18 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
 - Every verdict is tied to a byte position, so the code does not depend on chunking or read-ahead. A container defect
   found on the compressed bytes (a walker code above, or a source longer or shorter than its declared size, section 8)
   stops reading at the bad byte; the bytes before it are still decompressed and checked, and the container code is
-  reported only if they pass. So a cut file is `SNAP_TRUNCATED` unless the data before the cut is itself invalid. A
-  decompressor error (corrupt data, checksum mismatch) is always `SNAP_ZSTD_INVALID`: the decompressor does not fail on
-  a prefix of a valid frame, so its error means corrupt bytes before any deferred verdict. How much a corrupt block
-  emits before that error depends on the zstd library, so a corrupt file may instead fail with a code of the content it
+  reported only if they pass. So a cut file is `SNAP_TRUNCATED` unless the data before the cut is itself invalid. The
+  reader ends the decompressor only after a frame the walker completed; a frame the walker stopped is flushed instead,
+  so the bytes before the verdict decode the same on every zstd version. `Assumed` (Ruling R23, 2026-10-28)
+- Decompressor errors (Ruling R23, 2026-10-28, which replaces R12 "a decompressor error is always
+  `SNAP_ZSTD_INVALID`"): the code MUST be the same on every zstd library and version. On a decompressor error the reader
+  stops decompressing but keeps feeding the remaining compressed bytes, up to `compressedSize`, to the frame walker
+  alone. If the walker has a verdict anywhere in the input (truncated, no checksum, a dictionary id, the window, the
+  reserved bit or block type, a skippable or second frame, trailing data, a source longer or shorter than declared),
+  that verdict is reported, under the deferral rule above: a defect the tar, manifest or record checks already found in
+  the bytes decompressed before the error still comes first. Only when the walker saw a complete, structurally valid
+  frame is the result `SNAP_ZSTD_INVALID` (corrupt block content or a checksum mismatch). How much a corrupt block emits
+  before that error depends on the zstd library, so a corrupt file may instead fail with a code of the content it
   decoded to. The uncompressed limits (`SNAP_RATIO_EXCEEDED`, `SNAP_TOTAL_TOO_LARGE`) fail at the exact tar byte that
   crosses them, after the bytes before it were checked. `Assumed`
 - Tar: ustar headers (magic `ustar\0`, version `00`), sizes in octal only. Writers emit only regular files with mode
@@ -397,11 +407,13 @@ A reader is given the exact compressed size of the file (`compressedSize`; the w
   `SNAP_FILE_TOO_LARGE` at the first extra byte; one that ends below it is `SNAP_TRUNCATED`. Both are verdicts on the
   compressed bytes (section 2): the frame walker's verdict on the bytes within `compressedSize` and the checks of the
   data before the extra or missing byte come first.
+- A decompressor error is `SNAP_ZSTD_INVALID` only when the frame walker has no verdict on the whole input (section 2,
+  Ruling R23).
 
 Container-level codes, checked continuously while streaming: `SNAP_FILE_TOO_LARGE`; `SNAP_ZSTD_INVALID` (not a zstd
 frame, a skippable frame first, corrupt data, a content checksum mismatch, a window above 2^27, a dictionary id);
-`SNAP_ZSTD_NO_CHECKSUM`; `SNAP_TRUNCATED` (input ends early, detected by the frame walker of section 2, since the
-decompressor does not report it); `SNAP_RATIO_EXCEEDED` (the ratio rule above); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
+`SNAP_ZSTD_NO_CHECKSUM`; `SNAP_TRUNCATED` (input ends early, detected by the frame walker of section 2, since not every
+decompressor reports it); `SNAP_RATIO_EXCEEDED` (the ratio rule above); `SNAP_TOTAL_TOO_LARGE`; `SNAP_TRAILING_DATA` (any byte after the first frame, another
 frame included, or non-zero bytes after the tar end blocks). Entry codes are in section 3.1, manifest and
 hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FORMAT`, `SNAP_UNSUPPORTED_VERSION`,
 `SNAP_CONTENT_HASH_MISMATCH`, `SNAP_SIZE_MISMATCH`, `SNAP_ENTRY_HASH_MISMATCH`, `SNAP_MISSING_ENTRY`) in sections 4 and

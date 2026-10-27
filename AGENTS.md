@@ -62,7 +62,8 @@ Reserved, **not created yet**. Do not create a directory until the work that nee
 
 ## Commands
 
-`nvm use` (reads `.nvmrc`, Node 24) then `pnpm install`. The `packageManager` field pins pnpm; pnpm switches to that
+`nvm install` once, then `nvm use` (both read `.nvmrc`: Node 24.22.1, the Node line of Electron 45, which ships 24.22.0)
+then `pnpm install`. The `packageManager` field pins pnpm; pnpm switches to that
 version by itself inside the repo. `pnpm install` also installs the git hooks (the `prepare` script).
 
 | Command | What it does |

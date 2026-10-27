@@ -17,7 +17,7 @@ rules apply to humans and AI agents.
 
 ## Setup
 
-Prerequisites: Git, Node 24 (`.nvmrc`; `nvm use`) and pnpm. The `packageManager` field pins the pnpm version and pnpm
+Prerequisites: Git, Node 24.22.1 (`.nvmrc`; `nvm install` once, then `nvm use`) and pnpm. The `packageManager` field pins the pnpm version and pnpm
 switches to it by itself inside the repository.
 
 ```sh

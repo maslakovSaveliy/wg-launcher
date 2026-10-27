@@ -57,9 +57,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   in `pnpm check`, pre-commit on staged files, CI on all tracked text files); what it flags and the one allowed path
   `/home/web_user`: AGENTS.md "Commands" and the script header. The user-name needle is off on CI (`CI=true`), because a
   runner's generic user name would match ordinary words.
+- 2026-10-28 CI fix 1 (controller rulings, Assumed): R22 pins `.nvmrc` to `24.22.1`, the Node line of Electron 45
+  (24.22.0), so CI and local runs match what the snapshot worker runs on; R23 makes the reader's code independent of
+  the zstd version (the frame walker's verdict wins over a decompressor error): snapshot-format.md section 2 and the
+  "Node, zstd and the snapshot codec" gotcha below.
 - 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): rulings R10 (Node-only entry
   `@wg-launcher/snapshot/container`), R11 (exact `compressedSize`, ratio bound), R12 (a decompressor error is always
-  `SNAP_ZSTD_INVALID`), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
+  `SNAP_ZSTD_INVALID`; replaced on 2026-10-28 by R23 below), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
   Task 3. The container entry is never re-exported from `src/index.ts` (`src/web-only.test.ts` walks its import graph); zod 4.6.7 (MIT)
   is a production dependency of `packages/snapshot`.
 - 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): layout, the 31 vectors plus `invalid-truncated-tar`
@@ -220,7 +224,10 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   on `PATH`, so git runs Homebrew 2.1.15 here, not 2.2.2; `min_version` is `2.1.15` (tested with both). [V, 2026-10-24]
 - lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the Biome
   fix. [U] not tested here
-- nvm reads `.nvmrc` (`nvm use`); `24` resolves to the newest installed Node 24.
+- nvm reads `.nvmrc` (`nvm use`). Since 2026-10-28 it pins `24.22.1` (Ruling R22), so a machine without that version
+  needs `nvm install` once; neither command changes the nvm default alias. Before, `24` resolved to the newest
+  installed Node 24, and CI's `actions/setup-node` read the same `24` as the newest 24.x (24.22.1 in run 40591493314)
+  while the dev machine ran 24.13.0. [V, 2026-10-28, `nvm install 24.22.1`; `gh run view 40591493314 --log`: "node: v24.22.1"]
 - `tsc -b` with `references` needs `composite: true` and refuses `noEmit` (TS6306, TS6310), which the base config sets,
   so the root `typecheck` script lists the projects (`tsc -b . <dirs>`): add every new `tsconfig.json` there. [V,
   2026-10-24, TypeScript 7.0.2]
@@ -254,9 +261,16 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 
 ### Node, zstd and the snapshot codec
 
-- Node's zstd does not report truncation: a checksummed frame cut by 6 bytes decompressed without error through
-  `zstdDecompressSync` and `createZstdDecompress`. The `.wgsnap` reader detects it itself (plan M6, `ZstdFrameWalker` in
-  `packages/snapshot/src/container/zstd-frame.ts`). [V, 2026-10-25, Node 24.13.0, `node -e`]
+- Node's zstd reports truncation on some versions only. Node 24.13.0: a checksummed frame cut by 6 bytes decompressed
+  without error through `zstdDecompressSync` and `createZstdDecompress` [V, 2026-10-25, Node 24.13.0, `node -e`].
+  Node 24.22.1: the same cut (and a cut at half, and the `invalid-truncated` vector) fails in both APIs with code
+  `Z_BUF_ERROR`, errno -5, message "unexpected end of file", raised by `end()` after the decodable output was emitted;
+  a frame without the checksum flag still decompresses, and `flush()` on a cut frame does not fail on either version
+  [V, 2026-10-28, Node 24.13.0 and 24.22.1, scratch script]. The `.wgsnap` reader therefore detects truncation itself
+  (plan M6, `ZstdFrameWalker` in `packages/snapshot/src/container/zstd-frame.ts`), never ends the decompressor on a
+  frame the walker stopped, and lets the walker's verdict win over a decompressor error (Ruling R23,
+  snapshot-format.md section 2). Ending instead of flushing lost buffered output on 24.22.1, so a tar defect before the
+  cut was missed (mutation run of `reader.test.ts` and `inflate.test.ts`).
 - Node's streaming zstd compressor can append a second, empty frame (`28b52ffd 24 00 01 00 00` plus checksum):
   `lib/zlib.js` gives `ZSTD_e_end` to a chunk still queued at `end()`, then `_flush` finishes again. Three chunks piped from
   `Readable.from` gave two frames; awaiting each `write()` callback before `end()` (what the writer does) gave one. [V,

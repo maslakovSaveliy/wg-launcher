@@ -2,7 +2,8 @@
 // into Node's zstd decompressor, with the size and ratio limits. Async throughout, so the snapshot worker stays
 // responsive; backpressure keeps at most a few chunks in memory. Every verdict is tied to a byte position, so the
 // result does not depend on how the source is chunked or how far Node reads ahead.
-import { Readable } from "node:stream";
+import { Readable, type Transform } from "node:stream";
+import { finished } from "node:stream/promises";
 import { constants, createZstdDecompress } from "node:zlib";
 import { SnapError } from "../errors.js";
 import type { Limits } from "./limits.js";
@@ -14,6 +15,13 @@ export interface Counters {
   /** Uncompressed (tar) bytes produced so far. */
   uncompressed: number;
 }
+
+/** A zstd decompressor stream; `flush` calls back once every byte written so far has been processed. */
+export type Decompressor = Transform & { flush(callback: () => void): void };
+
+/** Node's decompressor with the window bound of section 2. Tests inject others to pin the precedence rule. */
+export const zstdDecompressor = (): Decompressor =>
+  createZstdDecompress({ params: { [constants.ZSTD_d_windowLogMax]: 27 } });
 
 /** An error of the source itself (for example a failed read), carried through the streams unchanged. */
 class SourceError extends Error {
@@ -32,8 +40,12 @@ class SourceError extends Error {
  * and yielded, and the verdict is thrown where the stream would have ended. So a defect in the frame content (which the
  * tar reader finds) is reported first, and a cut file never reaches the tar reader as a clean end.
  *
- * Decompressor errors are always `SNAP_ZSTD_INVALID`: Node's decompressor does not fail on a prefix of a valid frame
- * (it just ends), so an error means corrupt bytes before any deferred verdict.
+ * The result does not depend on the zstd library (Ruling R23): Node 24.13.0 ends a cut frame silently, 24.22.1 fails
+ * it. The decompressor is ended only after a frame the walker completed; otherwise it is flushed, so every byte before
+ * the walker's verdict is still decompressed and yielded. When the decompressor fails anyway (corrupt data, a wrong
+ * checksum, a library that rejects a prefix), decompression stops, the walker alone reads the rest of the source up
+ * to `compressedSize`, and its verdict is thrown if it has one; only after a complete, structurally valid frame is the
+ * failure `SNAP_ZSTD_INVALID`. A defect the tar reader found in the bytes yielded before the failure still comes first.
  *
  * Uncompressed side, at the exact byte that crosses the limit, after the bytes before it were yielded:
  * `SNAP_RATIO_EXCEEDED` past max(`ratioFloorBytes`, `maxRatio` × `compressedSize`) bytes, `SNAP_TOTAL_TOO_LARGE` past
@@ -44,9 +56,12 @@ export async function* inflate(
   limits: Readonly<Limits>,
   compressedSize: number,
   counters: Counters,
+  createDecompressor: () => Decompressor = zstdDecompressor,
 ): AsyncGenerator<Uint8Array> {
   const walker = new ZstdFrameWalker();
   let verdict: SnapError | undefined;
+  /** The decompressor failed: the rest of the source goes through the walker only (R23). */
+  let failed = false;
 
   async function* frameBytes(): AsyncGenerator<Uint8Array> {
     const iterator = source[Symbol.asyncIterator]();
@@ -71,13 +86,13 @@ export async function* inflate(
         } catch (error) {
           verdict = error as SnapError;
           counters.compressed += walker.accepted;
-          if (walker.accepted > 0) {
+          if (walker.accepted > 0 && !failed) {
             yield chunk.subarray(0, walker.accepted);
           }
           return;
         }
         counters.compressed += allowed;
-        if (allowed > 0) {
+        if (allowed > 0 && !failed) {
           yield chunk.subarray(0, allowed);
         }
         if (allowed < chunk.length) {
@@ -112,11 +127,21 @@ export async function* inflate(
       : new SnapError("SNAP_TOTAL_TOO_LARGE", "the uncompressed archive is too large");
 
   const input = Readable.from(frameBytes(), { objectMode: false });
-  const decompressor = createZstdDecompress({
-    params: { [constants.ZSTD_d_windowLogMax]: 27 },
-  });
+  const decompressor = createDecompressor();
   input.on("error", (error) => decompressor.destroy(error));
-  input.pipe(decompressor);
+  input.on("end", () => {
+    if (failed) {
+      return;
+    }
+    if (verdict === undefined) {
+      decompressor.end();
+    } else {
+      // A frame the walker stopped is incomplete: ending it would make some zstd versions fail the prefix. Flushing
+      // emits everything the bytes before the verdict decode to, the same on every version.
+      decompressor.flush(() => decompressor.push(null));
+    }
+  });
+  input.pipe(decompressor, { end: false });
   try {
     for await (const out of decompressor as AsyncIterable<Buffer>) {
       const room = limit - counters.uncompressed;
@@ -138,8 +163,17 @@ export async function* inflate(
     if (error instanceof SnapError) {
       throw error;
     }
-    // zlib reports corrupt data and a wrong content checksum (`ZSTD_error_checksum_wrong`) as stream errors.
-    throw new SnapError("SNAP_ZSTD_INVALID", "the zstd data is corrupt");
+    // zlib reports corrupt data and a wrong content checksum (`ZSTD_error_checksum_wrong`) as stream errors. R23: the
+    // walker reads the rest of the source alone, and its verdict wins over the decompressor's.
+    failed = true;
+    input.unpipe(decompressor);
+    input.resume();
+    try {
+      await finished(input);
+    } catch (sourceFailure) {
+      throw sourceFailure instanceof SourceError ? sourceFailure.original : sourceFailure;
+    }
+    throw verdict ?? new SnapError("SNAP_ZSTD_INVALID", "the zstd data is corrupt");
   } finally {
     input.destroy();
     decompressor.destroy();

@@ -20,7 +20,7 @@ Conventions: [ADR-0000](0000-template.md#conventions).
 
 | Tool | Version and role | Tag |
 | --- | --- | --- |
-| Node | 24 (`.nvmrc`); 24.13.0 on the dev machine | Verified (2026-10-24, [MEMORY.md](../../MEMORY.md) Dev machine) |
+| Node | 24; `.nvmrc` pins 24.22.1 since 2026-10-28 (Ruling R22, the Node line of Electron 45); 24.13.0 on the dev machine before that | Verified (2026-10-24 and 2026-10-28, [MEMORY.md](../../MEMORY.md) Dev machine) |
 | pnpm | 12.15.0 pinned by `packageManager`; workspace `fixtures/test-games/*` | Verified (2026-10-24, MEMORY.md Decisions; `pnpm-workspace.yaml`) |
 | TypeScript | 7.0.2; the gate passed with the whole toolchain, no fallback to 6.0.3 | Verified (2026-10-24, MEMORY.md Tooling versions) |
 | Biome | 2.6.2 for JS, TS, JSON and CSS only; markdownlint-cli2 0.24.0 owns Markdown | Verified (2026-10-24, MEMORY.md Tooling versions) |
