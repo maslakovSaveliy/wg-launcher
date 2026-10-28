@@ -11,7 +11,8 @@ import {
   decodeSchema,
   decodeStoreRecords,
 } from "../record/data-files.js";
-import { type BlobRefs, stringOf } from "../record/value.js";
+import { stringOf } from "../record/value.js";
+import type { BlobRefs } from "../record/value-check.js";
 import { type Counters, inflate } from "./inflate.js";
 import { type Limits, resolveLimits } from "./limits.js";
 import { type Manifest, parseManifest } from "./manifest.js";

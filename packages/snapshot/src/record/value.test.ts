@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { bytesToHex, sha256Hex } from "../../test/notation.js";
 import { ExportError, SnapError } from "../errors.js";
 import { type CborItem, decodeSequence, encodeItem } from "./cbor.js";
-import { type BlobRefs, checkValueItem, fromItem, toItem } from "./value.js";
+import { fromItem } from "./value-build.js";
+import { type BlobRefs, checkValueItem } from "./value-check.js";
+import { toItem } from "./value-export.js";
 
 interface Exported {
   item: CborItem;

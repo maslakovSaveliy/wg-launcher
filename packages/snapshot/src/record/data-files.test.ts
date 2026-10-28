@@ -11,7 +11,7 @@ import {
   encodeSchema,
   encodeStoreRecords,
 } from "./data-files.js";
-import type { BlobRefs } from "./value.js";
+import type { BlobRefs } from "./value-check.js";
 
 const uint = (v: number): CborItem => ({ k: "uint", v });
 const text = (v: string): CborItem => ({ k: "text", v });

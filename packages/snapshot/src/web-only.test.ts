@@ -18,12 +18,15 @@ describe("record layer uses Web APIs only", () => {
     expect(source).not.toMatch(/\b(?:Buffer|process|__dirname|__filename|setImmediate)\b/);
   });
 
-  it("covers the four record modules and the errors", () => {
+  it("covers the record modules and the errors", () => {
     expect(webOnly.sort()).toEqual([
       "errors.ts",
       "record/cbor.ts",
       "record/data-files.ts",
       "record/idb-key.ts",
+      "record/value-build.ts",
+      "record/value-check.ts",
+      "record/value-export.ts",
       "record/value.ts",
     ]);
   });
@@ -63,6 +66,9 @@ describe("the main package entry stays web-only (Ruling R10)", () => {
       "record/cbor.ts",
       "record/data-files.ts",
       "record/idb-key.ts",
+      "record/value-build.ts",
+      "record/value-check.ts",
+      "record/value-export.ts",
       "record/value.ts",
     ]);
   });

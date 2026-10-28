@@ -91,7 +91,9 @@ import {
 } from "../../test/notation.js";
 import { SnapError } from "../errors.js";
 import { type CborItem, decodeSequence, encodeItem } from "./cbor.js";
-import { checkValueItem, fromItem, toItem } from "./value.js";
+import { fromItem } from "./value-build.js";
+import { checkValueItem } from "./value-check.js";
+import { toItem } from "./value-export.js";
 
 interface Vector {
   id: string;

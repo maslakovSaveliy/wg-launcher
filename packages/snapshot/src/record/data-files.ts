@@ -4,7 +4,8 @@
 import { SnapError } from "../errors.js";
 import { type CborItem, type DecodeOptions, decodeSequence, encodeItem } from "./cbor.js";
 import { compareIdbKeys, type IdbKey, keyFromItem, keyToItem } from "./idb-key.js";
-import { type BlobRefs, checkValueItem, numberItem, stringItem, stringOf } from "./value.js";
+import { numberItem, stringItem, stringOf } from "./value.js";
+import { type BlobRefs, checkValueItem } from "./value-check.js";
 
 export type KeyPath = string | string[];
 
