@@ -1,6 +1,7 @@
 // The generic exporter, import side (save-transfer.md section 4, import steps 1 to 4). Every entry is decoded and every
 // value built once before the first write, so a record this engine cannot rebuild (Ruling R7) fails the import with
 // nothing written. Then localStorage, then each database in bounded put transactions, then the key generators.
+
 import {
   type BlobRefs,
   type DbSchema,
@@ -11,6 +12,7 @@ import {
   type StoreRecord,
   type StoreSchema,
 } from "@wg-launcher/snapshot";
+import type { FrameEnv } from "./env.js";
 import {
   at as atAny,
   errorName,
@@ -26,7 +28,6 @@ import { selectsDatabase, selectsKey } from "./scope.js";
 import type {
   DatabaseSummary,
   EntrySource,
-  FrameEnv,
   FrameErrorDetail,
   FrameImportPlan,
   FrameSummary,

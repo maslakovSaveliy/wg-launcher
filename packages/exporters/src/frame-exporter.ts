@@ -1,6 +1,7 @@
 // The generic exporter, export side (save-transfer.md section 4, export steps 1 to 6), and the exporter object of one
 // frame. Reads localStorage and IndexedDB only; never `document.cookie`, `cookieStore`, Cache Storage contents,
 // `navigator.credentials` or service worker scripts.
+
 import {
   compareIdbKeys,
   type DbSchema,
@@ -12,6 +13,7 @@ import {
   type StoreSchema,
   toItem,
 } from "@wg-launcher/snapshot";
+import type { FrameEnv } from "./env.js";
 import { FrameFailure, settle, within } from "./errors.js";
 import { importFrame } from "./frame-importer.js";
 import { keyPathOf, openExisting, request } from "./idb.js";
@@ -21,7 +23,6 @@ import { blobPath, localStoragePath, schemaPath, storePath } from "./paths.js";
 import {
   type DatabaseSummary,
   type EntrySink,
-  type FrameEnv,
   type FrameExporter,
   type FrameExportRequest,
   type FrameSummary,

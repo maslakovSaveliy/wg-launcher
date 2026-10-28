@@ -1,9 +1,10 @@
 // `wipe-selected` (save-transfer.md section 6, R5): for a selective (adapter) restore, removes only the selected
 // localStorage keys and databases. A full restore wipes with CDP `Storage.clearDataForStorageKey` instead.
+import type { FrameEnv } from "./env.js";
 import { FrameFailure } from "./errors.js";
 import { listDatabases, localStorageKeys } from "./inventory.js";
 import type { FrameScope } from "./scope.js";
-import type { FrameEnv, WipeSummary } from "./types.js";
+import type { WipeSummary } from "./types.js";
 
 export async function wipeSelected(env: FrameEnv, scope: FrameScope): Promise<WipeSummary> {
   const keys = localStorageKeys(env, scope.localStorage);

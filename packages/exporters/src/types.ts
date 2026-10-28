@@ -107,13 +107,3 @@ export interface FrameExporter {
   importFrame(source: EntrySource, plan: FrameImportPlan): Promise<FrameResult<FrameSummary>>;
   wipeSelected(scope: FrameScope): Promise<FrameResult<WipeSummary>>;
 }
-
-/** The Web APIs of the frame's isolated world. Injected, so that tests can replace one (a full localStorage). */
-export interface FrameEnv {
-  localStorage: Storage;
-  indexedDB: IDBFactory;
-  /** Hashes the blobs an import receives (`blobs/<sha256>` must match its name). */
-  crypto: Crypto;
-  /** `navigator.storage`, for `usageDetails`; absent where the API is missing. */
-  storage?: Pick<StorageManager, "estimate">;
-}

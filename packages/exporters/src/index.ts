@@ -8,6 +8,7 @@ export {
   MODULE_NAME,
   parseAdapter,
 } from "./adapters/schema.js";
+export type { FrameEnv } from "./env.js";
 export { decideFlushState, type FlushObservation, type HookRun, PROMPT_CLOSE_MS } from "./flush.js";
 export { createFrameExporter } from "./frame-exporter.js";
 export { type FramePort, serveFrame } from "./frame-server.js";

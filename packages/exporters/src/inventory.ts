@@ -1,7 +1,8 @@
 // What a frame holds (save-transfer.md section 3 `FrameInventory`, section 4 export step 1 and import step 1). Reads
 // counts, names and usage numbers only; never cookies, Cache Storage or credentials.
+import type { FrameEnv } from "./env.js";
 import { type FrameScope, type Selection, selectsDatabase, selectsKey } from "./scope.js";
-import type { FrameEnv, FrameInventory, NotExportedKind } from "./types.js";
+import type { FrameInventory, NotExportedKind } from "./types.js";
 
 const byCodeUnits = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
