@@ -26,6 +26,7 @@ function setUp() {
     "library:orphans": vi.fn(async () => ok({ orphans: [] })),
     "game:launch": vi.fn(),
     "game:focus": vi.fn(async () => ok({})),
+    "shortcut:create": vi.fn(async () => ok({ created: true })),
     "settings:get": vi.fn(async () => ok({})),
     "settings:set": vi.fn(async () => ok({})),
   } as unknown as Handlers & Record<IpcChannel, ReturnType<typeof vi.fn>>;

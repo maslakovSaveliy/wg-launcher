@@ -1,7 +1,7 @@
 // The launcher IPC contract of architecture.md section 6: one zod schema per request and response. Main validates
 // every request with these schemas after its sender check; the renderer only uses the types. Every object is a
 // `z.strictObject` (unknown keys are rejected, plan M7), ids are lowercase UUIDv7, and no request carries a file
-// path or a URL to open. Channels of later tasks (snapshots, shortcuts, deleting data) are added with those tasks.
+// path or a URL to open. Channels of later tasks (snapshots, deleting data) are added with those tasks.
 
 import { z } from "zod";
 import type { IpcCode } from "./errors.js";
@@ -109,6 +109,8 @@ export const IPC_CONTRACT = {
     }),
   },
   "game:focus": { request: byId, response: empty },
+  // The save dialog runs in main: no path crosses IPC (architecture.md section 8).
+  "shortcut:create": { request: byId, response: z.strictObject({ created: z.boolean() }) },
   "settings:get": { request: empty, response: settingsSchema },
   "settings:set": { request: settingsSchema, response: settingsSchema },
 } as const satisfies Record<string, { request: z.ZodType; response: z.ZodType }>;

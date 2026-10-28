@@ -1,5 +1,6 @@
 // The context every IPC handler is built over, and the read-only refusal they share.
 
+import type { IpcCode, Result } from "@wg-launcher/shared";
 import type { Covers } from "../../covers.js";
 import type { Repos } from "../../db/repos/index.js";
 import type { Dialogs } from "../../dialogs.js";
@@ -22,6 +23,10 @@ export interface HandlerContext {
   readOnlyReason?: string;
   dialogs: Pick<Dialogs, "confirm" | "openFile">;
   covers: Covers;
+  /** `createShortcut` with the platform's writers (`shortcuts.ts`). */
+  shortcuts: {
+    create(game: { id: string; title: string }): Promise<Result<{ created: boolean }, IpcCode>>;
+  };
   flavor: Flavor;
   log: Logger;
   newId: () => string;

@@ -241,7 +241,7 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
 - **Implementation (Phase 1 Task 9).** `Assumed` unless noted.
   - The schemas are `packages/shared/src/ipc.ts` (`IPC_CONTRACT`; every request and response object is a
     `z.strictObject`, which a unit test checks by walking the schemas); the bridge's shape is
-    `packages/shared/src/bridge.ts` (`window.wg`: one function per channel, `onGameState`, `bridgeVersion` 2), which the
+    `packages/shared/src/bridge.ts` (`window.wg`: one function per channel, `onGameState`, `bridgeVersion` 3 since Task 11 added `createShortcut`), which the
     preload imports without zod. `task:progress` and `onTaskProgress` come with the first task that reports progress
     (Task 13), so the bridge does not have them yet.
   - Main: `apps/desktop/src/main/ipc/` (`sender-check.ts`, `register.ts`, `handlers/`). The sender check compares
@@ -370,12 +370,46 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   more, even identical ones, are invalid, because an extra one may have been injected. A launch argument is never
   split, so one with spaces or `--` inside is a single value that fails the id pattern. Upper-case ids and an
   upper-case scheme are invalid. Results carry only the input's length, never its text. If Windows turns out to
-  append a trailing slash to a deep link, the link is refused until that is verified and the rule amended.
+  append a trailing slash to a deep link, the link is refused until that is verified and the rule amended; whether it
+  does is Unverified (no Windows machine).
 - **macOS:** the scheme is declared in `Info.plist` (`CFBundleURLTypes`), because `setAsDefaultProtocolClient` works on
   macOS only for schemes declared at build time. Verified (2026-10-24, <https://www.electronjs.org/docs/latest/api/app>).
   The shortcut is a `.webloc` file whose only variable part is the validated id. A `.command` file is not offered,
   because it runs a shell script. Development builds do not register the scheme: `setAsDefaultProtocolClient` leaves a
   LaunchServices preference that outlives the app. Verified (2026-10-24, RESULTS.md H15). `Assumed` for the choices.
+- **Implementation (Phase 1 Task 11).** `Assumed` unless noted.
+  - `apps/desktop/src/main/launch-input.ts`: `index.ts` registers `second-instance` and `open-url` (with
+    `preventDefault`) right after the single-instance lock is granted, before `ready`, and pushes each request, and
+    the first start's own `process.argv`, into a queue (`createLaunchQueue`) that is started once the game runtime
+    exists and the launcher page has loaded; requests are then handled one at a time in arrival order, so a very
+    early second start is neither lost nor exits without being handled. A request is logged as `launch.input` with
+    its source and `result: "valid"` with the id, `"invalid"` with the length, or `"none"` (security.md section 9).
+  - A valid, known id goes to `GameRuntime.launch`, which opens the game or focuses its one window. A malformed value,
+    an unknown id, a refused launch (`GAME_BUSY`, `NEEDS_RECOVERY`, `URL_NOT_ALLOWED`), a game that is still closing
+    and a read-only library each bring the launcher to the front (shown, restored, focused) and show a native notice
+    with one OK button (`Dialogs.notify`, an asynchronous message box, so the main process is not blocked as
+    `showErrorBox` would block it): "The launch link is not valid", "The game is not in the library", "The game
+    cannot be opened" or "The game is closing". The renderer gets no new event; nothing navigates. A second start
+    without a launch argument only brings the launcher to the front, as before.
+  - `shortcut:create {gameId}` (`apps/desktop/src/main/shortcuts.ts`): a native save dialog in main, defaulting to
+    `app.getPath("desktop")` and a file name made from the title (separators, reserved and control characters become
+    `-`, no leading dot, at most 100 characters, "WGLauncher game" when nothing is left); the extension is added
+    when the chosen name lacks it. On macOS it writes the `.webloc` plist whose only content is
+    `<string>wglauncher://launch/<id></string>` (XML-escaped; the id is checked to be a lowercase UUIDv7 first). On
+    Windows it calls `shell.writeShortcutLink(path, "create", {target: process.execPath, args:
+    "--launch-game=<id>", description: "<title> (WGLauncher)", icon: process.execPath, iconIndex: 0})`; unit-tested
+    arguments only, not tested on Windows. Other systems get "Shortcuts can be created on macOS and Windows only."
+    (`INTERNAL`); Linux is not a target yet (PRD section 11). In dev and test builds a `.webloc` points at a scheme no
+    build of theirs registers. Cancel is `CANCELLED`; a failed write is `INTERNAL` with no path in the message.
+  - `registerDeepLinkScheme` calls `app.setAsDefaultProtocolClient("wglauncher")` in the packaged prod build only
+    (`app.isPackaged`); dev and test builds never call it (unit test).
+  - e2e (`apps/desktop/e2e/shortcut.spec.ts`, plan M13): the first start with `--launch-game=<id>` opened that game;
+    a second instance with the same argument exited 0 and the minimized game window was restored and shown, still one
+    game window; second instances with a hostile value, an upper-case deep link, two arguments and an unknown id each
+    exited 0, showed the notice, opened no window and left the launcher page's URL unchanged, and the log held none
+    of the input text; "Create shortcut" wrote exactly the `.webloc` above and nothing else. Verified (2026-10-28, Electron 45.0.0,
+    macOS arm64, test flavor). The `wglauncher://` scheme and opening a `.webloc` are checked by hand on the packaged
+    app (Task 16).
 
 ## 9. Window state and fullscreen
 

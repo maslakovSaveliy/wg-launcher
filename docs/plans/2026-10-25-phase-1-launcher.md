@@ -372,15 +372,16 @@ function per channel plus `onGameState(cb)` and `onTaskProgress(cb)`; `checkSend
 
 ### Task 11: Shortcuts and deep links (S)
 **Files:** `src/main/{launch-input.ts,shortcuts.ts}`, e2e `e2e/shortcut.spec.ts`.
-- [ ] `open-url` registered before `ready`, queued until the window manager is up; `second-instance` argv parsed with
+- [x] `open-url` registered before `ready`, queued until the window manager is up; `second-instance` argv parsed with
   `parseLaunchInput`; valid known id → focus or open; unknown → library with "not in the library"; malformed → library
-  with an error, nothing navigated.
-- [ ] `shortcut:create`: macOS `.webloc` (only the id varies); Windows `shell.writeShortcutLink` with the options of
+  with an error, nothing navigated. (`second-instance` is registered right after the lock too, and the error is a
+  native notice over the library: architecture §8.)
+- [x] `shortcut:create`: macOS `.webloc` (only the id varies); Windows `shell.writeShortcutLink` with the options of
   architecture §8 (unit-tested args, labeled not tested on Windows). Dev and test builds never call
   `setAsDefaultProtocolClient`.
-- [ ] e2e (M13): launching with `--launch-game=<id>` opens that game; a second instance with the argument focuses the
+- [x] e2e (M13): launching with `--launch-game=<id>` opens that game; a second instance with the argument focuses the
   existing window; malformed and unknown ids (AC-19 automated part). Scheme handling → Task 16 manual.
-- [ ] Commit `feat(desktop): add shortcuts and launch arguments`.
+- [x] Commit `feat(desktop): add shortcuts and launch arguments`.
 
 ### Task 12: `packages/exporters`: generic frame exporter and importer, adapters, flush decision (L)
 **Files:** `packages/exporters/{package.json,tsconfig.json,playwright.config.ts}`, `src/{frame-exporter.ts,frame-importer.ts,
@@ -470,7 +471,9 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
   descriptions, `CFBundleURLTypes` has `wglauncher`), no `__wgTest` in the bundle, renderer deps not duplicated.
 - [ ] **Warn the owner first** (windows open, macOS prompts may appear, ~30–45 min, owner needed at the keyboard).
   Manual checklist, each result recorded with date, versions, machine: deep link not running / running / second
-  instance (AC-19); `.webloc` shortcut opens the game; media with the macOS microphone and camera permission undecided,
+  instance (AC-19), the `wglauncher://` scheme registered by the packaged app (`Info.plist` and the prod-only
+  `setAsDefaultProtocolClient`); a `.webloc` made by "Create shortcut" opens the game, not running and running
+  (open check 10); a malformed and an unknown deep link show the notice over the library; media with the macOS microphone and camera permission undecided,
   denied, granted → `NotAllowedError`, no OS prompt, app keeps running (security §5 item 3; open check 5); real-input
   fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual): View → Toggle Full Screen clicked and
   Ctrl+Cmd+F pressed in a game window, a short real Esc reaches the game, Esc held 1.5 s ends the launcher's

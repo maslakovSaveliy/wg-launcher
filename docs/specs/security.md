@@ -281,7 +281,10 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
 - A single `redact()` function runs on every log record and is unit-tested (S-12, AC-20): game URLs are reduced to their
   origin (paths and query strings can hold tokens); the home directory becomes `~`; storage values, localStorage key
   names, record contents, snapshot bytes, cookie and `Authorization` headers are never passed to the logger at all;
-  deep-link input is logged only as "valid" with the id or "invalid" with its length. `Assumed`
+  deep-link input is logged only as "valid" with the id or "invalid" with its length. `Assumed`. Implemented as the
+  `launch.input` record of `apps/desktop/src/main/launch-input.ts` (source and result, plus the id or the length);
+  a unit test and `apps/desktop/e2e/shortcut.spec.ts` check that a hostile value's text never reaches the log
+  (Verified, 2026-10-28, Electron 45.0.0, macOS arm64).
 - Logged events: lifecycle, permission denials, navigation refusals, job steps with counts, sizes and error codes,
   migrations, recovery. Errors shown in the UI follow the same rules.
 

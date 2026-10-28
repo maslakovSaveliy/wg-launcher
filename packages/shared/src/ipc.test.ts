@@ -14,6 +14,7 @@ const VALID: { [C in IpcChannel]: Record<string, unknown> } = {
   "library:orphans": {},
   "game:launch": { gameId: ID },
   "game:focus": { gameId: ID },
+  "shortcut:create": { gameId: ID },
   "settings:get": {},
   "settings:set": {},
 };
@@ -65,7 +66,12 @@ describe("IPC contract (architecture.md section 6)", () => {
     ["surrounding space", ` ${ID}`],
     ["not a string", 42],
   ])("rejects an id that is not a lowercase UUIDv7: %s", (_name, gameId) => {
-    for (const channel of ["library:remove", "game:launch", "game:focus"] as const) {
+    for (const channel of [
+      "library:remove",
+      "game:launch",
+      "game:focus",
+      "shortcut:create",
+    ] as const) {
       expect(request(channel).safeParse({ gameId }).success).toBe(false);
     }
   });

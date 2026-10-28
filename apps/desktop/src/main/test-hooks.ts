@@ -110,6 +110,9 @@ function queuedDialogs(
     confirm: async (spec: ConfirmSpec) => next("confirm", spec.title).value === true,
     openFile: async (spec: OpenFileSpec) => next("openFile", spec.title).value as string | null,
     saveFile: async (spec: SaveFileSpec) => next("saveFile", spec.title).value as string | null,
+    notify: async (spec: ErrorSpec) => {
+      hooks.dialogsShown.push({ kind: "notify", title: spec.title });
+    },
     showError: async (spec: ErrorSpec) => {
       hooks.dialogsShown.push({ kind: "showError", title: spec.title });
       appendFileSync(

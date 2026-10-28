@@ -107,7 +107,9 @@ export function appArgs(userData: string): string[] {
   return [APP_DIR, `--user-data-dir=${userData}`];
 }
 
-export async function launchApp(options: { userData?: string } = {}): Promise<Launched> {
+export async function launchApp(
+  options: { userData?: string; extraArgs?: string[] } = {},
+): Promise<Launched> {
   const userData = options.userData ?? (await mkdtemp(join(tmpdir(), "wg-e2e-")));
   const profiles = await guardRealProfiles();
   const progressLab = await startProgressLab();
@@ -117,7 +119,7 @@ export async function launchApp(options: { userData?: string } = {}): Promise<La
       // No executablePath: only then does Playwright add its loader (`-r loader.js`), which also appends
       // `--disable-features=...,ThirdPartyStoragePartitioning,...`; the app must undo that (architecture.md section
       // 5), and the partitioning test checks that it does. Playwright resolves the `electron` package itself.
-      args: appArgs(userData),
+      args: [...appArgs(userData), ...(options.extraArgs ?? [])],
       // Playwright adds --no-sandbox on Linux unless this is set; the app's windows rely on the sandbox.
       chromiumSandbox: true,
       cwd: APP_DIR,
@@ -156,10 +158,17 @@ export async function launchApp(options: { userData?: string } = {}): Promise<La
   }
 }
 
-/** Starts the app once more on the same userData without Playwright and resolves with its exit code. */
-export function runSecondInstance(userData: string, timeoutMs = 20_000): Promise<number | null> {
+/**
+ * Starts the app once more on the same userData without Playwright (with `extraArgs` after the app's own) and
+ * resolves with its exit code.
+ */
+export function runSecondInstance(
+  userData: string,
+  extraArgs: string[] = [],
+  timeoutMs = 20_000,
+): Promise<number | null> {
   return new Promise((resolveExit, reject) => {
-    const child = spawn(ELECTRON_PATH, appArgs(userData), {
+    const child = spawn(ELECTRON_PATH, [...appArgs(userData), ...extraArgs], {
       cwd: APP_DIR,
       env: appEnv(userData),
       stdio: "ignore",

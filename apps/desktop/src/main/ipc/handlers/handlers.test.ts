@@ -33,6 +33,12 @@ function setUp(
     confirm: vi.fn(async (_spec: ConfirmSpec) => answers.shift() ?? false),
     openFile: vi.fn(async (_spec: OpenFileSpec): Promise<string | null> => files.shift() ?? null),
   };
+  const shortcuts = {
+    create: vi.fn(async (_game: { id: string; title: string }) => ({
+      ok: true as const,
+      data: { created: true },
+    })),
+  };
   const runtime = {
     state: vi.fn(() => "idle" as const),
     launch: vi.fn(async () => ({ ok: true as const, data: { window: "opened" as const } })),
@@ -42,6 +48,7 @@ function setUp(
     library: { repos, runtime, locks },
     dialogs,
     covers: createCovers({ coversDir, tmpDir }),
+    shortcuts,
     flavor: options.flavor ?? "test",
     log,
     newId: () => uuidv7(clock.now),
@@ -51,7 +58,20 @@ function setUp(
     writeFileSync(path, bytes);
     return path;
   };
-  return { dir, db, repos, locks, dialogs, runtime, handlers, coversDir, clock, file, log };
+  return {
+    dir,
+    db,
+    repos,
+    locks,
+    dialogs,
+    runtime,
+    shortcuts,
+    handlers,
+    coversDir,
+    clock,
+    file,
+    log,
+  };
 }
 
 /** Checks the result against the channel's response schema and returns its data. */
@@ -157,6 +177,7 @@ describe("library:add (architecture.md section 12, AC-17)", () => {
       readOnlyReason: db.readOnly ? db.reason : "",
       dialogs: { confirm: vi.fn(), openFile: vi.fn() },
       covers: createCovers({ coversDir: dir, tmpDir: dir }),
+      shortcuts: { create: vi.fn() },
       flavor: "test",
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() },
       newId: uuidv7,
@@ -171,6 +192,7 @@ describe("library:add (architecture.md section 12, AC-17)", () => {
       handlers["library:orphans"]({}),
       handlers["game:launch"]({ gameId }),
       handlers["game:focus"]({ gameId }),
+      handlers["shortcut:create"]({ gameId }),
       handlers["settings:set"]({}),
     ]);
     for (const result of writes)
@@ -406,6 +428,27 @@ describe("game:launch and game:focus", () => {
     });
     runtime.focus.mockReturnValue(true);
     expect(dataOf("game:focus", await handlers["game:focus"]({ gameId }))).toEqual({});
+  });
+});
+
+describe("shortcut:create (architecture.md section 8)", () => {
+  it("creates the shortcut of a game in the library, with its id and title", async () => {
+    const { handlers, repos, shortcuts } = setUp();
+    const gameId = uuidv7();
+    repos.games.insert({ id: gameId, url: "https://example.com/", title: "Example" });
+    expect(dataOf("shortcut:create", await handlers["shortcut:create"]({ gameId }))).toEqual({
+      created: true,
+    });
+    expect(shortcuts.create).toHaveBeenCalledWith({ id: gameId, title: "Example" });
+  });
+
+  it("is NOT_FOUND for a game that is not in the library, and asks nothing", async () => {
+    const { handlers, shortcuts } = setUp();
+    expect(await handlers["shortcut:create"]({ gameId: uuidv7() })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+    expect(shortcuts.create).not.toHaveBeenCalled();
   });
 });
 

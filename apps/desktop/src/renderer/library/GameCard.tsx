@@ -72,6 +72,9 @@ export function GameCard({ card, onChanged }: { card: Card; onChanged: () => Pro
             Remove cover
           </button>
         )}
+        <button type="button" onClick={() => void run(() => bridge().createShortcut({ gameId }))}>
+          Create shortcut
+        </button>
         <button type="button" onClick={() => void run(() => bridge().removeGame({ gameId }))}>
           Remove from library
         </button>

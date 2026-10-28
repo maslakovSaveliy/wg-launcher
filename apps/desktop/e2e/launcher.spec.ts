@@ -43,6 +43,7 @@ test("serves the launcher from app://launcher with the CSP and security headers,
     bridgeKeys: [
       "addGame",
       "bridgeVersion",
+      "createShortcut",
       "focusGame",
       "getSettings",
       "launchGame",
@@ -53,7 +54,7 @@ test("serves the launcher from app://launcher with the CSP and security headers,
       "setSettings",
       "updateGame",
     ],
-    version: 2,
+    version: 3,
     frozen: true,
   });
 

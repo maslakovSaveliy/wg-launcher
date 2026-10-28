@@ -5,7 +5,7 @@
 import type { GameStateEvent, IpcChannel, IpcRequest, IpcResult } from "./ipc.js";
 
 /** Bumped whenever the bridge's functions change. */
-export const BRIDGE_VERSION = 2;
+export const BRIDGE_VERSION = 3;
 
 /** Bridge function name to channel. */
 export const BRIDGE_CHANNELS = {
@@ -16,6 +16,7 @@ export const BRIDGE_CHANNELS = {
   listOrphans: "library:orphans",
   launchGame: "game:launch",
   focusGame: "game:focus",
+  createShortcut: "shortcut:create",
   getSettings: "settings:get",
   setSettings: "settings:set",
 } as const satisfies Record<string, IpcChannel>;

@@ -1,6 +1,8 @@
 // Main process entry. Order matters: the partitioning switch, userData and the single-instance lock are settled
-// before anything else, and the app:// scheme is registered before `ready`.
+// before anything else; `second-instance` and `open-url` are registered right after the lock, and the app:// scheme
+// before `ready`.
 
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { GAME_STATE_CHANNEL, type GameStateEvent, uuidv7 } from "@wg-launcher/shared";
 import {
@@ -46,6 +48,7 @@ import {
 } from "./games/window-state.js";
 import { createHandlers } from "./ipc/handlers/index.js";
 import { registerIpc } from "./ipc/register.js";
+import { createLaunchQueue, handleLaunchRequest, registerDeepLinkScheme } from "./launch-input.js";
 import {
   createLauncherWindow,
   focusLauncher,
@@ -55,6 +58,8 @@ import {
 import { createLogger, type Logger } from "./log/logger.js";
 import { redact } from "./log/redact.js";
 import { type AppPaths, appPaths, prepareAppPaths, resolveUserData } from "./paths.js";
+import { parseDeepLink, parseLaunchInput } from "./policy/deep-link.js";
+import { createShortcut } from "./shortcuts.js";
 import { fixPartitioningSwitch } from "./start-up.js";
 
 /** What later parts of the main process (database, IPC, jobs) are built on. */
@@ -129,6 +134,9 @@ if (__WG_FLAVOR__ === "test") {
 }
 
 const partitioning = fixPartitioningSwitch(app.commandLine);
+
+/** Launch requests (argv, `second-instance`, `open-url`), held until the runtime and the launcher are up. */
+const launchQueue = createLaunchQueue();
 
 /** The game runtime with the real windows, sessions and close procedure (architecture.md sections 4 and 5). */
 function createGames(
@@ -210,6 +218,9 @@ async function start(userData: string): Promise<AppContext> {
   installBaselineHandlers(app, { warn: (event, fields) => logger?.warn(event, fields) });
   await app.whenReady();
   Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate(process.platform, FLAVOR)));
+  registerDeepLinkScheme(FLAVOR, app.isPackaged, (scheme) =>
+    app.setAsDefaultProtocolClient(scheme),
+  );
 
   const paths = appPaths(userData);
   await prepareAppPaths(paths);
@@ -286,6 +297,19 @@ async function start(userData: string): Promise<AppContext> {
       ...(db.readOnly ? { readOnlyReason: db.reason } : {}),
       dialogs,
       covers: createCovers({ coversDir: paths.covers, tmpDir: paths.tmp }),
+      shortcuts: {
+        create: (game) =>
+          createShortcut(game, {
+            platform: process.platform,
+            execPath: process.execPath,
+            desktopDir: app.getPath("desktop"),
+            dialogs,
+            writeFile: (path, content) => writeFile(path, content, "utf8"),
+            writeShortcutLink: (path, operation, options) =>
+              shell.writeShortcutLink(path, operation, options),
+            log,
+          }),
+      },
       flavor: FLAVOR,
       log,
       newId: () => uuidv7(),
@@ -294,15 +318,28 @@ async function start(userData: string): Promise<AppContext> {
     origin: FLAVOR === "dev" ? DEV_LAUNCHER_ORIGIN : LAUNCHER_ORIGIN,
   });
 
-  app.on("second-instance", () => {
-    log.info("app.second-instance");
-    hooks?.onSecondInstance();
-    focusLauncher(window);
-  });
   app.on("window-all-closed", () => app.quit());
 
   const devUrl = FLAVOR === "dev" ? process.env.ELECTRON_RENDERER_URL : undefined;
   await window.loadURL(devUrl ?? LAUNCHER_URL);
+  // The window manager is up: handle the launch requests queued so far, then each as it comes.
+  launchQueue.start((request) => {
+    if (request.source === "second-instance") {
+      log.info("app.second-instance");
+      hooks?.onSecondInstance();
+    }
+    return handleLaunchRequest(request, {
+      log,
+      focusLauncher: () => focusLauncher(window),
+      notify: (spec) => dialogs.notify(spec),
+      games: games
+        ? {
+            has: (gameId) => games.repos.games.get(gameId) !== null,
+            launch: (gameId) => games.runtime.launch(gameId),
+          }
+        : null,
+    });
+  });
   return { paths, log, dialogs, db, games: games?.runtime ?? null };
 }
 
@@ -314,6 +351,15 @@ if (userData !== null) {
   if (!app.requestSingleInstanceLock()) {
     app.quit();
   } else {
+    // Right after the lock, before `ready`: a request that arrives while this instance starts is queued, not lost.
+    app.on("second-instance", (_event, argv) =>
+      launchQueue.push({ source: "second-instance", input: parseLaunchInput(argv) }),
+    );
+    app.on("open-url", (event, url) => {
+      event.preventDefault();
+      launchQueue.push({ source: "open-url", input: parseDeepLink(url) });
+    });
+    launchQueue.push({ source: "argv", input: parseLaunchInput(process.argv) });
     registerAppScheme();
     start(userData).catch((error: unknown) => fail("start-up failed", error));
   }
