@@ -195,7 +195,7 @@ async function start(userData: string): Promise<AppContext> {
   const checks =
     games && snapshotDeps
       ? createStorageCheckScheduler({
-          run: (gameId) => runStorageCheck(gameId, undefined, snapshotDeps),
+          run: (gameId, signal) => runStorageCheck(gameId, signal, snapshotDeps),
           gameWindowFocused: () => {
             const focused = BrowserWindow.getFocusedWindow();
             return (

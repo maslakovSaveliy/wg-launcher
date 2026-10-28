@@ -16,7 +16,8 @@
 // 11. The canary (canary.ts) aborts the job at its first violation; its verdict is taken after the last navigation.
 // 12. Whatever happened: destroy the window, detach the debugger, remove the interceptor, the listeners and the
 //     handshake channel, then (after the plan's commit or discard) release the lease. A watchdog ends a job that
-//     takes longer than 60 s plus 1 s per MiB the plan reported (Assumed).
+//     takes longer than 60 s plus 1 s per MiB the plan reported (Assumed), its commit included: a commit still
+//     pending then is left to the plan's discard.
 //
 // Log lines carry the job's game id, step, counts, sizes and codes: never values, key names or URLs with queries
 // (QW-9; stub URLs carry the job nonce, so only their origins are logged).
@@ -80,7 +81,10 @@ export interface JobPlan<T> {
    * before it commits anything: its result is the job's.
    */
   commit(context: JobContext): Promise<Result<T, ErrorCode>>;
-  /** After any failure, instead of `commit`. */
+  /**
+   * After any failure, instead of `commit`; also after a `commit` that had not settled when the job was stopped
+   * (the watchdog, a cancel): then it must end that commit's work and leave nothing of it behind.
+   */
   discard(): Promise<void>;
   /** Test controls only (open check 3); production always sends `all`. */
   bypass?: Bypass;
@@ -184,15 +188,6 @@ export async function runQuiescentJob<T>(
     log.info("snapshot.job.refused", { gameId, code: lease.code });
     return fail(lease.code, refusalMessage(lease.code));
   }
-  const giveSlot = (deps.slots ?? SNAPSHOT_JOB_SLOTS).take();
-  if (giveSlot === null) {
-    lease.release();
-    log.info("snapshot.job.refused", { gameId, code: "GAME_BUSY", reason: "job-cap" });
-    return fail(
-      "GAME_BUSY",
-      "Two snapshot jobs are running already; try again when one has finished.",
-    );
-  }
   const abort = new AbortController();
   let stopped: Failure | null = null;
   const stop = (failure: Failure) => {
@@ -201,6 +196,22 @@ export async function runQuiescentJob<T>(
     abort.abort(new JobStop(failure));
   };
   const onCancel = () => stop(fail("CANCELLED", "The job was cancelled."));
+  // A user task may take a background job's slot (slots.ts): the background job is then cancelled like this.
+  const slots = deps.slots ?? SNAPSHOT_JOB_SLOTS;
+  const slot = await slots.take(plan.lock, onCancel);
+  if (!slot.ok) {
+    lease.release();
+    if (slot.code === "INTERNAL") {
+      log.error("snapshot.job.slot-not-released", { gameId, waitedMs: slots.releaseTimeoutMs });
+      return fail("INTERNAL", "Something went wrong.");
+    }
+    log.info("snapshot.job.refused", { gameId, code: "GAME_BUSY", reason: "job-cap" });
+    return fail(
+      "GAME_BUSY",
+      "Two snapshot jobs are running already; try again when one has finished.",
+    );
+  }
+  const giveSlot = slot.give;
   lease.signal.addEventListener("abort", onCancel);
   signal?.addEventListener("abort", onCancel);
   if (lease.signal.aborted || signal?.aborted) onCancel();
@@ -236,15 +247,26 @@ export async function runQuiescentJob<T>(
       log.warn("snapshot.job.failed", { gameId, lock: plan.lock, code: failure.code });
       return failure;
     }
-    let committed: Result<T, ErrorCode>;
-    try {
-      committed = await plan.commit(context);
-    } catch (error) {
+    // The commit honors the context's signal itself, and once it has committed its outcome stands. A commit that
+    // has not settled when the job is stopped (the watchdog, a cancel) is left: the plan's `discard` ends its work.
+    const committing = plan.commit(context).catch((error: unknown) => {
       log.error("snapshot.job.commit-threw", { gameId, error });
-      committed = fail("INTERNAL", "Something went wrong.");
+      return fail("INTERNAL", "Something went wrong.");
+    });
+    const stoppedFirst = new Promise<"stopped">((resolve) => {
+      if (abort.signal.aborted) resolve("stopped");
+      abort.signal.addEventListener("abort", () => resolve("stopped"), { once: true });
+    });
+    const settled = await Promise.race([committing, stoppedFirst]);
+    let outcome: Result<T, ErrorCode>;
+    if (settled === "stopped") {
+      outcome = stopped ?? fail("CANCELLED", "The job was cancelled.");
+      await plan
+        .discard()
+        .catch((error: unknown) => log.error("snapshot.job.discard-failed", { gameId, error }));
+    } else {
+      outcome = settled;
     }
-    // The commit honors the context's signal itself; once it has committed, its outcome stands.
-    const outcome = committed;
     if (outcome.ok) log.info("snapshot.job.done", { gameId, lock: plan.lock });
     else
       log.warn("snapshot.job.failed", {

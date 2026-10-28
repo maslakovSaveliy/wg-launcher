@@ -291,9 +291,12 @@ otherwise.
   `CANCELLED` and lets go of the lease. Verified (2026-10-28, `apps/desktop/e2e/quiescent.spec.ts`: a launch during a
   held storage check opened the game in under 2.5 s and the check was cancelled; an export right after a close
   cancelled the running check the same way). An aborted job's signal carries why it stopped, so a commit returns
-  that code (the watchdog's `EXP_TIMEOUT`, a cancellation's `CANCELLED`). At most two jobs run at once in the
-  process (security.md section 8). A job's worker is started once and killed when the job ends, also when the job
-  was stopped while the worker was still starting (`worker/slot.ts`). Each step throwing once
+  that code (the watchdog's `EXP_TIMEOUT`, a cancellation's `CANCELLED`); a commit that has not settled when the
+  job is stopped is left to the plan's `discard`, which must end its work (the export kills its worker and waits for
+  the exit before it removes the revision's files). At most two jobs run at once in the process, and a user task
+  takes a storage check's slot by cancelling it (security.md section 8, architecture.md section 4 "Lock details"). A job's worker is started once and killed when the job ends, also when the job
+  was stopped while the worker was still starting (`worker/slot.ts`); the kill resolves once the process has exited,
+  and the worker's pending requests fail then, not before. Each step throwing once
   leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
   behind and releases the lease (QW-3, `job.test.ts`). QW-2 counts the `webContents` on the game's session before
   the first stub navigation.

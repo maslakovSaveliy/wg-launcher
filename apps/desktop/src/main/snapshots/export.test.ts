@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createRepos } from "../db/repos/index.js";
 import { fakeClock, openTestDb, tempDir } from "../db/testing.js";
 import type { WriteOptions } from "../worker/client.js";
-import { type CommitRequest, commitExport, exportKeys } from "./export.js";
+import { type CommitRequest, commitExport, discardExport, exportKeys } from "./export.js";
 import { JobStop } from "./quiescent/stop.js";
 
 function setUp() {
@@ -121,6 +121,25 @@ describe("the export commit (save-transfer.md section 6, Export)", () => {
     });
     expect(repos.snapshots.listForGame(gameId, null)).toEqual([]);
     expect(files()).toEqual({ tmp: [], snapshots: [] });
+  });
+
+  it("discards a stopped export only after its worker has exited: no partial, no final file, no row", async () => {
+    const { deps, repos, gameId, revisionId, finalPath, files } = setUp();
+    const partialPath = join(deps.paths.tmp, `${revisionId}.wgsnap.partial`);
+    writeFileSync(partialPath, "partial");
+    const workers = {
+      get: vi.fn(),
+      // A worker that renames its file in its last moments, before it exits.
+      dispose: vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        mkdirSync(join(deps.paths.snapshots, gameId), { recursive: true });
+        writeFileSync(finalPath, "snapshot");
+      }),
+    };
+    await discardExport({ gameId, revisionId, workers }, deps);
+    expect(workers.dispose).toHaveBeenCalled();
+    expect(files()).toEqual({ tmp: [], snapshots: [] });
+    expect(repos.snapshots.listForGame(gameId, null)).toEqual([]);
   });
 
   it("refuses more storage keys than a manifest holds with SNAP_MANIFEST_INVALID", () => {

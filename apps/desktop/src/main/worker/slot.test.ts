@@ -3,7 +3,7 @@ import type { SnapshotWorker } from "./client.js";
 import { workerSlot } from "./slot.js";
 
 function fakeWorker() {
-  return { begin: vi.fn(), kill: vi.fn() } as unknown as SnapshotWorker & {
+  return { begin: vi.fn(), kill: vi.fn(async () => undefined) } as unknown as SnapshotWorker & {
     begin: ReturnType<typeof vi.fn>;
     kill: ReturnType<typeof vi.fn>;
   };
@@ -46,6 +46,23 @@ describe("workerSlot: one snapshot worker per job, always killed", () => {
     }, {});
     expect(await slot.get(stop.signal)).toBeNull();
     expect(worker.kill).toHaveBeenCalled();
+  });
+
+  it("dispose waits until the killed worker has exited", async () => {
+    const exited = Promise.withResolvers<void>();
+    const worker = fakeWorker();
+    worker.kill.mockReturnValue(exited.promise);
+    const slot = workerSlot(async () => worker, {});
+    await slot.get(new AbortController().signal);
+    let disposed = false;
+    const disposing = slot.dispose().then(() => {
+      disposed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(disposed).toBe(false);
+    exited.resolve();
+    await disposing;
+    expect(disposed).toBe(true);
   });
 
   it("disposes without a worker when none was started", async () => {

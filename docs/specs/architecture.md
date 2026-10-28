@@ -155,6 +155,11 @@ stateDiagram-v2
   waits the game counts as held by it. A background request never cancels another one (`GAME_BUSY`), and a user task
   still refuses a launch with `GAME_BUSY` (plan M5). Verified (2026-10-28, `locks.test.ts`;
   `apps/desktop/e2e/quiescent.spec.ts`: an export right after a close cancelled the running check and succeeded).
+  The process-wide cap of two snapshot jobs (`snapshots/quiescent/slots.ts`) follows the same rule: when both slots
+  are taken and one holds a background job (a storage check of any game), a user task cancels that job and takes
+  its slot once it is given back, waiting at most 2 s (then `INTERNAL`, logged `snapshot.job.slot-not-released`); a
+  user task meets `GAME_BUSY` from the cap only while two user tasks run, and a background job never takes another
+  job's slot. Verified (2026-10-28, `job.test.ts`).
 - **Crash and hang.** `render-process-gone` ends the session as `crashed` and the library shows it; `unresponsive`
   offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. The e2e test crashes a game
   with `forcefullyCrashRenderer` and force-closes a really hung page; it emits the window's `unresponsive` event itself,
@@ -278,8 +283,8 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
 - **Implementation (Phase 1 Task 13).** `Assumed` unless noted.
   - `snapshot:export {gameId, frameKeys?}`, `snapshot:list {gameId}` and `snapshot:saveAs {gameId, revisionId}`
     exist (`apps/desktop/src/main/ipc/handlers/snapshots.ts`). An export answers `{taskId}` once the game's lock is
-    held; a refusal before that (`GAME_RUNNING` while the window is open, AC-11, `GAME_BUSY` also when two snapshot
-    jobs run already, `NEEDS_RECOVERY`, `NOT_FOUND`, `INVALID_ARGUMENT` for a frame that is not the game's,
+    held; a refusal before that (`GAME_RUNNING` while the window is open, AC-11, `GAME_BUSY` also when two user tasks
+    run already, `NEEDS_RECOVERY`, `NOT_FOUND`, `INVALID_ARGUMENT` for a frame that is not the game's,
     `SNAP_MANIFEST_INVALID` for a game with more than 32 storage keys) is the call's own result. Verified (2026-10-28,
     `apps/desktop/e2e/export.spec.ts` through `window.wg`).
   - No `task:progress` event of an export reaches the page before the reply with its `{taskId}`: the handler holds
@@ -563,8 +568,11 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
   (`apps/desktop/src/main/snapshots/{storage-check,check-scheduler}.ts`) it starts 2 s after a game window exits
   (`QUIET_MS`, Assumed: a user who opens the game again at once finds no check to cancel), waits while any game
   window is focused (it runs when the focus changes), runs one check at a time and each game once, holds a
-  `background` lease that a launch or a user task cancels, and is dropped when it cannot start (the next exit
-  schedules it again); after an import or a delete it comes with Task 14. Verified (2026-10-28,
+  `background` lease that a launch or a user task cancels (a user task of another game also cancels it for its job
+  slot), and is dropped when it cannot start (the next exit schedules it again). A running check is cancelled when
+  any game window takes focus (that game is checked again once no game window is focused) and when the app starts
+  quitting (`before-quit`), logged `snapshot.storage-check.cancelled`; it only reads, so cancelling it is safe
+  (Verified, 2026-10-28, `check-scheduler.test.ts`). After an import or a delete it comes with Task 14. Verified (2026-10-28,
   `check-scheduler.test.ts` and `apps/desktop/e2e/quiescent.spec.ts`: a check after an exit, none for 3.5 s while
   another game window was focused, both games checked once it closed). `has_data` means at
   least one localStorage item or IndexedDB database, or `usageDetails.fileSystem` above zero (OPFS is data too, though

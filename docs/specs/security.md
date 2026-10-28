@@ -274,8 +274,12 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
   ([save-transfer.md](save-transfer.md#5-quiescent-window)); 64 KiB per launcher IPC message; one pending external-link
   confirmation per game window; rate-limited denial logs. `Assumed` Phase 1 Task 13 enforces one job per game (the lock), the
   watchdog (60 s plus 1 s per MiB read) and the cap of two jobs at once (`quiescent/slots.ts`: a third job is refused
-  with `GAME_BUSY` naming the cap; storage checks run one at a time, so background work holds at most one slot;
-  Verified 2026-10-28, `job.test.ts`).
+  with `GAME_BUSY` naming the cap, except that a user task takes the slot of a running storage check, which it
+  cancels, waiting at most 2 s for it; storage checks run one at a time, so background work holds at most one slot;
+  Verified 2026-10-28, `job.test.ts`). The watchdog covers the commit too: a commit still pending at the deadline
+  (a hung worker write) is left, the job returns `EXP_TIMEOUT`, and the export's discard kills the worker, waits for
+  its exit (at most 2 s) and only then removes the partial and the final file; no row is written (Verified
+  2026-10-28, `job.test.ts`, `export.test.ts`, `worker/client.test.ts`).
   Messages between a quiescent frame and the snapshot worker carry at most 1 MiB of entry bytes each, and those
   between main and the worker carry no data bytes at all ([save-transfer.md](save-transfer.md#3-exporter-interface-and-versioning)). `Assumed`
 

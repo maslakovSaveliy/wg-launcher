@@ -451,6 +451,119 @@ describe("runQuiescentJob (save-transfer.md section 5)", () => {
     expect((await runQuiescentJob(GAME, third.plan, third.deps)).ok).toBe(true);
   });
 
+  it("gives a user task the slot of a background job: the job is cancelled and the task runs (architecture.md 4)", async () => {
+    const slots = new JobSlots(2);
+    const gate = Promise.withResolvers<void>();
+    const task = fakes({ slots });
+    task.plan.runFrames.mockImplementation(async () => {
+      await gate.promise;
+      return { ok: true, data: undefined };
+    });
+    const background = fakes({ slots });
+    // Reads until it is stopped (the job's guard ends the wait when the job's signal is aborted).
+    background.plan.runFrames.mockImplementation(async () => {
+      await gate.promise;
+      return { ok: true, data: undefined };
+    });
+    const backgroundPlan = { ...background.plan, lock: "background" as const };
+    const running = [
+      runQuiescentJob(GAME, task.plan, task.deps),
+      runQuiescentJob(GAME, backgroundPlan, background.deps),
+    ];
+    await vi.waitFor(() => expect(background.plan.runFrames).toHaveBeenCalled());
+    expect(slots.running).toBe(2);
+    const user = fakes({ slots });
+    expect(await runQuiescentJob(GAME, user.plan, user.deps)).toEqual({
+      ok: true,
+      data: "committed",
+    });
+    expect(await running[1]).toMatchObject({ ok: false, code: "CANCELLED" });
+    expect(background.plan.discard).toHaveBeenCalled();
+    expect(background.plan.commit).not.toHaveBeenCalled();
+    expect(background.nothingLeft()).toEqual(CLEAN);
+    gate.resolve();
+    await running[0];
+    expect(slots.running).toBe(0);
+  });
+
+  it("refuses the user task with INTERNAL when the background job does not give its slot back in time", async () => {
+    const slots = new JobSlots(2, 50);
+    const gates: Array<() => void> = [];
+    const hold = () => new Promise<void>((resolve) => gates.push(resolve));
+    const task = fakes({ slots });
+    task.plan.runFrames.mockImplementation(async () => {
+      await hold();
+      return { ok: true, data: undefined };
+    });
+    const background = fakes({ slots });
+    background.plan.runFrames.mockImplementation(async () => {
+      await hold();
+      return { ok: true, data: undefined };
+    });
+    background.plan.discard.mockImplementation(async () => {
+      await hold();
+      return undefined;
+    });
+    const backgroundPlan = { ...background.plan, lock: "background" as const };
+    const running = [
+      runQuiescentJob(GAME, task.plan, task.deps),
+      runQuiescentJob(GAME, backgroundPlan, background.deps),
+    ];
+    await vi.waitFor(() => expect(background.plan.runFrames).toHaveBeenCalled());
+    const user = fakes({ slots });
+    expect(await runQuiescentJob(GAME, user.plan, user.deps)).toMatchObject({
+      ok: false,
+      code: "INTERNAL",
+    });
+    expect(user.plan.runFrames).not.toHaveBeenCalled();
+    expect(user.nothingLeft()).toEqual(CLEAN);
+    expect(user.log.error).toHaveBeenCalledWith("snapshot.job.slot-not-released", {
+      gameId: GAME,
+      waitedMs: 50,
+    });
+    while (gates.length > 0) for (const open of gates.splice(0)) open();
+    await Promise.all(running);
+    expect(slots.running).toBe(0);
+  });
+
+  it("never gives a background job's slot to another background job", async () => {
+    const slots = new JobSlots(1);
+    const gate = Promise.withResolvers<void>();
+    const first = fakes({ slots });
+    first.plan.runFrames.mockImplementation(async () => {
+      await gate.promise;
+      return { ok: true, data: undefined };
+    });
+    const running = runQuiescentJob(GAME, { ...first.plan, lock: "background" }, first.deps);
+    await vi.waitFor(() => expect(first.plan.runFrames).toHaveBeenCalled());
+    const second = fakes({ slots });
+    expect(
+      await runQuiescentJob(GAME, { ...second.plan, lock: "background" }, second.deps),
+    ).toMatchObject({ ok: false, code: "GAME_BUSY" });
+    gate.resolve();
+    expect((await running).ok).toBe(true);
+  });
+
+  it("puts a hung commit under the watchdog: EXP_TIMEOUT, the plan's discard, lease and slot given back", async () => {
+    const slots = new JobSlots(2);
+    const setUp = fakes({ slots });
+    setUp.deps.timing = { ...FAST, deadlineMs: 100 };
+    setUp.plan.commit.mockImplementationOnce(() => new Promise(() => {}));
+    expect(await runQuiescentJob(GAME, setUp.plan, setUp.deps)).toMatchObject({
+      ok: false,
+      code: "EXP_TIMEOUT",
+    });
+    expect(setUp.plan.discard).toHaveBeenCalledOnce();
+    expect(setUp.nothingLeft()).toEqual(CLEAN);
+    expect(slots.running).toBe(0);
+    expect(setUp.log.warn).toHaveBeenCalledWith("snapshot.job.failed", {
+      gameId: GAME,
+      lock: "task",
+      code: "EXP_TIMEOUT",
+      step: "commit",
+    });
+  });
+
   it("aborts the job's signal with the watchdog's EXP_TIMEOUT, which a commit can read", async () => {
     const setUp = fakes();
     setUp.deps.timing = { ...FAST, deadlineMs: 100 };

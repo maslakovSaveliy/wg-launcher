@@ -6,7 +6,7 @@ import type { Limits, SnapshotWorker } from "./client.js";
 export interface WorkerSlot {
   /** The job's worker, or null when `signal` is aborted or the slot was disposed (any worker started is killed). */
   get(signal: AbortSignal): Promise<SnapshotWorker | null>;
-  /** Kills the worker, once it has started if it is still starting. */
+  /** Kills the worker, once it has started if it is still starting, and waits until it has exited. */
   dispose(): Promise<void>;
 }
 
@@ -21,7 +21,7 @@ export function workerSlot(start: () => Promise<SnapshotWorker>, limits: Limits)
       });
       const worker = await starting;
       if (disposed || signal.aborted) {
-        worker.kill();
+        await worker.kill();
         return null;
       }
       return worker;
@@ -29,11 +29,14 @@ export function workerSlot(start: () => Promise<SnapshotWorker>, limits: Limits)
     async dispose() {
       disposed = true;
       if (starting === null) return;
+      let worker: SnapshotWorker;
       try {
-        (await starting).kill();
+        worker = await starting;
       } catch {
         // It never started: nothing to kill.
+        return;
       }
+      await worker.kill();
     },
   };
 }

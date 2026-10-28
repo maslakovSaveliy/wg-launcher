@@ -8,9 +8,15 @@ const ok = { ok: true as const, data: undefined };
 function setUp(focused = false) {
   let gameFocused = focused;
   const gates: Array<() => void> = [];
-  const run = vi.fn(
-    (_gameId: string) => new Promise<typeof ok>((resolve) => gates.push(() => resolve(ok))),
-  );
+  const signals: AbortSignal[] = [];
+  const run = vi.fn((_gameId: string, signal: AbortSignal) => {
+    signals.push(signal);
+    // A real check stops when its signal is aborted (the job returns CANCELLED).
+    return new Promise<{ ok: boolean; code?: string }>((resolve) => {
+      gates.push(() => resolve(ok));
+      signal.addEventListener("abort", () => resolve({ ok: false, code: "CANCELLED" }));
+    });
+  });
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
   const scheduler = createStorageCheckScheduler({
     run,
@@ -22,6 +28,7 @@ function setUp(focused = false) {
     scheduler,
     run,
     gates,
+    signals,
     focus: (value: boolean) => {
       gameFocused = value;
     },
@@ -36,10 +43,10 @@ describe("the storage check after a game exits (architecture.md section 11)", ()
     // Not in the turn that reports the exit: the runtime releases the game's lease right after reporting it.
     expect(run).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
-    expect(run).toHaveBeenLastCalledWith(A);
+    expect(run).toHaveBeenLastCalledWith(A, expect.any(AbortSignal));
     gates.shift()?.();
     await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
-    expect(run).toHaveBeenLastCalledWith(B);
+    expect(run).toHaveBeenLastCalledWith(B, expect.any(AbortSignal));
     gates.shift()?.();
     await vi.waitFor(() => expect(scheduler.pending()).toEqual([]));
   });
@@ -54,7 +61,7 @@ describe("the storage check after a game exits (architecture.md section 11)", ()
     expect(run).not.toHaveBeenCalled();
     focus(false);
     scheduler.focusChanged();
-    await vi.waitFor(() => expect(run).toHaveBeenCalledWith(A));
+    await vi.waitFor(() => expect(run).toHaveBeenCalledWith(A, expect.any(AbortSignal)));
     gates.shift()?.();
   });
 
@@ -68,6 +75,38 @@ describe("the storage check after a game exits (architecture.md section 11)", ()
     scheduler.gameExited(B);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("cancels a running check when a game window takes focus, and checks that game again once focus leaves", async () => {
+    const { scheduler, run, signals, focus, gates } = setUp();
+    scheduler.gameExited(A);
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+    // Focus moving between windows that are not games changes nothing.
+    scheduler.focusChanged();
+    expect(signals[0]?.aborted).toBe(false);
+    focus(true);
+    scheduler.focusChanged();
+    expect(signals[0]?.aborted).toBe(true);
+    await vi.waitFor(() => expect(scheduler.pending()).toEqual([A]));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(run).toHaveBeenCalledTimes(1);
+    focus(false);
+    scheduler.focusChanged();
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    expect(run).toHaveBeenLastCalledWith(A, expect.any(AbortSignal));
+    gates.at(-1)?.();
+  });
+
+  it("cancels a running check when the app starts quitting, and checks nothing after", async () => {
+    const { scheduler, run, signals } = setUp();
+    scheduler.gameExited(A);
+    scheduler.gameExited(B);
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+    scheduler.stop();
+    expect(signals[0]?.aborted).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(scheduler.pending()).toEqual([]);
   });
 
   it("goes on after a check that fails or throws", async () => {
@@ -90,7 +129,7 @@ describe("the quiet time after an exit", () => {
       await vi.advanceTimersByTimeAsync(QUIET_MS - 1);
       expect(run).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(1);
-      expect(run).toHaveBeenCalledWith(A);
+      expect(run).toHaveBeenCalledWith(A, expect.any(AbortSignal));
     } finally {
       vi.useRealTimers();
     }

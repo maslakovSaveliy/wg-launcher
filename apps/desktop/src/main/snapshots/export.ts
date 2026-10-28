@@ -20,7 +20,7 @@ import type { Snapshot } from "../db/repos/snapshots.js";
 import type { Logger } from "../log/logger.js";
 import type { AppPaths } from "../paths.js";
 import type { Limits, SnapshotWorker } from "../worker/client.js";
-import { workerSlot } from "../worker/slot.js";
+import { type WorkerSlot, workerSlot } from "../worker/slot.js";
 import { frameKeyCandidates, numberKeys, type StorageKeyRef, sameKey, topOrigins } from "./keys.js";
 import {
   type Bypass,
@@ -159,10 +159,7 @@ export async function commitExport(
   const dir = join(deps.paths.snapshots, gameId);
   const finalPath = join(dir, `${revisionId}.wgsnap`);
   const partialPath = join(deps.paths.tmp, `${revisionId}.wgsnap.partial`);
-  const removeFiles = async () => {
-    await rm(partialPath, { force: true });
-    await rm(finalPath, { force: true });
-  };
+  const removeFiles = () => removeRevisionFiles(deps.paths, gameId, revisionId);
   request.onWrite?.();
   await mkdir(dir, { recursive: true });
   const flushState = decideFlushState({
@@ -244,6 +241,30 @@ export async function commitExport(
     await removeFiles();
     return fail("INTERNAL", "The snapshot could not be recorded.");
   }
+}
+
+/** The files a revision of this job may have left: the partial and, after the worker's rename, the final one. */
+async function removeRevisionFiles(
+  paths: SnapshotDeps["paths"],
+  gameId: string,
+  revisionId: string,
+): Promise<void> {
+  await rm(join(paths.tmp, `${revisionId}.wgsnap.partial`), { force: true });
+  await rm(join(paths.snapshots, gameId, `${revisionId}.wgsnap`), { force: true });
+}
+
+/**
+ * The export's discard, after a failure or a commit the job stopped before it settled (a hung write under the
+ * watchdog): the worker is killed and has exited before the revision's files are removed, so a write still running
+ * cannot leave one behind. No row exists then: the commit records one only after the write and only while the job
+ * is not stopped.
+ */
+export async function discardExport(
+  job: { gameId: string; revisionId: string; workers: WorkerSlot },
+  deps: Pick<SnapshotDeps, "paths">,
+): Promise<void> {
+  await job.workers.dispose();
+  await removeRevisionFiles(deps.paths, job.gameId, job.revisionId);
 }
 
 export async function exportSnapshot(
@@ -332,7 +353,7 @@ export async function exportSnapshot(
           );
         },
         async discard() {
-          await rm(join(deps.paths.tmp, `${revisionId}.wgsnap.partial`), { force: true });
+          await discardExport({ gameId, revisionId, workers }, deps);
         },
       },
       deps.job,

@@ -149,8 +149,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `@wg-launcher/exporters/wire` is the DOM-free entry the main process and the worker use; the quiescent preload has
   its own `tsconfig.preload.json` (DOM lib). Owner decision (2026-10-28): background work never blocks a user action,
   so a user task cancels a storage check exactly as a launch does (2 s release wait, then `INTERNAL`), and the check
-  runs after a game window exits (2 s quiet time, not while a game window is focused, one at a time); at most two
-  snapshot jobs run at once (a third is `GAME_BUSY`). The export's row, base revision and remembered frame choice
+  runs after a game window exits (2 s quiet time, not while a game window is focused, one at a time; a running check
+  is cancelled when a game window takes focus or the app starts quitting); at most two snapshot jobs run at once (a
+  third is `GAME_BUSY`, but a user task takes a storage check's slot by cancelling it, 2 s wait, then `INTERNAL`);
+  the watchdog covers the commit, and a stopped export's discard kills the worker and waits for its exit before it
+  removes the revision's files. The export's row, base revision and remembered frame choice
   are one transaction; a failed write removes both the partial and the final file; more than 32 keys is
   `SNAP_MANIFEST_INVALID`. The canary pins its allowlist to the calibration (architecture.md section 4 "Lock
   details", section 11; save-transfer.md section 5).
@@ -565,11 +568,6 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   runs, 7 retried) and `window.spec.ts` passed 5 runs in a row. [V, 2026-10-28, Electron 45.0.0, macOS arm64,
   instrumented copies of the AC-18 test and a throwaway probe app run through `_electron.launch`; the cause inside
   AppKit is [A]]
-- (Earlier note) `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" was flaky on the dev machine: its last step (a window
-  closed in the page's own fullscreen is saved as not fullscreen) failed in runs of the whole file and of the suite,
-  on the code before Task 13 (commit 0b853e2, 3 of 3 runs of the file, a git worktree) as on Task 13's, and passed in
-  every run of the test alone. The cause is taken to be timing (the macOS fullscreen animation, as the test's own
-  comment says) [A]. [V, 2026-10-28, dev machine under a load average above 30]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]

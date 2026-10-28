@@ -33,11 +33,17 @@ export interface SnapshotWorker {
   write(options: WriteOptions): Promise<Result<Written, ErrorCode>>;
   /** Entry bytes received so far, as the worker measured them. */
   onReceived(listener: (bytes: number) => void): void;
-  kill(): void;
+  /**
+   * Kills the process; resolves once it has exited (at most `KILL_WAIT_MS`), so nothing it does outlives the call.
+   * Pending requests fail with INTERNAL at the exit, later ones at once.
+   */
+  kill(): Promise<void>;
 }
 
 const JOB = 1;
 const READY_MS = 10_000;
+/** How long `kill` waits for the exit (Assumed). */
+const KILL_WAIT_MS = 2000;
 
 /** Forks the worker and resolves once it is ready. */
 export async function startSnapshotWorker(deps: {
@@ -49,6 +55,8 @@ export async function startSnapshotWorker(deps: {
   const received: Array<(bytes: number) => void> = [];
   let nextId = 1;
   let gone: string | null = null;
+  let killed = false;
+  const exited = Promise.withResolvers<void>();
   const ready = Promise.withResolvers<void>();
 
   const failAll = (why: string) => {
@@ -66,8 +74,9 @@ export async function startSnapshotWorker(deps: {
     pending.clear();
   };
   child.on("exit", (code) => {
-    if (gone === null) deps.log.warn("snapshot.worker-exit", { code });
+    if (gone === null && !killed) deps.log.warn("snapshot.worker-exit", { code });
     failAll("exit");
+    exited.resolve();
   });
   child.on("message", (message) => {
     const parsed = WorkerEvent.safeParse(message);
@@ -104,7 +113,7 @@ export async function startSnapshotWorker(deps: {
   const request = (command: Record<string, unknown>, transfer: unknown[] = []) =>
     new Promise<WorkerEvent>((resolve) => {
       const requestId = nextId++;
-      if (gone !== null) {
+      if (gone !== null || killed) {
         resolve({
           type: "failed",
           requestId,
@@ -143,9 +152,21 @@ export async function startSnapshotWorker(deps: {
     onReceived(listener) {
       received.push(listener);
     },
-    kill() {
-      gone ??= "killed";
+    async kill() {
+      killed = true;
       child.kill();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const outcome = await Promise.race([
+        exited.promise.then(() => "exited" as const),
+        new Promise<"timeout">((resolve) => {
+          timer = setTimeout(() => resolve("timeout"), KILL_WAIT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (outcome === "timeout") {
+        deps.log.warn("snapshot.worker-kill-timeout", { waitedMs: KILL_WAIT_MS });
+        failAll("killed");
+      }
     },
   };
 }
