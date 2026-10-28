@@ -9,6 +9,8 @@ import { BrowserWindow, session } from "electron";
 import type { Db } from "./db/database.js";
 import { readUserVersion } from "./db/migrate.js";
 import type { Repos } from "./db/repos/index.js";
+import type { PlaySession } from "./db/repos/play-sessions.js";
+import type { WindowState } from "./db/repos/window-state.js";
 import type { ConfirmSpec, Dialogs, ErrorSpec, OpenFileSpec, SaveFileSpec } from "./dialogs.js";
 import type { GameRuntime, GameState, LaunchResult } from "./games/lifecycle.js";
 import type { AppPaths } from "./paths.js";
@@ -68,6 +70,14 @@ export interface TestHooks {
   addSnapshotRecord(gameId: string): string;
   /** How many snapshot rows the game has (its own, not its base revision's). */
   snapshotCount(gameId: string): number;
+  /** The game's `window_state` row, or null. */
+  windowStateOf(gameId: string): WindowState | null;
+  /** The game's `play_sessions` rows and `last_launched_at`. */
+  playtimeOf(gameId: string): { sessions: PlaySession[]; lastLaunchedAt: number | null };
+  /** Adds a play session with `activeMs` (finished, or left unfinished as a crash leaves it). */
+  seedPlaySession(gameId: string, activeMs: number, finished: boolean): void;
+  /** Records a storage check (the "Local data" badge's state). */
+  saveStorageCheck(gameId: string, hasData: boolean): void;
 }
 
 /**
@@ -202,6 +212,18 @@ export function installTestHooks(init: {
       return revisionId;
     },
     snapshotCount: (gameId) => needGames().repos.snapshots.listForGame(gameId, null).length,
+    windowStateOf: (gameId) => needGames().repos.windowState.get(gameId),
+    playtimeOf: (gameId) => ({
+      sessions: needGames().repos.playSessions.listForGame(gameId),
+      lastLaunchedAt: needGames().repos.games.get(gameId)?.lastLaunchedAt ?? null,
+    }),
+    seedPlaySession(gameId, activeMs, finished) {
+      const sessions = needGames().repos.playSessions;
+      const { id } = sessions.start(gameId);
+      if (finished) sessions.end(id, activeMs);
+      else sessions.checkpoint(id, activeMs);
+    },
+    saveStorageCheck: (gameId, hasData) => needGames().repos.storageChecks.save(gameId, hasData),
     closeGame(gameId) {
       const window = needGames().runtime.windowOf(gameId);
       if (!window || window.isDestroyed()) return false;

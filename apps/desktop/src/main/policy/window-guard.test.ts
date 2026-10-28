@@ -143,19 +143,61 @@ describe("restoreBounds", () => {
     });
   });
 
-  describe("unusable saved values", () => {
-    it("uses the default when the position was never saved", () => {
-      expect(restoreBounds(win(null, null), [primary])).toEqual(defaultOnPrimary);
-      expect(restoreBounds(win(100, null), [primary])).toEqual(defaultOnPrimary);
+  describe("a saved size without a position (Ruling R21, PRD F-7)", () => {
+    // 800 x 600 centered on the primary work area { x: 0, y: 25, width: 1920, height: 1055 }.
+    const savedSizeOnPrimary = { x: 560, y: 25 + 227, width: 800, height: 600 };
+
+    it("keeps the saved size, centered on the primary display, when the position was never saved", () => {
+      expect(restoreBounds(win(null, null), [primary])).toEqual(savedSizeOnPrimary);
+      expect(restoreBounds(win(100, null), [primary])).toEqual(savedSizeOnPrimary);
+      expect(restoreBounds(win(null, 100), [right, primary])).toEqual(savedSizeOnPrimary);
     });
 
-    it("uses the default for a non-finite or non-positive size or position", () => {
+    it("treats a position that is not a finite number as missing", () => {
+      expect(restoreBounds(win(Number.NaN, 100), [primary])).toEqual(savedSizeOnPrimary);
+      expect(restoreBounds(win(100, Number.NEGATIVE_INFINITY), [primary])).toEqual(
+        savedSizeOnPrimary,
+      );
+    });
+
+    it("clamps the saved size to the primary work area", () => {
+      const small: DisplayArea = {
+        id: "s",
+        primary: true,
+        workArea: { x: 10, y: 20, width: 1024, height: 700 },
+      };
+      expect(restoreBounds(win(null, null, 3000, 500), [small])).toEqual({
+        x: 10,
+        y: 120,
+        width: 1024,
+        height: 500,
+      });
+      expect(restoreBounds(win(null, null, 2000, 2000), [small])).toEqual({
+        x: 10,
+        y: 20,
+        width: 1024,
+        height: 700,
+      });
+    });
+
+    it("keeps the saved size when no display is connected", () => {
+      expect(restoreBounds(win(null, null), [])).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+    });
+  });
+
+  describe("unusable saved values", () => {
+    it("uses the default for a non-finite or non-positive size", () => {
       expect(restoreBounds(win(100, 100, 0, 600), [primary])).toEqual(defaultOnPrimary);
       expect(restoreBounds(win(100, 100, 800, -5), [primary])).toEqual(defaultOnPrimary);
-      expect(restoreBounds(win(Number.NaN, 100), [primary])).toEqual(defaultOnPrimary);
+      expect(restoreBounds(win(null, null, 800, 0), [primary])).toEqual(defaultOnPrimary);
       expect(restoreBounds(win(100, 100, Number.POSITIVE_INFINITY, 600), [primary])).toEqual(
         defaultOnPrimary,
       );
+      expect(restoreBounds(win(null, null, Number.NaN, 600), [primary])).toEqual(defaultOnPrimary);
+    });
+
+    it("uses the default size for a saved position that is off every display", () => {
+      expect(restoreBounds(win(5000, 5000, 800, 600), [primary])).toEqual(defaultOnPrimary);
     });
   });
 

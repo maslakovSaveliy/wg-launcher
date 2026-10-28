@@ -114,6 +114,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   bridge is `window.wg` (version 2) without `onTaskProgress` until Task 13; "Export verified" cannot appear yet
   because no exporter version exists in this build; a corrupt `library.db` shows a native error dialog, then exit 1
   (the test flavor records it in `<userData>/test-error-dialogs.jsonl`).
+- 2026-10-28 Phase 1 Task 10 (window state, fullscreen, playtime, Assumed unless noted): Ruling R21 (a saved size
+  without a position keeps its size, clamped and centered on the primary display); the F-6 "UI control" is the View
+  menu item with role `togglefullscreen` (`app-menu.ts`), because section 6 has no fullscreen channel and a game window
+  has no UI; saved flags are applied on the first `show`; step 1 of the close procedure feeds playtime `hide`; details
+  in architecture.md sections 9 and 10 ("Implementation (Phase 1 Task 10)").
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -434,6 +439,14 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Electron 45 does not stop a `window.open` without a user gesture before the window-open handler (it reached the
   handler and was offered), and `HandlerDetails` has no activation flag. [V, 2026-10-28, `e2e/game-isolation.spec.ts`;
   `electron.d.ts`]
+- `webContents.sendInputEvent({type: "keyDown", keyCode: "Escape"})` reaches `before-input-event` and the page
+  (`keydown`, not `defaultPrevented`), so the Esc-hold e2e test uses it (whether Playwright's CDP keyboard reaches
+  `before-input-event` was not checked). Esc ends a
+  fullscreen the page requested, and Chromium does not deliver that Esc to the page. An Esc sent at once after
+  `isFullScreen()` turned true, while macOS still animated into fullscreen, had no effect in one run [U as a rule].
+  [V, 2026-10-28, `e2e/window.spec.ts`, Electron 45.0.0, macOS arm64]
+- The e2e harness's `launched.hooks()` is a JSON copy of `globalThis.__wgTest`, so hook functions are dropped: call them
+  through `app.evaluate((_electron, id) => globalThis.__wgTest?.fn(id), id)`. [V, 2026-10-28, `e2e/window.spec.ts`]
 - Playwright `page.click` and locators wait for "scheduled navigations" to finish, and a navigation the app prevented
   never does (30 s timeout): click through `page.mouse.click` at coordinates read with `page.evaluate`. [V, 2026-10-28,
   Playwright 1.64.1, `e2e/game-isolation.spec.ts` `trustedClick`]

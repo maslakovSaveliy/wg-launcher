@@ -386,9 +386,12 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   maximized and fullscreen are re-applied. `Assumed`
 - The guard (`restoreBounds`, `apps/desktop/src/main/policy/window-guard.ts`) checks the overlap against each display's
   work area on its own, so the saved display id is only a hint and an overlap with another display is accepted. A
-  saved bounds record with no x or y, or a size that is not a positive finite number, counts as unusable and gets the
-  default; the default is clamped to a work area smaller than 1280 by 800. The maximized and fullscreen flags are
-  re-applied by the caller whether or not the saved bounds were used. `Assumed`
+  saved record with a size but no x or y (or one that is not a finite number) keeps its saved size, clamped to the
+  primary display's work area, and is centered there (Ruling R21: F-7 remembers the size too, and
+  `window_state.width` and `height` are `NOT NULL` while `x` and `y` are nullable); a size that is not a positive
+  finite number makes the record unusable and gets the default; the default is clamped to a work area smaller than
+  1280 by 800. The maximized and fullscreen flags are re-applied by the caller whether or not the saved bounds were
+  used. `Assumed`
 - **Fullscreen toggle:** the window menu item with role `togglefullscreen` (macOS Ctrl+Cmd+F, Windows F11) and a UI
   control (F-6). `Assumed`
 - **Esc stays with the game.** The launcher never consumes Esc: no accelerator on it and no `preventDefault` on it in
@@ -400,6 +403,31 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   alone after injected input succeeded. Verified (2026-10-24, RESULTS.md H13). So the Phase 1 e2e test requests pointer
   lock first or gives each call its own injected click, does not expect keyboard lock to need a gesture, and checks
   focus first (pointer lock fails without it). A manual run with real input on macOS completes AC-18.
+- **Implementation (Phase 1 Task 10).** `Assumed` unless noted.
+  - `apps/desktop/src/main/games/window-state.ts`: the state is saved on the first `close` (before the close procedure
+    hides the window; nothing more is saved until a "Stay" shows the window again) and 500 ms after the last `move`,
+    `resize`, `maximize`, `unmaximize`, `enter-full-screen` or `leave-full-screen`; nothing after `closed`; a failed
+    write is logged (`game.window-state-save-failed`), never thrown. The display id is
+    `String(screen.getDisplayMatching(normalBounds).id)`. A game window is created at `restoreBounds` of its row, and
+    the saved maximized and fullscreen flags are applied on its first `show` (it is created hidden).
+  - The UI control of F-6 is the menu item itself: `apps/desktop/src/main/app-menu.ts` sets an application menu of
+    Electron's standard roles with a View menu holding `togglefullscreen` (clickable, and its accelerator is the
+    keyboard toggle), the edit roles (copy and paste in the launcher's fields), no accelerator on Esc, and reload and
+    developer tools in the dev flavor only. The launcher has no fullscreen button for a game: section 6 has no channel
+    for it, and the game window has no UI of its own. `Assumed` (an open point for review).
+  - `apps/desktop/src/main/games/fullscreen.ts`: `before-input-event` is only observed; Esc held for 1.5 s (auto-repeat
+    does not restart the hold, a key-up, blur or close cancels it, one exit per press) calls `setFullScreen(false)` when
+    the window is fullscreen and the page has not requested fullscreen itself (`enter-html-full-screen` until
+    `leave-html-full-screen`), logged as `game.fullscreen-esc-exit`.
+  - e2e (`apps/desktop/e2e/window.spec.ts`): bounds set on a game window were saved within the debounce and restored
+    on the next launch; a fullscreen set from main was saved with the normal bounds and restored; a short Esc sent
+    through `webContents.sendInputEvent` (which reaches `before-input-event`) arrived at the page as `keydown` and
+    `keyup` with `defaultPrevented` false and the window stayed fullscreen for 2 s; Esc held 1.7 s reached the page
+    too and ended the fullscreen. A fullscreen the page requested ended on Esc, and Chromium did not deliver that Esc
+    to the page (no `keydown`), as browsers do; this settles plan open check 9. Verified (2026-10-28, Electron 45.0.0,
+    macOS arm64, test flavor). An Esc sent at once after `isFullScreen()` turned true, while macOS still animated into
+    fullscreen, had no effect in one run (Unverified as a rule). Clicking the menu item and real key presses are the
+    manual part (Task 16).
 
 ## 10. Playtime
 
@@ -417,6 +445,20 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   focused, so a window that is already up must be replayed to it as `show` and `focus`. Every event is idempotent,
   events after `closed` are ignored, and a clock that steps backwards counts as zero elapsed time (the machine then
   continues from the new reading; time not yet banked by an earlier event is lost). `Assumed`
+- **Implementation (Phase 1 Task 10, `apps/desktop/src/main/games/playtime-recorder.ts`).** `Assumed` unless noted.
+  When a game window is created its row's `last_launched_at` is set (the database clock) and a `play_sessions` row
+  is started; the window's state is replayed (`show`, `focus`, `minimize` when already true, and `suspend` or
+  `lock-screen` when the system is suspended or `powerMonitor.getSystemIdleState(1)` says `locked`, asked at every
+  launch because Linux emits no lock events); `powerMonitor` `suspend`, `resume`, `lock-screen` and `unlock-screen`
+  go to every open session. The clock is `performance.now()`. Step 1 of the close procedure feeds `hide`, so the
+  procedure's time and its dialog are not counted and a "Stay" (`show`) counts again. At `closed` the session is ended
+  with its active time, or deleted under 10 000 ms. At start-up, before any launch, unfinished sessions under
+  10 000 ms are deleted and the others get `ended_at = checkpoint_at`. A failed write is logged
+  (`game.playtime-write-failed`). The card shows the sum of `active_ms` as "Playtime" ("less than a minute" under
+  60 s) and "Last launched", only when recorded. e2e: a launch closed at once set `last_launched_at` and left no
+  session; seeded rows changed the card's playtime and "Local data" badge and nothing else did; after a restart an
+  unfinished 5 s session was gone and a 20 s one ended. Verified (2026-10-28, `apps/desktop/e2e/window.spec.ts`,
+  Electron 45.0.0, macOS arm64).
 
 ## 11. Badges
 

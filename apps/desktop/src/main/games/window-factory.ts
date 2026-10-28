@@ -14,6 +14,7 @@ import {
   decideTopNavigation,
   isExternalUrlAllowed,
 } from "../policy/url-rules.js";
+import type { Bounds } from "../policy/window-guard.js";
 
 /** The one partition of a game: `persist:game:<gameId>` (AGENTS.md security invariant 2). */
 export function gamePartition(gameId: string): string {
@@ -110,6 +111,8 @@ export interface GameWindowOptions {
   log: Logger;
   /** Called for an http or https target on another site (the caller asks "Open in browser?"). */
   askExternal(url: string): void;
+  /** Where the window opens (`window-state.ts`: the saved bounds through the off-screen guard). */
+  bounds: Bounds;
 }
 
 /**
@@ -120,8 +123,7 @@ export interface GameWindowOptions {
 export function createGameWindow(options: GameWindowOptions): BrowserWindow {
   const { gameId, entryUrl, flavor, log, askExternal } = options;
   const window = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...options.bounds,
     show: false,
     title: options.title,
     backgroundColor: "#000000",

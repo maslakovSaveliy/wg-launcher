@@ -1,6 +1,6 @@
-// Off-screen guard (architecture.md section 9) as a pure function over plain shapes. A later task
-// maps Electron's displays and the `window_state` row to these shapes, and re-applies the saved
-// maximized and fullscreen flags after creating the window at the returned bounds.
+// Off-screen guard (architecture.md section 9) as a pure function over plain shapes.
+// `games/window-state.ts` maps Electron's displays and the `window_state` row to these shapes and
+// re-applies the saved maximized and fullscreen flags after creating the window at the returned bounds.
 
 export interface Bounds {
   x: number;
@@ -37,17 +37,18 @@ function overlaps(b: Bounds, area: Bounds): boolean {
   return w >= MIN_OVERLAP_WIDTH && h >= MIN_OVERLAP_HEIGHT;
 }
 
-function defaultBounds(displays: readonly DisplayArea[]): Bounds {
+/** `width` by `height`, clamped to the primary display's work area (else the first's) and centered on it. */
+function centered(displays: readonly DisplayArea[], width: number, height: number): Bounds {
   const target = displays.find((d) => d.primary) ?? displays[0];
-  if (!target) return { x: 0, y: 0, width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+  if (!target) return { x: 0, y: 0, width, height };
   const area = target.workArea;
-  const width = Math.min(DEFAULT_WIDTH, area.width);
-  const height = Math.min(DEFAULT_HEIGHT, area.height);
+  const w = Math.min(width, area.width);
+  const h = Math.min(height, area.height);
   return {
-    x: area.x + Math.floor((area.width - width) / 2),
-    y: area.y + Math.floor((area.height - height) / 2),
-    width,
-    height,
+    x: area.x + Math.floor((area.width - w) / 2),
+    y: area.y + Math.floor((area.height - h) / 2),
+    width: w,
+    height: h,
   };
 }
 
@@ -55,20 +56,24 @@ function defaultBounds(displays: readonly DisplayArea[]): Bounds {
  * Saved bounds if they overlap the work area of one connected display by at least 100 by 50
  * pixels, else 1280 by 800 (clamped to a smaller work area) centered on the primary display.
  * Which display the window was on when saved does not matter: only the overlap does. A saved
- * position that is missing or not a finite number, and a non-positive size, count as unusable.
+ * size with no usable position (missing or not a finite number) keeps that size, clamped to the
+ * primary work area and centered on it (Ruling R21: PRD F-7 remembers the size too). A size that
+ * is not a positive finite number makes the record unusable.
  */
 export function restoreBounds(saved: SavedWindow | null, displays: readonly DisplayArea[]): Bounds {
   if (
-    saved &&
-    isFiniteNumber(saved.x) &&
-    isFiniteNumber(saved.y) &&
-    Number.isFinite(saved.width) &&
-    Number.isFinite(saved.height) &&
-    saved.width > 0 &&
-    saved.height > 0
+    !saved ||
+    !Number.isFinite(saved.width) ||
+    !Number.isFinite(saved.height) ||
+    saved.width <= 0 ||
+    saved.height <= 0
   ) {
-    const bounds = { x: saved.x, y: saved.y, width: saved.width, height: saved.height };
-    if (displays.some((d) => overlaps(bounds, d.workArea))) return bounds;
+    return centered(displays, DEFAULT_WIDTH, DEFAULT_HEIGHT);
   }
-  return defaultBounds(displays);
+  if (!isFiniteNumber(saved.x) || !isFiniteNumber(saved.y)) {
+    return centered(displays, saved.width, saved.height);
+  }
+  const bounds = { x: saved.x, y: saved.y, width: saved.width, height: saved.height };
+  if (displays.some((d) => overlaps(bounds, d.workArea))) return bounds;
+  return centered(displays, DEFAULT_WIDTH, DEFAULT_HEIGHT);
 }

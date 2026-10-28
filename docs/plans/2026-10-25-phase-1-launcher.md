@@ -355,16 +355,20 @@ function per channel plus `onGameState(cb)` and `onTaskProgress(cb)`; `checkSend
 - [x] Commit `feat(desktop): add the library UI and IPC contract`.
 
 ### Task 10: Window state, fullscreen, playtime and badges wired (M)
-**Files:** `src/main/games/{window-state.ts,fullscreen.ts,playtime-recorder.ts}`, `src/main/library/badges-view.ts`, e2e
-`e2e/window.spec.ts`.
-- [ ] Window state saved on close and debounced 500 ms on move/resize; restored through `restoreBounds`; menu item role
-  `togglefullscreen` and a UI control; launcher-set fullscreen exits with toggle, UI or Esc held 1.5 s (`before-input-event`
-  observes, never `preventDefault`s Esc; short Esc reaches the page: e2e asserts the page saw keydown Esc).
-- [ ] Playtime: checkpoints every 60 s, `last_launched_at` on launch, < 10 s deleted at close and at start-up.
-- [ ] e2e: AC-18 automated part (bounds and fullscreen restored; toggle; short Esc reaches the game); card shows playtime
-  and badges from DB state only (AC-14 automated part).
-- [ ] Run failing, implement, run passing. Manual AC-18 real-input check goes to Task 16's checklist.
-- [ ] Commit `feat(desktop): remember windows, add fullscreen and playtime`.
+**Files:** `src/main/games/{window-state.ts,fullscreen.ts,playtime-recorder.ts}`, `src/main/app-menu.ts`, e2e
+`e2e/window.spec.ts`. (`src/main/library/badges-view.ts` was not needed: Task 9's `cardOf` in
+`src/main/ipc/handlers/library.ts` already maps the rows to `badgesFor`, playtime and last launch.)
+- [x] Window state saved on close and debounced 500 ms on move/resize; restored through `restoreBounds` (Ruling R21: a
+  saved size without a position keeps its size, centered); menu item role `togglefullscreen`, which is also the UI
+  control (no launcher channel exists for it, architecture §9); launcher-set fullscreen exits with toggle, UI or Esc
+  held 1.5 s (`before-input-event` observes, never `preventDefault`s Esc; short Esc reaches the page: e2e asserts the
+  page saw keydown Esc).
+- [x] Playtime: checkpoints every 60 s, `last_launched_at` on launch, < 10 s deleted at close and at start-up.
+- [x] e2e: AC-18 automated part (bounds and fullscreen restored; the toggle's window method; short Esc reaches the
+  game; Esc held ends the launcher's fullscreen); card shows playtime and badges from DB state only (AC-14 automated
+  part); open check 9 settled (Esc ends a page-requested fullscreen; Chromium does not deliver that Esc).
+- [x] Run failing, implement, run passing. Manual AC-18 real-input check goes to Task 16's checklist.
+- [x] Commit `feat(desktop): remember windows, add fullscreen and playtime`.
 
 ### Task 11: Shortcuts and deep links (S)
 **Files:** `src/main/{launch-input.ts,shortcuts.ts}`, e2e `e2e/shortcut.spec.ts`.
@@ -468,7 +472,9 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
   Manual checklist, each result recorded with date, versions, machine: deep link not running / running / second
   instance (AC-19); `.webloc` shortcut opens the game; media with the macOS microphone and camera permission undecided,
   denied, granted → `NotAllowedError`, no OS prompt, app keeps running (security §5 item 3; open check 5); real-input
-  fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual); process list after close and quit (AC-13 manual).
+  fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual): View → Toggle Full Screen clicked and
+  Ctrl+Cmd+F pressed in a game window, a short real Esc reaches the game, Esc held 1.5 s ends the launcher's
+  fullscreen, a page's own fullscreen ends on Esc, and size, position and fullscreen come back on the next launch; process list after close and quit (AC-13 manual).
 - [ ] If removing the usage descriptions makes macOS kill the process, stop and ask the owner (security open question).
 - [ ] Commit `build(desktop): package the app and add the release check`.
 
@@ -506,7 +512,7 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 | 6 | React 19 runs under `trusted-types 'none'` (Task 5): settled 2026-10-28, it does (security.md section 6) | Allow one named policy, keep `require-trusted-types-for 'script'` |
 | 7 | `node:sqlite` runs without a warning in Electron 45 main (Task 6) | better-sqlite3 13.0.3 per ADR-0004 revisit trigger |
 | 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data) |
-| 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc |
+| 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc. **Settled in Task 10: it does** (e2e with `sendInputEvent`; Chromium does not deliver that Esc to the page; architecture.md section 9) |
 | 10 | `.webloc` with `wglauncher://` opens the packaged app (Task 16) | Offer "copy launch link" instead of a macOS shortcut file |
 | 11 | Windows shortcut and deep link (no machine) | Code and unit tests only, labeled not tested |
 

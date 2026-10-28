@@ -3,7 +3,17 @@
 
 import { join } from "node:path";
 import { GAME_STATE_CHANNEL, type GameStateEvent, uuidv7 } from "@wg-launcher/shared";
-import { app, type BrowserWindow, ipcMain, session, shell } from "electron";
+import {
+  app,
+  type BrowserWindow,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  screen,
+  session,
+  shell,
+} from "electron";
+import { appMenuTemplate } from "./app-menu.js";
 import {
   DEV_LAUNCHER_ORIGIN,
   handleAppProtocol,
@@ -18,10 +28,22 @@ import { type Dialogs, type ErrorSpec, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
 import { closeGameWindow } from "./games/close-procedure.js";
 import { recordFrames } from "./games/frames.js";
+import { wireFullscreen } from "./games/fullscreen.js";
 import { gameSession, installBaselineHandlers } from "./games/game-session.js";
 import { GameRuntime, type GameState } from "./games/lifecycle.js";
 import { LockManager } from "./games/locks.js";
+import {
+  createPlaytimeHub,
+  type PlaytimeRecorder,
+  settleUnfinishedSessions,
+} from "./games/playtime-recorder.js";
 import { createExternalOpener, createGameWindow } from "./games/window-factory.js";
+import {
+  applySavedFlags,
+  displayAreas,
+  initialBounds,
+  trackWindowState,
+} from "./games/window-state.js";
 import { createHandlers } from "./ipc/handlers/index.js";
 import { registerIpc } from "./ipc/register.js";
 import {
@@ -117,7 +139,20 @@ function createGames(
   onState: (gameId: string, state: GameState) => void,
 ) {
   const repos = createRepos(db);
+  // Before any launch: sessions a crash left unfinished (architecture.md section 10).
+  settleUnfinishedSessions(repos.playSessions, log);
   const locks = new LockManager({ log });
+  const playtime = createPlaytimeHub({
+    sessions: repos.playSessions,
+    games: repos.games,
+    clock: () => performance.now(),
+    log,
+    isScreenLocked: () => powerMonitor.getSystemIdleState(1) === "locked",
+  });
+  for (const event of ["suspend", "resume", "lock-screen", "unlock-screen"] as const) {
+    powerMonitor.on(event as "suspend", () => playtime.power(event));
+  }
+  const recorders = new Map<string, PlaytimeRecorder>();
   const runtime = new GameRuntime({
     games: repos.games,
     locks,
@@ -129,6 +164,7 @@ function createGames(
       // The session's handlers exist before the window, so the page never meets Electron's allow-all default.
       gameSession(gameId, { log });
       const askExternal = createExternalOpener({ gameId, dialogs, openExternal, log });
+      const saved = repos.windowState.get(gameId);
       const window = createGameWindow({
         gameId,
         title,
@@ -136,12 +172,33 @@ function createGames(
         flavor: FLAVOR,
         log,
         askExternal: (url) => void askExternal(url),
+        bounds: initialBounds(saved, displayAreas(screen)),
       });
       recordFrames(window.webContents, gameId, repos.storageTargets, log);
+      // Before the runtime's own listeners, so the first `close` saves the state the user saw (architecture.md 9).
+      trackWindowState(window, {
+        gameId,
+        save: (state) => repos.windowState.save(state),
+        displayIdOf: (bounds) => String(screen.getDisplayMatching(bounds).id),
+        log,
+      });
+      applySavedFlags(window, saved);
+      wireFullscreen(window, { gameId, log });
+      const recorder = playtime.attach(gameId, window);
+      recorders.set(gameId, recorder);
+      window.once("closed", () => {
+        if (recorders.get(gameId) === recorder) recorders.delete(gameId);
+      });
       return window;
     },
+    // Step 1 of the close procedure stops playtime, so the procedure's time is not counted (architecture.md 4).
     closeWindow: (window, gameId) =>
-      closeGameWindow(window as BrowserWindow, { gameId, log, dialogs }),
+      closeGameWindow(window as BrowserWindow, {
+        gameId,
+        log,
+        dialogs,
+        stopPlaytime: () => recorders.get(gameId)?.pause(),
+      }),
   });
   return { runtime, repos, locks };
 }
@@ -152,6 +209,7 @@ async function start(userData: string): Promise<AppContext> {
   let logger: Logger | null = null;
   installBaselineHandlers(app, { warn: (event, fields) => logger?.warn(event, fields) });
   await app.whenReady();
+  Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate(process.platform, FLAVOR)));
 
   const paths = appPaths(userData);
   await prepareAppPaths(paths);

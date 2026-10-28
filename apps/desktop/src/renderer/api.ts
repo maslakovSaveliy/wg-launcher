@@ -48,8 +48,9 @@ export function formatTime(ms: number): string {
   return new Date(ms).toLocaleString();
 }
 
-/** Recorded playtime in whole minutes (Task 10 records it). */
+/** Recorded playtime (architecture.md section 10) in whole minutes; under one minute is said so. */
 export function formatPlaytime(ms: number): string {
+  if (ms < 60_000) return "less than a minute";
   const minutes = Math.floor(ms / 60_000);
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
