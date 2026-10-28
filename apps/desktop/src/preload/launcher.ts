@@ -1,15 +1,36 @@
 // The launcher bridge (security.md section 6): a sandboxed CommonJS preload, bundled into one file. It exposes
-// typed functions through contextBridge, one per IPC channel (the channels come with the IPC contract, Task 9);
-// `ipcRenderer` itself is never exposed. Sandboxed preloads in Electron 45 have no Buffer, events, timers or url.
+// `window.wg` through contextBridge: one function per IPC channel, each calling `ipcRenderer.invoke` with its fixed
+// channel name, and the `game:state` subscription. `ipcRenderer` itself, a generic invoke or send, and the IPC event
+// object (whose `sender` is `ipcRenderer`) never reach the page. Validation is main's job (zod is not bundled here).
+// Sandboxed preloads in Electron 45 have no Buffer, events, timers or url.
 
-import { contextBridge } from "electron";
+import {
+  BRIDGE_CHANNELS,
+  BRIDGE_VERSION,
+  type BridgeFunction,
+  GAME_STATE_CHANNEL,
+  type WgBridge,
+} from "@wg-launcher/shared/bridge";
+import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 
-/** The shape the renderer sees as `window.wgLauncher`. */
-export interface LauncherBridge {
-  /** Bumped whenever the bridge's functions change. */
-  readonly bridgeVersion: 1;
-}
+const functions = Object.fromEntries(
+  (Object.keys(BRIDGE_CHANNELS) as BridgeFunction[]).map((name) => {
+    const channel = BRIDGE_CHANNELS[name];
+    return [name, (request: unknown) => ipcRenderer.invoke(channel, request)];
+  }),
+) as Omit<WgBridge, "bridgeVersion" | "onGameState">;
 
-const bridge: LauncherBridge = Object.freeze({ bridgeVersion: 1 });
+const bridge: WgBridge = Object.freeze({
+  ...functions,
+  bridgeVersion: BRIDGE_VERSION,
+  onGameState(listener) {
+    const forward = (_event: IpcRendererEvent, payload: unknown) =>
+      listener(payload as Parameters<typeof listener>[0]);
+    ipcRenderer.on(GAME_STATE_CHANNEL, forward);
+    return () => {
+      ipcRenderer.removeListener(GAME_STATE_CHANNEL, forward);
+    };
+  },
+});
 
-contextBridge.exposeInMainWorld("wgLauncher", bridge);
+contextBridge.exposeInMainWorld("wg", bridge);

@@ -19,17 +19,43 @@ test("serves the launcher from app://launcher with the CSP and security headers,
 
   expect(launcher.url()).toBe("app://launcher/");
   await expect(launcher.locator("h1")).toHaveText("WGLauncher");
-  // The sandboxed CommonJS preload ran and exposed only the bridge.
-  await expect(launcher.locator("#bridge-status")).toHaveText(
-    "Launcher bridge connected (version 1).",
-  );
+  // The sandboxed CommonJS preload ran and exposed only the typed bridge: one function per channel, the game:state
+  // subscription and the version; no ipcRenderer, no generic invoke or send.
+  await expect(
+    launcher.getByText("The library is empty. Add a game by its address."),
+  ).toBeVisible();
   expect(
-    await launcher.evaluate(() => ({
-      require: typeof (globalThis as { require?: unknown }).require,
-      process: typeof (globalThis as { process?: unknown }).process,
-      bridgeKeys: Object.keys((window as { wgLauncher?: object }).wgLauncher ?? {}),
-    })),
-  ).toEqual({ require: "undefined", process: "undefined", bridgeKeys: ["bridgeVersion"] });
+    await launcher.evaluate(() => {
+      const wg = (window as { wg?: Record<string, unknown> }).wg ?? {};
+      return {
+        require: typeof (globalThis as { require?: unknown }).require,
+        process: typeof (globalThis as { process?: unknown }).process,
+        ipcRenderer: typeof (globalThis as { ipcRenderer?: unknown }).ipcRenderer,
+        bridgeKeys: Object.keys(wg).sort(),
+        version: wg.bridgeVersion,
+        frozen: Object.isFrozen(wg),
+      };
+    }),
+  ).toEqual({
+    require: "undefined",
+    process: "undefined",
+    ipcRenderer: "undefined",
+    bridgeKeys: [
+      "addGame",
+      "bridgeVersion",
+      "focusGame",
+      "getSettings",
+      "launchGame",
+      "listLibrary",
+      "listOrphans",
+      "onGameState",
+      "removeGame",
+      "setSettings",
+      "updateGame",
+    ],
+    version: 2,
+    frozen: true,
+  });
 
   // Headers as the launcher's session serves them: the page, a traversal attempt and a bad cover name.
   const responses = await app.evaluate(async ({ session }) => {

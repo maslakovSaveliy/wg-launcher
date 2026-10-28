@@ -62,6 +62,13 @@ export function queueConfirm(launched: Launched, value: boolean): Promise<void> 
   );
 }
 
+export function queueOpenFile(launched: Launched, path: string | null): Promise<void> {
+  return launched.app.evaluate(
+    (_electron, value) => globalThis.__wgTest?.queueDialogAnswer({ kind: "openFile", value }),
+    path,
+  );
+}
+
 export type LogLine = Record<string, unknown> & { event: string; level: string };
 
 /** Every record of `logs/main.log` so far (the logger writes asynchronously, so poll for what you expect). */

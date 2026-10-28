@@ -13,6 +13,11 @@ export const APP_SCHEME = "app";
 export const LAUNCHER_HOST = "launcher";
 export const LAUNCHER_ORIGIN = `${APP_SCHEME}://${LAUNCHER_HOST}`;
 export const LAUNCHER_URL = `${LAUNCHER_ORIGIN}/`;
+/**
+ * The dev flavor loads the launcher from the Vite dev server instead; `DEV_SERVER` in electron.vite.config.ts fixes
+ * that origin, and the IPC sender check compares with this constant (security.md section 6).
+ */
+export const DEV_LAUNCHER_ORIGIN = "http://localhost:5173";
 
 /** Not `bypassCSP`, `corsEnabled`, `allowServiceWorkers`, `stream` or `allowExtensions`. */
 export const APP_SCHEME_PRIVILEGES = Object.freeze({

@@ -2,12 +2,14 @@
 // in a prod bundle; scripts/check-prod-bundle.mjs fails if the global's name appears there. The e2e suite reaches
 // the hooks through Playwright's `app.evaluate` as `globalThis.__wgTest`.
 
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { uuidv7 } from "@wg-launcher/shared";
 import { BrowserWindow, session } from "electron";
 import type { Db } from "./db/database.js";
 import { readUserVersion } from "./db/migrate.js";
 import type { Repos } from "./db/repos/index.js";
-import type { ConfirmSpec, Dialogs, OpenFileSpec, SaveFileSpec } from "./dialogs.js";
+import type { ConfirmSpec, Dialogs, ErrorSpec, OpenFileSpec, SaveFileSpec } from "./dialogs.js";
 import type { GameRuntime, GameState, LaunchResult } from "./games/lifecycle.js";
 import type { AppPaths } from "./paths.js";
 import { checkEntryUrl } from "./policy/url-rules.js";
@@ -62,14 +64,30 @@ export interface TestHooks {
   closeGame(gameId: string): boolean;
   /** The game's `storage_targets` rows as `top frame` origin pairs. */
   storageTargets(gameId: string): string[];
+  /** Adds a snapshot row (no file: the row only) for the game and returns its revision id. */
+  addSnapshotRecord(gameId: string): string;
+  /** How many snapshot rows the game has (its own, not its base revision's). */
+  snapshotCount(gameId: string): number;
 }
+
+/**
+ * Error dialogs of the test flavor are also appended here, one JSON line each, because a start-up failure exits the
+ * app before an e2e test could read the hooks.
+ */
+export const TEST_ERROR_DIALOGS_FILE = "test-error-dialogs.jsonl";
 
 declare global {
   var __wgTest: TestHooks | undefined;
 }
 
-/** Dialogs that answer from the queue the e2e test filled, and fail loudly when it is empty or mismatched. */
-function queuedDialogs(hooks: Pick<TestHooks, "dialogsShown">, queue: DialogAnswer[]): Dialogs {
+/**
+ * Dialogs that answer from the queue the e2e test filled, and fail loudly when it is empty or mismatched. Error
+ * dialogs need no answer: they are recorded (in the hooks and in `TEST_ERROR_DIALOGS_FILE`).
+ */
+function queuedDialogs(
+  hooks: Pick<TestHooks, "dialogsShown" | "userData">,
+  queue: DialogAnswer[],
+): Dialogs {
   const next = (kind: DialogKind, title: string): DialogAnswer => {
     hooks.dialogsShown.push({ kind, title });
     const answer = queue.shift();
@@ -82,6 +100,13 @@ function queuedDialogs(hooks: Pick<TestHooks, "dialogsShown">, queue: DialogAnsw
     confirm: async (spec: ConfirmSpec) => next("confirm", spec.title).value === true,
     openFile: async (spec: OpenFileSpec) => next("openFile", spec.title).value as string | null,
     saveFile: async (spec: SaveFileSpec) => next("saveFile", spec.title).value as string | null,
+    showError: async (spec: ErrorSpec) => {
+      hooks.dialogsShown.push({ kind: "showError", title: spec.title });
+      appendFileSync(
+        join(hooks.userData, TEST_ERROR_DIALOGS_FILE),
+        `${JSON.stringify({ title: spec.title, message: spec.message })}\n`,
+      );
+    },
   };
 }
 
@@ -156,6 +181,27 @@ export function installTestHooks(init: {
       needGames()
         .repos.storageTargets.listForGame(gameId)
         .map((row) => `${row.topOrigin} ${row.frameOrigin}`),
+    addSnapshotRecord(gameId) {
+      const { repos } = needGames();
+      const revisionId = uuidv7();
+      repos.snapshots.addIfAbsent({
+        revisionId,
+        gameId,
+        kind: "export",
+        manifestGameId: gameId,
+        parentRevisionId: null,
+        createdAt: new Date().toISOString(),
+        deviceId: repos.device.ensure().id,
+        exporterId: "e2e-record",
+        exporterVersion: "0.0.0",
+        contentHash: "0".repeat(64),
+        sizeBytes: 0,
+        path: "snapshots/e2e-record.wgsnap",
+        flushState: "unconfirmed",
+      });
+      return revisionId;
+    },
+    snapshotCount: (gameId) => needGames().repos.snapshots.listForGame(gameId, null).length,
     closeGame(gameId) {
       const window = needGames().runtime.windowOf(gameId);
       if (!window || window.isDestroyed()) return false;

@@ -342,14 +342,17 @@ sender-check.ts,handlers/library.ts,handlers/game.ts,handlers/settings.ts}`, `sr
 **Interfaces (Produces):** `IpcContract` (channel → `{request: ZodType; response: ZodType}`), `window.wg` with one typed
 function per channel plus `onGameState(cb)` and `onTaskProgress(cb)`; `checkSender(event, launcherWc): boolean`;
 `setCover(gameId, path): Promise<Result<string>>` (PNG/JPEG/WebP magic bytes, ≤ 10 MiB, `covers/<gameId>-<random>.<ext>`).
-- [ ] Unit (S-10): wrong sender, subframe, wrong origin, unknown key, oversize payload, upper-case id → rejected,
-  `IPC_FORBIDDEN_SENDER` logged once; every schema is a `z.strictObject`.
-- [ ] e2e: AC-17 (edit title and cover keeps `gameId` and partition; `ftp:`/`http://example.com` rejected; dev origins
+- [x] Unit (S-10): wrong sender, subframe, wrong origin, unknown key, oversize payload, upper-case id → rejected,
+  `IPC_FORBIDDEN_SENDER` logged once; every schema is a `z.strictObject`. Also covers (magic bytes, 10 MiB, symlink,
+  name pattern, old file removed), handlers over a real database, and `game:state` transitions.
+- [x] e2e: AC-17 (edit title and cover keeps `gameId` and partition; `ftp:`/`http://example.com` rejected; dev origins
   only in the test flavor); add the same URL twice → warning, then a second entry; AC-1 part (restart → same title, URL,
   cover, `gameId`; Play opens it); remove from library → card gone, row in "Data of removed games" (settings), snapshots
-  kept; a title `<img src=x onerror=…>` renders as text (S-15).
-- [ ] Run failing, implement, run passing.
-- [ ] Commit `feat(desktop): add the library UI and IPC contract`.
+  kept; a title `<img src=x onerror=…>` renders as text (S-15). Also the read-only database (persistent notice,
+  writes refused with `LIBRARY_READ_ONLY`) and a corrupt `library.db` (native error dialog, exit 1).
+- [x] Run failing, implement, run passing. `onTaskProgress` is not in the bridge yet: no channel reports progress
+  before Task 13, which adds it with `task:progress`.
+- [x] Commit `feat(desktop): add the library UI and IPC contract`.
 
 ### Task 10: Window state, fullscreen, playtime and badges wired (M)
 **Files:** `src/main/games/{window-state.ts,fullscreen.ts,playtime-recorder.ts}`, `src/main/library/badges-view.ts`, e2e

@@ -83,7 +83,7 @@ test("two entries with the same URL share nothing, and the launcher shares nothi
         require: typeof scope.require,
         process: typeof scope.process,
         module: typeof scope.module,
-        bridge: typeof scope.wgLauncher,
+        bridge: typeof scope.wg,
         electron: typeof scope.electron,
         ipcRenderer: typeof scope.ipcRenderer,
       };

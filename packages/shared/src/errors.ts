@@ -11,6 +11,7 @@ export const IPC_CODES = [
   "GAME_BUSY",
   "NEEDS_RECOVERY",
   "CANCELLED",
+  "LIBRARY_READ_ONLY",
   "INTERNAL",
 ] as const;
 

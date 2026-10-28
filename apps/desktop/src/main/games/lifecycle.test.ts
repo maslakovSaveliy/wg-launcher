@@ -83,7 +83,9 @@ function setUp(
     options.game === undefined
       ? { id: GAME, url: URL_OF_GAME, title: "Lab", needsRecovery: false }
       : options.game;
+  const states: string[] = [];
   const runtime = new GameRuntime({
+    onState: (gameId, state) => states.push(`${gameId === GAME ? "game" : gameId} ${state}`),
     games: { get: (id: string) => (game && id === GAME ? (game as never) : null) },
     locks,
     log,
@@ -99,7 +101,7 @@ function setUp(
       ? {}
       : { launchShowTimeoutMs: options.launchShowTimeoutMs }),
   });
-  return { runtime, windows, locks, log, confirm, closeWindow };
+  return { runtime, windows, locks, log, confirm, closeWindow, states };
 }
 
 describe("GameRuntime.launch: one window per game (F-5, Review Focus 3)", () => {
@@ -283,5 +285,41 @@ describe("GameRuntime: closing, crash and hang", () => {
     expect(closeWindow).toHaveBeenCalledTimes(1);
     expect(runtime.state(GAME)).toBe("exited");
     expect(runtime.openGames()).toEqual([]);
+  });
+});
+
+describe("GameRuntime: state changes for game:state (architecture.md section 6)", () => {
+  it("reports every transition of a launch and a close, once each", async () => {
+    const { runtime, windows, states } = setUp();
+    await runtime.launch(GAME);
+    windows[0]?.emit("ready-to-show");
+    await runtime.launch(GAME); // a focus changes no state
+    windows[0]?.close();
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("exited"));
+    expect(states).toEqual(["game launching", "game running", "game closing", "game exited"]);
+  });
+
+  it("reports running again when the user stays, and crashed on a crash", async () => {
+    const { runtime, windows, states } = setUp({ closeOutcome: "stayed" });
+    await runtime.launch(GAME);
+    windows[0]?.emit("ready-to-show");
+    windows[0]?.close();
+    await vi.waitFor(() => expect(states.at(-1)).toBe("game running"));
+    windows[0]?.webContents.emit("render-process-gone", {}, { reason: "crashed", exitCode: 11 });
+    expect(states).toEqual([
+      "game launching",
+      "game running",
+      "game closing",
+      "game running",
+      "game crashed",
+    ]);
+  });
+
+  it("reports idle again when a launch is refused by the lock", async () => {
+    const { runtime, locks, states } = setUp();
+    const lease = await locks.acquire(GAME, "task");
+    expect((await runtime.launch(GAME)).ok).toBe(false);
+    expect(states).toEqual(["game launching", "game idle"]);
+    if ("release" in lease) lease.release();
   });
 });

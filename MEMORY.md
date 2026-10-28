@@ -105,6 +105,15 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `will-prevent-unload` is answered by cancelling, asking, then reloading `about:blank` with the trap ignored. The test
   flavor records `shell.openExternal` calls (`externalOpened`) instead of opening; e2e pages are served by
   `apps/desktop/e2e/test-pages.ts` on `127.0.0.1`.
+- 2026-10-28 Phase 1 Task 9 (IPC contract and library UI, Assumed unless noted): the settled details are in
+  architecture.md section 6 ("Implementation (Phase 1 Task 9)"), section 7 ("What the user sees") and section 12
+  ("Implementation (Phase 1 Task 9)"). In short: new result code `LIBRARY_READ_ONLY` for every channel but
+  `settings:get` while the database is read-only; a refused sender gets `INVALID_ARGUMENT` "Refused." and one
+  `IPC_FORBIDDEN_SENDER` record per call; the same URL twice is confirmed in a native dialog by main (Cancel is
+  `CANCELLED`); `games.cover_path` holds the cover's file name, not a path; settings have an empty allowlist; the
+  bridge is `window.wg` (version 2) without `onTaskProgress` until Task 13; "Export verified" cannot appear yet
+  because no exporter version exists in this build; a corrupt `library.db` shows a native error dialog, then exit 1
+  (the test flavor records it in `<userData>/test-error-dialogs.jsonl`).
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -309,6 +318,12 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `https://:@evil.com` drop the empty user info; `https://exa%2Emple.com/` becomes host `exa.mple.com`; tabs and
   newlines inside are dropped, leading and trailing spaces trimmed; `https://example.com.` keeps the trailing dot. So
   `url-rules.ts` refuses those raw shapes before parsing. [V, 2026-10-28, Node 24.13.0, scratch script]
+- WHATWG `new URL("app://launcher/x")` has `origin` `"null"` (non-special schemes get an opaque origin) but
+  `protocol` `app:` and `host` `launcher`, so the IPC sender check builds the origin from scheme and host. [V,
+  2026-10-28, Node 24.13.0, `node -e`]
+- zod 4.6.7: `.refine()` on a `z.strictObject` returns the same `ZodObject` with `def.catchall` of type `never` (no
+  wrapper), so a schema walk can check strictness; `.trim()` on a string schema trims the parsed output. [V,
+  2026-10-28, `packages/shared/src/ipc.test.ts`; a mutation to `z.object` made it fail]
 - tldts 7.4.19 `parse(host, {allowPrivateDomains: true, extractHostname: false})` gives domain `com.` for
   `example.com.` (trailing dot), `null` for `co.uk`, `github.io`, `localhost`, `intranet` and IP literals (`isIp`
   true, also for `[::1]`), `a.github.io` for `a.github.io`, and falls back to the last label for an unknown TLD

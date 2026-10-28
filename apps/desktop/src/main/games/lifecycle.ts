@@ -59,6 +59,8 @@ export interface RuntimeDeps {
   closeWindow(window: GameWindow, gameId: string): Promise<CloseOutcome>;
   /** For tests; defaults to `LAUNCH_SHOW_TIMEOUT_MS`. */
   launchShowTimeoutMs?: number;
+  /** Called after every state change, once per change (the `game:state` event of architecture.md section 6). */
+  onState?(gameId: string, state: GameState): void;
 }
 
 /** A launching window is shown after this long even without `ready-to-show` (Assumed). */
@@ -144,9 +146,11 @@ export class GameRuntime {
       done: Promise.withResolvers<void>(),
     };
     this.#entries.set(gameId, entry);
+    this.#deps.onState?.(gameId, "launching");
     const lease = await this.#deps.locks.acquire(gameId, "session");
     if (!("release" in lease)) {
       this.#entries.delete(gameId);
+      this.#deps.onState?.(gameId, "idle");
       log.info("game.launch-refused", { gameId, code: lease.code });
       return fail(lease.code);
     }
@@ -219,7 +223,7 @@ export class GameRuntime {
     const { log, dialogs } = this.#deps;
     const showNow = () => {
       if (entry.state !== "launching" || window.isDestroyed()) return;
-      entry.state = "running";
+      this.#set(gameId, entry, "running");
       log.info("game.running", { gameId });
       window.show();
       window.focus();
@@ -235,13 +239,13 @@ export class GameRuntime {
     window.on("close", (event: { preventDefault(): void }) => {
       event.preventDefault();
       if (entry.state === "closing") return;
-      entry.state = "closing";
+      this.#set(gameId, entry, "closing");
       log.info("game.closing", { gameId });
       this.#deps.closeWindow(window, gameId).then(
         (outcome) => {
           if (outcome === "stayed" && !window.isDestroyed()) {
             // The procedure showed the window again.
-            entry.state = "running";
+            this.#set(gameId, entry, "running");
             log.info("game.close-cancelled", { gameId });
           }
         },
@@ -289,9 +293,14 @@ export class GameRuntime {
     });
   }
 
+  #set(gameId: string, entry: Entry, state: GameState): void {
+    entry.state = state;
+    this.#deps.onState?.(gameId, state);
+  }
+
   #finish(gameId: string, entry: Entry, state: "exited" | "crashed"): void {
     if (entry.state === "exited" || entry.state === "crashed") return;
-    entry.state = state;
+    this.#set(gameId, entry, state);
     entry.lease?.release();
     entry.lease = null;
     entry.done.resolve();

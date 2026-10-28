@@ -205,12 +205,12 @@ no longer have `Buffer`, `events`, `timers` or `url`, so the bridge uses none of
 
 | Channel | Request | Response `data` |
 | --- | --- | --- |
-| `library:list` | `{}` | Cards: id, title, url, cover URL, badges, last launch, playtime, session state |
+| `library:list` | `{}` | `{library: "ready", cards}` (card: id, title, url, cover URL, badges, last launch, playtime, session state, needs recovery) or `{library: "read-only", reason}` (section 7) |
 | `library:add` | `{url, title?}` | The new card (rules in section 12) |
 | `library:update` | `{gameId, title?, cover?: "pick" \| "remove"}` | The card; `pick` opens the file dialog in main |
 | `library:remove` | `{gameId}` | `{}` (section 12) |
 | `library:orphans`, `library:deleteOrphanData` | `{}`, `{gameId}` | Orphan list; `{taskId}` |
-| `game:launch`, `game:focus` | `{gameId}` | `{state}`, `{}` |
+| `game:launch`, `game:focus` | `{gameId}` | `{window: "opened" \| "focused" \| "closing", state}`, `{}` |
 | `game:clearCache`, `game:deleteSaves` | `{gameId}` | `{}`, `{taskId}` |
 | `snapshot:export` | `{gameId, frameKeys?}` | `{taskId}` |
 | `snapshot:import` | `{gameId, source: {revisionId} \| "file", mapping?: [{from, to}]}` | `{taskId}`; `"file"` opens the file dialog in main |
@@ -231,10 +231,33 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
   payloads above 64 KiB are rejected. Ids must be lowercase UUIDv7.
 - **Errors:** `{ok: false, code, message}`; success is `{ok: true, data}`. `message` is short English for the UI with no
   paths, query strings or save data. Codes: `INVALID_ARGUMENT`, `NOT_FOUND`, `URL_NOT_ALLOWED`, `GAME_RUNNING`,
-  `GAME_BUSY`, `NEEDS_RECOVERY`, `CANCELLED`, `INTERNAL`, and the `SNAP_*`, `EXP_*` and `IMP_*` codes of the other specs.
+  `GAME_BUSY`, `NEEDS_RECOVERY`, `CANCELLED`, `LIBRARY_READ_ONLY`, `INTERNAL`, and the `SNAP_*`, `EXP_*` and `IMP_*`
+  codes of the other specs. `LIBRARY_READ_ONLY` is what every channel that writes (or launches) returns while the
+  database is read-only (section 7). `Assumed`
 - **No paths cross IPC.** The renderer never sends a file path or an arbitrary URL to open; files are chosen in native
   dialogs owned by main, and destructive actions (remove, delete local saves, import, a storage-key mapping) are confirmed
   in a native dialog whose text main writes. `Assumed`
+- **Implementation (Phase 1 Task 9).** `Assumed` unless noted.
+  - The schemas are `packages/shared/src/ipc.ts` (`IPC_CONTRACT`; every request and response object is a
+    `z.strictObject`, which a unit test checks by walking the schemas); the bridge's shape is
+    `packages/shared/src/bridge.ts` (`window.wg`: one function per channel, `onGameState`, `bridgeVersion` 2), which the
+    preload imports without zod. `task:progress` and `onTaskProgress` come with the first task that reports progress
+    (Task 13), so the bridge does not have them yet.
+  - Main: `apps/desktop/src/main/ipc/` (`sender-check.ts`, `register.ts`, `handlers/`). The sender check compares
+    `event.sender` with the launcher's `webContents` by identity, the sender frame with its main frame by process and
+    routing id (the `WebFrameMain` wrapper object is not compared), requires `parent === null`, and compares the
+    frame URL's scheme and host with `app://launcher` (WHATWG gives non-special schemes an opaque origin, so the
+    origin is built from scheme and host); the dev flavor compares with `DEV_LAUNCHER_ORIGIN`,
+    `http://localhost:5173` (`app-protocol.ts`, the `DEV_SERVER` of `electron.vite.config.ts`).
+  - A refused sender gets `{ok: false, code: "INVALID_ARGUMENT", message: "Refused."}`, the same for every check, and
+    each refused call writes one `IPC_FORBIDDEN_SENDER` record (channel, the frame URL through `redact`, whether it was
+    a subframe). A call must carry exactly one payload; its `JSON.stringify` form is measured in UTF-8 bytes and above
+    65 536 bytes, or without a JSON form (BigInt, undefined), it is `INVALID_ARGUMENT` before zod runs. zod issues are
+    logged as codes and paths only, never returned. A throwing handler is `INTERNAL` ("Something went wrong.").
+  - `settings:get` and `settings:set` exist with an empty allowlist (`settingsSchema` is `z.strictObject({})`): no
+    setting exists yet, so every key is refused and nothing is stored.
+  - `game:state` is sent on every state change of the game runtime (`GameRuntime`'s `onState`), once per change,
+    with `at` in Unix milliseconds; a refused launch reports `idle` again.
 - Game windows have no IPC at all; quiescent windows use only the handshake of
   [save-transfer.md](save-transfer.md#5-quiescent-window). Bulk data never travels as JSON IPC (AGENTS.md data-safety
   invariant 9).
@@ -292,6 +315,14 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   one transaction that also sets `user_version`. Before migrating an existing database the main process copies it to
   `backups/library-v<n>-<time>.db`. A database whose `user_version` is newer than the app knows is opened read-only and
   the app shows an explicit error instead of writing. `Assumed`
+  - *What the user sees (Phase 1 Task 9).* With a read-only database the game runtime is not created,
+    `library:list` returns `{library: "read-only", reason}` and the UI shows the reason in place of the library (and
+    an alert in Settings); every other channel except `settings:get` returns `LIBRARY_READ_ONLY` (section 6), so
+    nothing is read through the repositories or written. A database that cannot be opened at all (a corrupt file, a
+    failed migration, which is rolled back) stops start-up with a native error dialog, "WGLauncher cannot open its
+    library", logged as `db.open-failed`, then exit code 1; the file is not changed. Verified (2026-10-28,
+    `apps/desktop/e2e/library.spec.ts` on Electron 45.0.0, macOS arm64, test flavor, where the dialog is recorded
+    instead of shown). `Assumed` for the rest.
   - *How it is built (Phase 1 Task 6, `apps/desktop/src/main/db/`).* The SQL files are imported as strings with Vite's
     `?raw` suffix, so electron-vite inlines them into the main bundle and Vitest reads them the same way; no file is
     looked up at run time. `Assumed`. The copy before a migration is made with `VACUUM INTO` (a consistent copy of what
@@ -416,6 +447,26 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 - **Edit (F-3, AC-17).** Title: 1 to 200 characters after trimming, default the host name, rendered as text only.
   Cover: a PNG, JPEG or WebP file of at most 10 MiB chosen in a native dialog, checked by its magic bytes, copied to
   `covers/`. Editing never changes `gameId` or the partition. `Assumed` for the limits.
+- **Implementation (Phase 1 Task 9).** `Assumed` unless noted.
+  - Add: the renderer trims the pasted address visibly (the field shows what is sent); main runs `checkEntryUrl`
+    (which does not trim) and refuses with `URL_NOT_ALLOWED`. When an entry with the same stored `href` exists, main
+    asks in a native dialog ("Already in the library", "Add a second entry"); Cancel is `CANCELLED` and adds nothing.
+    Removed games (orphans) do not count. An omitted title becomes the host name, cut to 200 characters.
+  - Titles are counted in code points (200 emoji are 200 characters) after `trim()`; the schema trims, so a handler
+    stores the trimmed title.
+  - Covers: `apps/desktop/src/main/covers.ts`. The chosen path must be a regular file (`lstat`, then `open` with
+    `O_NOFOLLOW` where the OS has it and `fstat` on the handle, so a symbolic link is refused); at most 10 MiB, read
+    with one byte of headroom so a file growing after the stat is caught; the type comes from the bytes only (PNG
+    signature, JPEG `ff d8 ff`, RIFF with `WEBP` at offset 8; the file's extension is ignored). The copy is named
+    `<gameId>-<16 hex from 8 random bytes>.<png|jpg|webp>`, written as `.partial` in `tmp/`, flushed, renamed into
+    `covers/`. `games.cover_path` holds that file name, not a path; the card's cover URL is
+    `app://launcher/covers/<name>`. The old file is deleted after the row points at the new one (or at none), and a
+    copy made for a game removed while the dialog was open is deleted again.
+  - Remove from library: refused with `GAME_RUNNING` while the game has a window (its session lease); otherwise main
+    holds a `task` lease while its confirmation is open, so the game cannot launch meanwhile. The confirmation says
+    what is removed (the card with title, cover, window position, playtime) and what is kept (snapshots, backups,
+    the saves on this computer under "Data of removed games"). Settings lists the orphans; deleting their data is
+    `library:deleteOrphanData`, a later task.
 - **Delete semantics** exactly as [PRD section 9](../product/prd.md#9-delete-semantics), each with its own native
   confirmation saying what will be lost (AC-16):
   - *Remove from library:* deletes the `games` row (with its window state, play sessions and storage check) and the

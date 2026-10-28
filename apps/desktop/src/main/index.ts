@@ -2,18 +2,28 @@
 // before anything else, and the app:// scheme is registered before `ready`.
 
 import { join } from "node:path";
-import { app, type BrowserWindow, session, shell } from "electron";
-import { handleAppProtocol, LAUNCHER_URL, registerAppScheme } from "./app-protocol.js";
+import { GAME_STATE_CHANNEL, type GameStateEvent, uuidv7 } from "@wg-launcher/shared";
+import { app, type BrowserWindow, ipcMain, session, shell } from "electron";
+import {
+  DEV_LAUNCHER_ORIGIN,
+  handleAppProtocol,
+  LAUNCHER_ORIGIN,
+  LAUNCHER_URL,
+  registerAppScheme,
+} from "./app-protocol.js";
+import { createCovers } from "./covers.js";
 import { type Db, openDatabase, type WritableDb } from "./db/database.js";
 import { createRepos } from "./db/repos/index.js";
-import { type Dialogs, nativeDialogs } from "./dialogs.js";
+import { type Dialogs, type ErrorSpec, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
 import { closeGameWindow } from "./games/close-procedure.js";
 import { recordFrames } from "./games/frames.js";
 import { gameSession, installBaselineHandlers } from "./games/game-session.js";
-import { GameRuntime } from "./games/lifecycle.js";
+import { GameRuntime, type GameState } from "./games/lifecycle.js";
 import { LockManager } from "./games/locks.js";
 import { createExternalOpener, createGameWindow } from "./games/window-factory.js";
+import { createHandlers } from "./ipc/handlers/index.js";
+import { registerIpc } from "./ipc/register.js";
 import {
   createLauncherWindow,
   focusLauncher,
@@ -36,10 +46,44 @@ export interface AppContext {
   games: GameRuntime | null;
 }
 
-/** Start-up cannot continue: report on stderr (the log may not exist yet) and exit without a dialog. */
+/** Shows a start-up failure; set once the dialogs exist (before that, only stderr reports it). */
+let showStartupError: ((spec: ErrorSpec) => Promise<void>) | null = null;
+
+const STARTUP_FAILED: ErrorSpec = {
+  title: "WGLauncher cannot start",
+  message:
+    "Something went wrong while WGLauncher was starting. It will now quit. The log has the details.",
+};
+const DATABASE_FAILED: ErrorSpec = {
+  title: "WGLauncher cannot open its library",
+  message:
+    "The library database (library.db) could not be opened: it may be damaged, or updating its format failed and " +
+    "was rolled back. Nothing was deleted. WGLauncher will now quit.",
+};
+
+/** A start-up failure with the text its error dialog shows. */
+class StartupError extends Error {
+  constructor(
+    readonly dialog: ErrorSpec,
+    options: { cause: unknown },
+  ) {
+    super(dialog.title, options);
+    this.name = "StartupError";
+  }
+}
+
+/** Start-up cannot continue: report on stderr, show an error dialog when the dialogs exist, and exit 1. */
 function fail(message: string, error: unknown): void {
   console.error(`WGLauncher: ${message}`, redact({ error }));
-  app.exit(1);
+  const show = showStartupError;
+  if (!show) {
+    app.exit(1);
+    return;
+  }
+  const spec = error instanceof StartupError ? error.dialog : STARTUP_FAILED;
+  void show(spec)
+    .catch(() => undefined)
+    .finally(() => app.exit(1));
 }
 
 function chooseUserData(): string | null {
@@ -70,11 +114,14 @@ function createGames(
   log: Logger,
   dialogs: Dialogs,
   openExternal: (url: string) => Promise<void>,
+  onState: (gameId: string, state: GameState) => void,
 ) {
   const repos = createRepos(db);
+  const locks = new LockManager({ log });
   const runtime = new GameRuntime({
     games: repos.games,
-    locks: new LockManager({ log }),
+    locks,
+    onState,
     log,
     dialogs,
     flavor: FLAVOR,
@@ -96,7 +143,7 @@ function createGames(
     closeWindow: (window, gameId) =>
       closeGameWindow(window as BrowserWindow, { gameId, log, dialogs }),
   });
-  return { runtime, repos };
+  return { runtime, repos, locks };
 }
 
 async function start(userData: string): Promise<AppContext> {
@@ -121,20 +168,30 @@ async function start(userData: string): Promise<AppContext> {
   const hooks =
     testHooks?.installTestHooks({ userData, paths, partitioning, warnings: earlyWarnings }) ?? null;
   const dialogs = hooks?.dialogs ?? nativeDialogs(() => launcher);
+  showStartupError = (spec) => dialogs.showError(spec);
 
   // The main process is the only writer of the library database (AGENTS.md data-safety invariant 9).
-  const db = openDatabase(paths.db, {
-    now: Date.now,
-    backupDir: paths.backups,
-    tmpDir: paths.tmp,
-  });
+  let db: Db;
+  try {
+    db = openDatabase(paths.db, { now: Date.now, backupDir: paths.backups, tmpDir: paths.tmp });
+  } catch (error) {
+    log.error("db.open-failed", { error });
+    await log.flush();
+    throw new StartupError(DATABASE_FAILED, { cause: error });
+  }
   if (db.readOnly) log.error("db.read-only", { reason: db.reason, userVersion: db.userVersion });
   else log.info("db.open");
   hooks?.watchDatabase(db);
   app.on("will-quit", () => db.close());
 
   const openExternal = hooks?.openExternal ?? ((url: string) => shell.openExternal(url));
-  const games = db.readOnly ? null : createGames(db, log, dialogs, openExternal);
+  // game:state goes to the launcher page only (architecture.md section 6).
+  const sendState = (gameId: string, state: GameState) => {
+    if (!launcher || launcher.isDestroyed()) return;
+    const event: GameStateEvent = { gameId, state, at: Date.now() };
+    launcher.webContents.send(GAME_STATE_CHANNEL, event);
+  };
+  const games = db.readOnly ? null : createGames(db, log, dialogs, openExternal, sendState);
   if (games) hooks?.watchGames(games);
   // App quit runs the close procedure of every open game window in parallel, at most 3 s (architecture.md 4).
   let quitting = false;
@@ -161,6 +218,23 @@ async function start(userData: string): Promise<AppContext> {
   });
   launcher = window;
   hooks?.watchLauncher(window);
+
+  // Before the first load, so the page never calls a channel that has no handler.
+  registerIpc({
+    ipc: ipcMain,
+    launcher: () => (window.isDestroyed() ? null : window.webContents),
+    handlers: createHandlers({
+      library: games ? { repos: games.repos, runtime: games.runtime, locks: games.locks } : null,
+      ...(db.readOnly ? { readOnlyReason: db.reason } : {}),
+      dialogs,
+      covers: createCovers({ coversDir: paths.covers, tmpDir: paths.tmp }),
+      flavor: FLAVOR,
+      log,
+      newId: () => uuidv7(),
+    }),
+    log,
+    origin: FLAVOR === "dev" ? DEV_LAUNCHER_ORIGIN : LAUNCHER_ORIGIN,
+  });
 
   app.on("second-instance", () => {
     log.info("app.second-instance");
