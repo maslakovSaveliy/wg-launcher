@@ -4,6 +4,8 @@ import type { WindowState } from "../db/repos/window-state.js";
 import {
   applySavedFlags,
   displayAreas,
+  FULLSCREEN_RESTORE_ATTEMPTS,
+  FULLSCREEN_RESTORE_RETRY_MS,
   initialBounds,
   trackWindowState,
   WINDOW_STATE_DEBOUNCE_MS,
@@ -221,9 +223,14 @@ describe("restoring a window", () => {
     expect(initialBounds(null, displays)).toEqual({ x: 320, y: 152, width: 1280, height: 800 });
   });
 
+  const flagDeps = () => ({
+    gameId: GAME,
+    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() },
+  });
+
   it("re-applies maximized and fullscreen when the window is first shown, not before and not again", () => {
     const window = new FakeWindow();
-    applySavedFlags(window, row({ maximized: true, fullscreen: true }));
+    applySavedFlags(window, row({ maximized: true, fullscreen: true }), flagDeps());
     expect(window.calls).toEqual([]);
     window.emit("show");
     expect(window.calls).toEqual(["maximize", "setFullScreen true"]);
@@ -233,12 +240,92 @@ describe("restoring a window", () => {
 
   it("applies nothing for a normal window or no saved state", () => {
     const plain = new FakeWindow();
-    applySavedFlags(plain, row({}));
+    applySavedFlags(plain, row({}), flagDeps());
     plain.emit("show");
     const none = new FakeWindow();
-    applySavedFlags(none, null);
+    applySavedFlags(none, null, flagDeps());
     none.emit("show");
     expect([...plain.calls, ...none.calls]).toEqual([]);
+  });
+
+  /**
+   * What Electron 45 on macOS showed for a fullscreen request AppKit refused (a request made while the Space of a
+   * fullscreen window closed a moment ago was still animating away): `isFullScreen()` turned true with a `resize`,
+   * then false again with another `resize`, and neither `enter-full-screen` nor `leave-full-screen` came.
+   */
+  const refuse = (window: FakeWindow) => {
+    window.fullscreen = true;
+    window.emit("resize");
+    window.fullscreen = false;
+    window.emit("resize");
+  };
+  const enter = (window: FakeWindow) => {
+    window.fullscreen = true;
+    window.emit("resize");
+    window.emit("enter-full-screen");
+  };
+
+  it("asks again when macOS refuses the restored fullscreen, until the window enters it", () => {
+    const window = new FakeWindow();
+    const deps = flagDeps();
+    applySavedFlags(window, row({ fullscreen: true }), deps);
+    window.emit("show");
+    expect(window.calls).toEqual(["setFullScreen true"]);
+    refuse(window);
+    expect(window.calls).toHaveLength(1);
+    vi.advanceTimersByTime(FULLSCREEN_RESTORE_RETRY_MS);
+    expect(window.calls).toEqual(["setFullScreen true", "setFullScreen true"]);
+    enter(window);
+    expect(deps.log.info).toHaveBeenCalledWith("game.fullscreen-restore-retried", {
+      gameId: GAME,
+      attempts: 2,
+    });
+    // Once entered, leaving fullscreen is the user's (or Esc held): nothing asks again.
+    window.fullscreen = false;
+    window.emit("resize");
+    window.emit("leave-full-screen");
+    vi.advanceTimersByTime(10 * FULLSCREEN_RESTORE_RETRY_MS);
+    expect(window.calls).toHaveLength(2);
+    expect(deps.log.warn).not.toHaveBeenCalled();
+  });
+
+  it("gives up after a bounded number of refused requests and logs it", () => {
+    const window = new FakeWindow();
+    const deps = flagDeps();
+    applySavedFlags(window, row({ fullscreen: true }), deps);
+    window.emit("show");
+    for (let attempt = 1; attempt <= FULLSCREEN_RESTORE_ATTEMPTS; attempt++) {
+      refuse(window);
+      vi.advanceTimersByTime(FULLSCREEN_RESTORE_RETRY_MS);
+    }
+    expect(window.calls).toHaveLength(FULLSCREEN_RESTORE_ATTEMPTS);
+    expect(deps.log.warn).toHaveBeenCalledWith("game.fullscreen-restore-failed", {
+      gameId: GAME,
+      attempts: FULLSCREEN_RESTORE_ATTEMPTS,
+    });
+    vi.advanceTimersByTime(10 * FULLSCREEN_RESTORE_RETRY_MS);
+    window.emit("resize");
+    expect(window.calls).toHaveLength(FULLSCREEN_RESTORE_ATTEMPTS);
+  });
+
+  it("does not ask again once the window is closed or has left fullscreen", () => {
+    const closed = new FakeWindow();
+    applySavedFlags(closed, row({ fullscreen: true }), flagDeps());
+    closed.emit("show");
+    refuse(closed);
+    closed.emit("closed");
+    vi.advanceTimersByTime(10 * FULLSCREEN_RESTORE_RETRY_MS);
+    expect(closed.calls).toEqual(["setFullScreen true"]);
+
+    // A refused request that the page's own fullscreen or a user toggle overtook: the window is in fullscreen when
+    // the retry is due, so it is not asked again.
+    const overtaken = new FakeWindow();
+    applySavedFlags(overtaken, row({ fullscreen: true }), flagDeps());
+    overtaken.emit("show");
+    refuse(overtaken);
+    overtaken.fullscreen = true;
+    vi.advanceTimersByTime(FULLSCREEN_RESTORE_RETRY_MS);
+    expect(overtaken.calls).toEqual(["setFullScreen true"]);
   });
 
   it("maps Electron's displays to work areas with the primary flagged", () => {

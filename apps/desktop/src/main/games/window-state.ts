@@ -99,8 +99,18 @@ export function initialBounds(saved: WindowState | null, displays: readonly Disp
   );
 }
 
+/** Delay before a refused fullscreen restore is asked again, and how many requests are made at most (Assumed). */
+export const FULLSCREEN_RESTORE_RETRY_MS = 250;
+export const FULLSCREEN_RESTORE_ATTEMPTS = 8;
+
 export interface FlagWindow {
   once(event: "show", listener: () => void): unknown;
+  on(
+    event: "resize" | "enter-full-screen" | "leave-full-screen" | "closed",
+    listener: () => void,
+  ): unknown;
+  removeListener(event: string, listener: () => void): unknown;
+  isFullScreen(): boolean;
   maximize(): void;
   setFullScreen(flag: boolean): void;
 }
@@ -108,13 +118,73 @@ export interface FlagWindow {
 /**
  * Re-applies the saved maximized and fullscreen flags when the window is first shown. A fullscreen restored here is
  * one the launcher set (the page did not request it), so it ends with the toggle or Esc held (`fullscreen.ts`).
+ *
+ * macOS can refuse a fullscreen request: one made while the Space of a fullscreen window closed a moment ago is still
+ * animating away (closing a game in fullscreen and launching it again) turned `isFullScreen()` true, then false again
+ * with a `resize`, and no `enter-full-screen` or `leave-full-screen` came (Electron 45, MEMORY.md). Such a refusal is
+ * asked again after `FULLSCREEN_RESTORE_RETRY_MS`, at most `FULLSCREEN_RESTORE_ATTEMPTS` requests in all; the restore
+ * ends at `enter-full-screen`, `leave-full-screen` or `closed`, and a window already fullscreen when a retry is due is
+ * left alone.
  */
-export function applySavedFlags(window: FlagWindow, saved: WindowState | null): void {
+export function applySavedFlags(
+  window: FlagWindow,
+  saved: WindowState | null,
+  deps: { gameId: string; log: Pick<Logger, "info" | "warn"> },
+): void {
   if (!saved || (!saved.maximized && !saved.fullscreen)) return;
   window.once("show", () => {
     if (saved.maximized) window.maximize();
-    if (saved.fullscreen) window.setFullScreen(true);
+    if (saved.fullscreen) restoreFullscreen(window, deps);
   });
+}
+
+function restoreFullscreen(
+  window: FlagWindow,
+  deps: { gameId: string; log: Pick<Logger, "info" | "warn"> },
+): void {
+  let attempts = 0;
+  let pending = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const request = () => {
+    timer = undefined;
+    if (window.isFullScreen()) {
+      stop();
+      return;
+    }
+    attempts += 1;
+    pending = true;
+    window.setFullScreen(true);
+  };
+  const onResize = () => {
+    if (!pending || window.isFullScreen()) return;
+    // Refused: the request was dropped without entering fullscreen.
+    pending = false;
+    if (attempts >= FULLSCREEN_RESTORE_ATTEMPTS) {
+      deps.log.warn("game.fullscreen-restore-failed", { gameId: deps.gameId, attempts });
+      stop();
+      return;
+    }
+    timer = setTimeout(request, FULLSCREEN_RESTORE_RETRY_MS);
+  };
+  const onEnter = () => {
+    if (attempts > 1)
+      deps.log.info("game.fullscreen-restore-retried", { gameId: deps.gameId, attempts });
+    stop();
+  };
+  const stop = () => {
+    pending = false;
+    clearTimeout(timer);
+    timer = undefined;
+    window.removeListener("resize", onResize);
+    window.removeListener("enter-full-screen", onEnter);
+    window.removeListener("leave-full-screen", stop);
+    window.removeListener("closed", stop);
+  };
+  window.on("resize", onResize);
+  window.on("enter-full-screen", onEnter);
+  window.on("leave-full-screen", stop);
+  window.on("closed", stop);
+  request();
 }
 
 /** The part of Electron's `screen` used to map displays. */

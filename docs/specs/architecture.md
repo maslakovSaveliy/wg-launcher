@@ -486,6 +486,15 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     not fullscreen as well (Assumed: rare, and the safe side). e2e: a game closed in its own fullscreen was saved
     with `fullscreen` false (Verified, 2026-10-28, `apps/desktop/e2e/window.spec.ts`). A game window is created at `restoreBounds` of its row, and
     the saved maximized and fullscreen flags are applied on its first `show` (it is created hidden).
+  - macOS can refuse that fullscreen request without an event: right after a fullscreen window closed, while its
+    Space still animated away, `isFullScreen()` turned true and then false again with a `resize`, and neither
+    `enter-full-screen` nor `leave-full-screen` came (Verified, 2026-10-28, Electron 45.0.0, macOS arm64: the
+    intermittent AC-18 failure in `apps/desktop/e2e/window.spec.ts`, and a probe app; MEMORY.md). So `applySavedFlags`
+    treats a `resize` that finds the window not fullscreen before `enter-full-screen` as a refusal and asks again after
+    250 ms, at most 8 requests in all, then logs `game.fullscreen-restore-failed` and leaves the window as it is; a
+    restore that needed more than one request logs `game.fullscreen-restore-retried`. The restore ends at
+    `enter-full-screen`, `leave-full-screen` or `closed`, and a window already fullscreen when a retry is due is left
+    alone. The delay and the limit are `Assumed`; every refused restore observed entered on the second request.
   - The UI control of F-6 is the menu item itself: `apps/desktop/src/main/app-menu.ts` sets an application menu of
     Electron's standard roles with a View menu holding `togglefullscreen` (clickable, and its accelerator is the
     keyboard toggle), the edit roles (copy and paste in the launcher's fields), no accelerator on Esc, and reload and

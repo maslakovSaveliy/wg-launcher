@@ -552,11 +552,19 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" now waits for the window's own fullscreen events
   (`enter-full-screen` and `leave-full-screen`, the end of macOS's transition, after `enter-html-full-screen` and
   `leave-html-full-screen`) instead of fixed sleeps; the observed order was always enter-html, enter, leave-html,
-  leave [V, 2026-10-28, runs on the dev machine]. The AC-18 test of the same file then still failed in several runs,
-  at the fullscreen restored on the next launch (`applySavedFlags` calls `setFullScreen(true)` on the first `show`)
-  or a launcher-set fullscreen that ended after a short Esc, also on the code before Task 13 (commit 0b853e2, 2 of 3
-  runs in a git worktree) and with the automatic storage check switched off (3 of 3): not caused by Task 13; the
-  cause is unknown [U], possibly the restore racing macOS's exit from the previous window's fullscreen space.
+  leave [V, 2026-10-28, runs on the dev machine].
+- macOS refuses a fullscreen request made while the Space of a fullscreen window closed a moment ago is still
+  animating away, and Electron 45 reports no event for it: `isFullScreen()` turns true with a `resize`, false again
+  about 10 to 20 ms later with another `resize`, and neither `enter-full-screen` nor `leave-full-screen` comes. That was
+  the intermittent AC-18 failure (`e2e/window.spec.ts`, a game closed in the launcher's fullscreen and launched again
+  at once): in the 9 failing instrumented runs the restored `setFullScreen(true)` came 317 to 366 ms after the previous
+  window's `closed`, in the 6 passing ones 568 to 589 ms after it; a probe that closed a fullscreen window and 300 ms later created one
+  with `fullscreen: true` failed 16 of 16, the same with `setFullScreen` on `show` 600 ms later passed 16 of 16.
+  `applySavedFlags` therefore asks again after 250 ms when a restore is refused (at most 8 requests, then
+  `game.fullscreen-restore-failed`); with it, every refused restore entered on the second request (8 of 8 instrumented
+  runs, 7 retried) and `window.spec.ts` passed 5 runs in a row. [V, 2026-10-28, Electron 45.0.0, macOS arm64,
+  instrumented copies of the AC-18 test and a throwaway probe app run through `_electron.launch`; the cause inside
+  AppKit is [A]]
 - (Earlier note) `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" was flaky on the dev machine: its last step (a window
   closed in the page's own fullscreen is saved as not fullscreen) failed in runs of the whole file and of the suite,
   on the code before Task 13 (commit 0b853e2, 3 of 3 runs of the file, a git worktree) as on Task 13's, and passed in

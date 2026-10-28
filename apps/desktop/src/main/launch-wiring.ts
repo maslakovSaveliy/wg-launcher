@@ -82,7 +82,7 @@ export function createGames(
         log,
         isPageFullscreen: fullscreen.isPageFullscreen,
       });
-      applySavedFlags(window, saved);
+      applySavedFlags(window, saved, { gameId, log });
       const recorder = playtime.attach(gameId, window);
       recorders.set(gameId, recorder);
       window.once("closed", () => {
