@@ -26,7 +26,12 @@ describe("the quiescence canary (save-transfer.md section 5, step 11)", () => {
     canary.onWorkerStatus({ runningStatus: "stopping" });
     canary.onWorkerStatus({ runningStatus: "stopped" });
     expect(canary.violation()).toBeNull();
-    expect(canary.scripts()).toEqual({ electron: 1, preload: 1, isolatedWorldSetUp: 1 });
+    expect(canary.scripts()).toEqual({
+      electron: 1,
+      preload: 1,
+      isolatedWorldSetUp: 1,
+      harness: 0,
+    });
   });
 
   it.each([
@@ -61,6 +66,70 @@ describe("the quiescence canary (save-transfer.md section 5, step 11)", () => {
     canary.onDebuggerMessage(method, params);
     expect(canary.violation()).not.toBeNull();
     expect(onViolation).toHaveBeenCalledTimes(1);
+  });
+
+  const created = (id: number, name: string, isDefault = false) => ({
+    context: {
+      id,
+      name,
+      origin: "http://localhost:4317",
+      auxData: { isDefault, type: isDefault ? "default" : "isolated" },
+    },
+  });
+  const inContext = (id: number, url: string, length = 100) => ({
+    ...parsed(url, isolated, length),
+    executionContextId: id,
+  });
+
+  it("checks the isolated world's name when its context is known", () => {
+    const canary = createCanary({ preloadPath: PRELOAD });
+    canary.onDebuggerMessage(
+      "Runtime.executionContextCreated",
+      created(5, "Electron Isolated Context"),
+    );
+    canary.onDebuggerMessage("Debugger.scriptParsed", inContext(5, PRELOAD));
+    expect(canary.violation()).toBeNull();
+    // In a cross-site iframe's own target Electron leaves the preload's world unnamed.
+    canary.onDebuggerMessage("Runtime.executionContextCreated", created(7, ""), "child");
+    canary.onDebuggerMessage("Debugger.scriptParsed", inContext(7, PRELOAD), "child");
+    expect(canary.violation()).toBeNull();
+    canary.onDebuggerMessage("Runtime.executionContextCreated", created(6, "another world"));
+    canary.onDebuggerMessage("Debugger.scriptParsed", inContext(6, PRELOAD));
+    expect(canary.violation()).toBe("script-outside-preload");
+  });
+
+  it("tells contexts of different sessions apart", () => {
+    const canary = createCanary({ preloadPath: PRELOAD });
+    canary.onDebuggerMessage(
+      "Runtime.executionContextCreated",
+      created(5, "another world"),
+      "child",
+    );
+    canary.onDebuggerMessage("Debugger.scriptParsed", inContext(5, PRELOAD));
+    expect(canary.violation()).toBeNull();
+  });
+
+  it("lets a test harness's own world through only when told to (test flavor), and counts it", () => {
+    const world = "__playwright_utility_world_page@0123";
+    const strict = createCanary({ preloadPath: PRELOAD });
+    strict.onDebuggerMessage("Runtime.executionContextCreated", created(6, world));
+    strict.onDebuggerMessage("Debugger.scriptParsed", inContext(6, "", 0));
+    expect(strict.violation()).toBe("script-outside-preload");
+    const harnessed = createCanary({
+      preloadPath: PRELOAD,
+      harnessWorld: (name) => name.startsWith("__playwright_utility_world_"),
+    });
+    harnessed.onDebuggerMessage("Runtime.executionContextCreated", created(6, world));
+    harnessed.onDebuggerMessage("Debugger.scriptParsed", inContext(6, "", 0));
+    expect(harnessed.violation()).toBeNull();
+    expect(harnessed.scripts()).toMatchObject({ harness: 1 });
+    // The main world stays off limits for the harness too.
+    harnessed.onDebuggerMessage("Runtime.executionContextCreated", created(1, "", true));
+    harnessed.onDebuggerMessage("Debugger.scriptParsed", {
+      ...parsed("", main, 0),
+      executionContextId: 1,
+    });
+    expect(harnessed.violation()).toBe("script-outside-preload");
   });
 
   it.each(["starting", "running"])("flags a service worker of the session %s", (status) => {

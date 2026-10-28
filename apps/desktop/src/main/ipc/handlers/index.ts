@@ -6,13 +6,15 @@ import type { HandlerContext } from "./context.js";
 import { gameHandlers } from "./game.js";
 import { libraryHandlers } from "./library.js";
 import { settingsHandlers } from "./settings.js";
+import { snapshotHandlers } from "./snapshots.js";
 
-export type { HandlerContext, Library } from "./context.js";
+export type { HandlerContext, Library, Snapshots } from "./context.js";
 
 export function createHandlers(context: HandlerContext): Handlers {
   return {
     ...libraryHandlers(context),
     ...gameHandlers(context),
     ...settingsHandlers(context),
+    ...snapshotHandlers(context),
   };
 }

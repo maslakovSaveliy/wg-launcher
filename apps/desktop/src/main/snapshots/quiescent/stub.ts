@@ -4,7 +4,9 @@
 // those iframes. The preload still runs in it (a page CSP does not restrict a preload: the spike's subframe preload
 // worked under `script-src 'none'`, RESULTS.md H14c).
 
-export const STUB_PATH = "/__wg_quiescent__";
+import { STUB_PATH } from "./channels.js";
+
+export { STUB_PATH };
 
 /** The CSP of every stub before its `frame-src`. */
 export const STUB_CSP_BASE =

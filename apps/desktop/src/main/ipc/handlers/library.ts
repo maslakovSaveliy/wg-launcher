@@ -2,6 +2,7 @@
 // orphan list. Cards carry recorded state only (badges through `badgesFor`). Every question to the user is a native
 // dialog whose text is written here; a file is chosen in a native dialog, so no path crosses IPC.
 
+import { GENERIC_EXPORTER } from "@wg-launcher/exporters/wire";
 import type { Card, IpcCode, Result } from "@wg-launcher/shared";
 import { MAX_TITLE_CHARS } from "@wg-launcher/shared";
 import { LAUNCHER_ORIGIN } from "../../app-protocol.js";
@@ -16,10 +17,10 @@ const fail = (code: IpcCode, message: string): Fail => ({ ok: false, code, messa
 const NOT_FOUND = fail("NOT_FOUND", "The game is not in the library.");
 
 /**
- * The exporter whose round trip would back "Export verified". No exporter exists in this build (Task 13 adds it), so
- * the badge cannot appear: `badgesFor` never matches an empty version.
+ * The exporter whose round trip backs "Export verified": the generic exporter of this build. The badge needs a
+ * snapshot with `verified_at` set by a passed verification (Task 14), so none appears before that.
  */
-const RUNNING_EXPORTER_VERSION = "";
+const RUNNING_EXPORTER_VERSION = GENERIC_EXPORTER.version;
 
 /** The host name, cut to the title limit (a host can be longer than 200 characters). */
 function defaultTitle(href: string): string {

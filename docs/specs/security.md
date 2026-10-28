@@ -272,7 +272,10 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
   final rename all use that private copy, so the user's file cannot change between checks. `Assumed`
 - Other limits: one task per game and at most two snapshot jobs at once; a watchdog per job
   ([save-transfer.md](save-transfer.md#5-quiescent-window)); 64 KiB per launcher IPC message; one pending external-link
-  confirmation per game window; rate-limited denial logs. `Assumed`
+  confirmation per game window; rate-limited denial logs. `Assumed` Phase 1 Task 13 enforces one job per game (the lock) and the
+  watchdog (60 s plus 1 s per MiB read); the cap of two jobs at once is not enforced yet (MEMORY.md "Open questions").
+  Messages between a quiescent frame and the snapshot worker carry at most 1 MiB of entry bytes each, and those
+  between main and the worker carry no data bytes at all ([save-transfer.md](save-transfer.md#3-exporter-interface-and-versioning)). `Assumed`
 
 ## 9. Logging and redaction
 

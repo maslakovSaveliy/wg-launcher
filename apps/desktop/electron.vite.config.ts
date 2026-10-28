@@ -1,5 +1,6 @@
-// electron-vite builds three bundles: main (ESM, `dependencies` externalized and packaged), the launcher preload
-// (one CommonJS bundle, everything inlined, because a sandboxed preload cannot load modules) and the React renderer.
+// electron-vite builds three bundles: main (ESM, `dependencies` externalized and packaged; its second entry is the
+// snapshot worker), the preloads (the launcher bridge and the quiescent preload, each one CommonJS file with
+// everything inlined, because a sandboxed preload cannot load modules) and the React renderer.
 //
 // Build flavors (src/main/flavor.ts): `electron-vite dev` → dev; `electron-vite build --mode test` → test;
 // `electron-vite build` → prod. `__WG_FLAVOR__` is replaced at compile time, so test-only code is dropped from prod.
@@ -17,7 +18,11 @@ const here = import.meta.dirname;
 const pkgJson = JSON.parse(readFileSync(resolve(here, "package.json"), "utf8"));
 
 /** Workspace packages shipped as TypeScript source; the main build bundles them instead of externalizing them. */
-const WORKSPACE_PACKAGES = ["@wg-launcher/shared", "@wg-launcher/snapshot"];
+const WORKSPACE_PACKAGES = [
+  "@wg-launcher/shared",
+  "@wg-launcher/snapshot",
+  "@wg-launcher/exporters",
+];
 
 /** The Vite dev server origin of the dev flavor (fixed, so the dev CSP can name it). */
 const DEV_SERVER = { host: "localhost", port: 5173 } as const;
@@ -55,6 +60,13 @@ export default defineConfig(({ command, mode }) => {
         // `dependencies` stay external (they are packaged in node_modules), except our workspace packages: they are
         // TypeScript source (`exports` points at `src/*.ts`) that Electron cannot load, so they are bundled.
         externalizeDeps: { exclude: WORKSPACE_PACKAGES },
+        // The snapshot worker is a second entry: a `utilityProcess` forks `out/main/snapshot-worker.js`.
+        rolldownOptions: {
+          input: {
+            index: resolve(here, "src/main/index.ts"),
+            "snapshot-worker": resolve(here, "src/main/worker/snapshot-worker.ts"),
+          },
+        },
       },
     },
     preload: {
@@ -64,7 +76,10 @@ export default defineConfig(({ command, mode }) => {
         isolatedEntries: true,
         externalizeDeps: false,
         rolldownOptions: {
-          input: { launcher: resolve(here, "src/preload/launcher.ts") },
+          input: {
+            launcher: resolve(here, "src/preload/launcher.ts"),
+            quiescent: resolve(here, "src/preload/quiescent.ts"),
+          },
           output: { format: "cjs", entryFileNames: "[name].cjs" },
         },
       },

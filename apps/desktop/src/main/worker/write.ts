@@ -31,7 +31,7 @@ export interface WriteRequest {
   partialPath: string;
   finalPath: string;
   limits: Partial<Limits>;
-  /** Test flavor only: the file write fails after its first chunk, as a full or failing disk would. */
+  /** Test flavor only: the file write fails after its first chunk reached the disk, as a failing disk would. */
   fault?: "fail-write";
 }
 
@@ -46,18 +46,17 @@ const errnoOf = (error: unknown) => {
   return typeof code === "string" && /^E[A-Z]+$/.test(code) ? code : "unknown error";
 };
 
-/** The file handle as a stream; with `fault`, the second chunk fails with EIO. */
+/** The file handle as a stream; with `fault`, the first chunk is written and then the write fails with EIO. */
 function fileSink(handle: FileHandle, fault: WriteRequest["fault"]): Writable {
-  let chunks = 0;
   return new Writable({
     write(chunk: Buffer, _encoding, callback) {
-      chunks += 1;
-      if (fault === "fail-write" && chunks > 1) {
-        callback(Object.assign(new Error("simulated write failure"), { code: "EIO" }));
-        return;
-      }
       handle.write(chunk).then(
-        () => callback(),
+        () =>
+          callback(
+            fault === "fail-write"
+              ? Object.assign(new Error("simulated write failure"), { code: "EIO" })
+              : undefined,
+          ),
         (error: Error) => callback(error),
       );
     },

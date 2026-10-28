@@ -1,10 +1,10 @@
 // The launcher IPC contract of architecture.md section 6: one zod schema per request and response. Main validates
 // every request with these schemas after its sender check; the renderer only uses the types. Every object is a
 // `z.strictObject` (unknown keys are rejected, plan M7), ids are lowercase UUIDv7, and no request carries a file
-// path or a URL to open. Channels of later tasks (snapshots, deleting data) are added with those tasks.
+// path or a URL to open. Channels of later tasks (import, verify, deleting data) are added with those tasks.
 
 import { z } from "zod";
-import type { IpcCode } from "./errors.js";
+import { ERROR_CODES, type ErrorCode } from "./errors.js";
 import { isUuidV7 } from "./ids.js";
 import type { Result } from "./result.js";
 
@@ -72,6 +72,33 @@ export const settingsSchema = z.strictObject({});
 const empty = z.strictObject({});
 const byId = z.strictObject({ gameId: gameIdSchema });
 
+/** A storage key (snapshot-format.md section 4) as the UI names a frame; main checks it against the game's frames. */
+export const storageKeyRefSchema = z.strictObject({
+  origin: z.string().max(2048),
+  topLevelSite: z.string().max(2048).nullable(),
+});
+
+const component = z.strictObject({ id: z.string(), version: z.string() });
+
+/** A stored snapshot as the UI sees it (architecture.md section 7): the row's fields, never its file path. */
+export const snapshotRowSchema = z.strictObject({
+  revisionId: gameIdSchema,
+  /** The library entry the row belongs to; may be another game's for its base revision (plan M8). */
+  gameId: gameIdSchema,
+  kind: z.enum(["export", "backup", "imported"]),
+  /** The manifest's display string; never used for ordering. */
+  createdAt: z.string(),
+  parentRevisionId: gameIdSchema.nullable(),
+  exporter: component,
+  adapter: component.nullable(),
+  contentHash: z.string(),
+  sizeBytes: z.int().min(0),
+  /** `unconfirmed` is shown as "flush unconfirmed", never as a save point (save-transfer.md section 7). */
+  flushState: z.enum(["confirmed", "unconfirmed"]),
+  verifiedAt: z.int().nullable(),
+  addedAt: z.int(),
+});
+
 export const IPC_CONTRACT = {
   "library:list": {
     request: empty,
@@ -117,6 +144,23 @@ export const IPC_CONTRACT = {
   "game:focus": { request: byId, response: empty },
   // The save dialog runs in main: no path crosses IPC (architecture.md section 8).
   "shortcut:create": { request: byId, response: z.strictObject({ created: z.boolean() }) },
+  // Answers once the game's lock is held; progress and the outcome follow as `task:progress` events.
+  "snapshot:export": {
+    request: z.strictObject({
+      gameId: gameIdSchema,
+      frameKeys: z.array(storageKeyRefSchema).max(32).optional(),
+    }),
+    response: z.strictObject({ taskId: gameIdSchema }),
+  },
+  "snapshot:list": {
+    request: byId,
+    response: z.strictObject({ snapshots: z.array(snapshotRowSchema) }),
+  },
+  // The save dialog runs in main.
+  "snapshot:saveAs": {
+    request: z.strictObject({ gameId: gameIdSchema, revisionId: gameIdSchema }),
+    response: z.strictObject({ saved: z.boolean() }),
+  },
   "settings:get": { request: empty, response: settingsSchema },
   "settings:set": { request: settingsSchema, response: settingsSchema },
 } as const satisfies Record<string, { request: z.ZodType; response: z.ZodType }>;
@@ -129,7 +173,8 @@ export type IpcRequest<C extends IpcChannel> = z.input<(typeof IPC_CONTRACT)[C][
 /** What a handler receives after validation (titles trimmed). */
 export type IpcParsedRequest<C extends IpcChannel> = z.output<(typeof IPC_CONTRACT)[C]["request"]>;
 export type IpcData<C extends IpcChannel> = z.output<(typeof IPC_CONTRACT)[C]["response"]>;
-export type IpcResult<C extends IpcChannel> = Result<IpcData<C>, IpcCode>;
+/** Any result code of the specs can come back: the IPC codes and the SNAP_*, EXP_* and IMP_* ones (section 6). */
+export type IpcResult<C extends IpcChannel> = Result<IpcData<C>, ErrorCode>;
 
 export type GameState = z.output<typeof gameStateSchema>;
 export type Card = z.output<typeof cardSchema>;
@@ -143,3 +188,24 @@ export const gameStateEventSchema = z.strictObject({
   at: z.int(),
 });
 export type GameStateEvent = z.output<typeof gameStateEventSchema>;
+
+export type SnapshotRow = z.output<typeof snapshotRowSchema>;
+export type StorageKeyRef = z.output<typeof storageKeyRefSchema>;
+
+/**
+ * Main to the launcher renderer only, on `TASK_PROGRESS_CHANNEL` (bridge.ts): one event per real step of a task and
+ * per measured byte count; `bytesTotal` only when it is known, so a percentage is never invented (AGENTS.md honesty
+ * rule 1). A failed task carries its code and a short message without paths or values.
+ */
+export const taskProgressEventSchema = z.strictObject({
+  taskId: gameIdSchema,
+  gameId: gameIdSchema,
+  kind: z.enum(["export"]),
+  step: z.enum(["lock", "read", "write"]),
+  status: z.enum(["running", "done", "failed"]),
+  bytesDone: z.int().min(0).optional(),
+  bytesTotal: z.int().min(0).optional(),
+  code: z.enum(ERROR_CODES).optional(),
+  message: z.string().max(512).optional(),
+});
+export type TaskProgressEvent = z.output<typeof taskProgressEventSchema>;

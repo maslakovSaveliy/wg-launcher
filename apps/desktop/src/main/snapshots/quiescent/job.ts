@@ -67,7 +67,10 @@ export interface JobPlan<T> {
     frames: readonly ConnectedFrame[],
     context: JobContext,
   ): Promise<Result<void, ErrorCode>>;
-  /** After a clean canary verdict and the window's teardown, still under the lease. */
+  /**
+   * After a clean canary verdict and the window's teardown, still under the lease. It must check `context.signal`
+   * before it commits anything: its result is the job's.
+   */
   commit(context: JobContext): Promise<Result<T, ErrorCode>>;
   /** After any failure, instead of `commit`. */
   discard(): Promise<void>;
@@ -126,6 +129,8 @@ export interface JobDeps {
   timing?: Partial<JobTiming>;
   /** Test flavor only: runs after each stub navigation (the canary controls inject a script or start a worker). */
   afterNavigation?(window: JobWindow, session: JobSession): Promise<void>;
+  /** Test flavor only: the e2e harness's own isolated world (canary.ts). */
+  harnessWorld?(name: string): boolean;
 }
 
 export interface JobTiming {
@@ -268,7 +273,8 @@ export async function runQuiescentJob<T>(
       log.error("snapshot.job.commit-threw", { gameId, error });
       committed = fail("INTERNAL", "Something went wrong.");
     }
-    const outcome = stopped ?? committed;
+    // The commit honors the context's signal itself; once it has committed, its outcome stands.
+    const outcome = committed;
     if (outcome.ok) log.info("snapshot.job.done", { gameId });
     else log.warn("snapshot.job.failed", { gameId, code: outcome.code, step: "commit" });
     return outcome;
@@ -310,6 +316,7 @@ async function quiescentWindow<T>(
   const ses = deps.session(gameId);
   const canary = createCanary({
     preloadPath: deps.preloadPath,
+    ...(deps.harnessWorld ? { harnessWorld: deps.harnessWorld } : {}),
     onViolation: (violation, detail) => {
       log.error("snapshot.quiescent.violation", { gameId, violation, ...detail });
       stop(fail(quiet, "Game code started while the save data was read, so the job was stopped."));
@@ -318,17 +325,17 @@ async function quiescentWindow<T>(
 
   const cleanups: Array<() => void> = [];
   let tearingDown = false;
-  /** Rejects as soon as the job is stopped, so no wait outlives it. */
-  const guard = <V>(promise: Promise<V>, ms: number, what: string): Promise<V> =>
+  /** Rejects as soon as the job is stopped, so no wait outlives it, and after `ms` unless that is null. */
+  const guard = <V>(promise: Promise<V>, ms: number | null, what: string): Promise<V> =>
     new Promise<V>((resolve, reject) => {
       if (context.signal.aborted) {
         reject(context.signal.reason);
         return;
       }
-      const timer = setTimeout(
-        () => reject(new JobStop(fail("EXP_TIMEOUT", `${what} timed out.`))),
-        ms,
-      );
+      const timer =
+        ms === null
+          ? undefined
+          : setTimeout(() => reject(new JobStop(fail("EXP_TIMEOUT", `${what} timed out.`))), ms);
       const onAbort = () => reject(context.signal.reason);
       context.signal.addEventListener("abort", onAbort, { once: true });
       promise.then(
@@ -458,13 +465,15 @@ async function quiescentWindow<T>(
         timing.loadMs,
         "A stub navigation",
       );
-      await deps.afterNavigation?.(window, ses);
       log.info("snapshot.quiescent.navigated", {
         gameId,
         step,
         origin: new URL(navigation.topUrl).origin,
         frames: navigation.frames.length,
       });
+      if (deps.afterNavigation) {
+        await guard(deps.afterNavigation(window, ses), null, "The test control");
+      }
 
       // Step 8.
       const keyed = await resolveKeys(navigation.frames, send, children);
@@ -494,7 +503,8 @@ async function quiescentWindow<T>(
       current = null;
 
       // Step 10.
-      const ran = await plan.runFrames(frames, context);
+      // A stopped job (a launch cancelling a storage check, the canary, the watchdog) stops waiting at once.
+      const ran = await guard(plan.runFrames(frames, context), null, "Reading");
       if (!ran.ok) return ran;
       if (context.signal.aborted) return fail(quiet, "The job was stopped.");
     }

@@ -5,8 +5,9 @@ import { IPC_CONTRACT, type IpcChannel, type IpcResult, uuidv7 } from "@wg-launc
 import { describe, expect, it, vi } from "vitest";
 import { createCovers } from "../../covers.js";
 import { createRepos } from "../../db/repos/index.js";
+import type { Snapshot } from "../../db/repos/snapshots.js";
 import { dbOptions, fakeClock, openDb, openTestDb, tempDir } from "../../db/testing.js";
-import type { ConfirmSpec, OpenFileSpec } from "../../dialogs.js";
+import type { ConfirmSpec, OpenFileSpec, SaveFileSpec } from "../../dialogs.js";
 import type { Flavor } from "../../flavor.js";
 import { LockManager } from "../../games/locks.js";
 import { createHandlers } from "./index.js";
@@ -20,6 +21,7 @@ function setUp(
     confirm?: boolean[];
     files?: Array<string | null>;
     shortcutsSupported?: boolean;
+    saveTo?: Array<string | null>;
   } = {},
 ) {
   const dir = tempDir();
@@ -34,9 +36,17 @@ function setUp(
   const locks = new LockManager({ log });
   const answers = [...(options.confirm ?? [])];
   const files = [...(options.files ?? [])];
+  const saves = [...(options.saveTo ?? [])];
   const dialogs = {
     confirm: vi.fn(async (_spec: ConfirmSpec) => answers.shift() ?? false),
     openFile: vi.fn(async (_spec: OpenFileSpec): Promise<string | null> => files.shift() ?? null),
+    saveFile: vi.fn(async (_spec: SaveFileSpec): Promise<string | null> => saves.shift() ?? null),
+  };
+  const snapshots = {
+    export: vi.fn(),
+    sendProgress: vi.fn(),
+    fileOf: (path: string) => join(dir, path),
+    copy: vi.fn(async (_from: string, _to: string) => undefined),
   };
   const shortcuts = {
     supported: options.shortcutsSupported ?? true,
@@ -55,6 +65,7 @@ function setUp(
     dialogs,
     covers: createCovers({ coversDir, tmpDir }),
     shortcuts,
+    snapshots,
     flavor: options.flavor ?? "test",
     log,
     newId: () => uuidv7(clock.now),
@@ -77,6 +88,7 @@ function setUp(
     clock,
     file,
     log,
+    snapshots,
   };
 }
 
@@ -181,9 +193,10 @@ describe("library:add (architecture.md section 12, AC-17)", () => {
     const handlers = createHandlers({
       library: null,
       readOnlyReason: db.readOnly ? db.reason : "",
-      dialogs: { confirm: vi.fn(), openFile: vi.fn() },
+      dialogs: { confirm: vi.fn(), openFile: vi.fn(), saveFile: vi.fn() },
       covers: createCovers({ coversDir: dir, tmpDir: dir }),
       shortcuts: { supported: true, create: vi.fn() },
+      snapshots: null,
       flavor: "test",
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() },
       newId: uuidv7,
@@ -199,6 +212,9 @@ describe("library:add (architecture.md section 12, AC-17)", () => {
       handlers["game:launch"]({ gameId }),
       handlers["game:focus"]({ gameId }),
       handlers["shortcut:create"]({ gameId }),
+      handlers["snapshot:export"]({ gameId }),
+      handlers["snapshot:list"]({ gameId }),
+      handlers["snapshot:saveAs"]({ gameId, revisionId: gameId }),
       handlers["settings:set"]({}),
     ]);
     for (const result of writes)
@@ -474,5 +490,170 @@ describe("settings", () => {
     expect(dataOf("settings:get", await handlers["settings:get"]({}))).toEqual({});
     expect(dataOf("settings:set", await handlers["settings:set"]({}))).toEqual({});
     expect(repos.settings.all()).toEqual({});
+  });
+});
+
+describe("snapshot:export, snapshot:list and snapshot:saveAs (architecture.md section 6)", () => {
+  const row = (gameId: string, revisionId: string, addedAt = 1): Snapshot => ({
+    revisionId,
+    gameId,
+    kind: "export",
+    manifestGameId: gameId,
+    parentRevisionId: null,
+    createdAt: "2026-10-28T00:00:00.000Z",
+    deviceId: gameId,
+    exporterId: "generic-web-storage",
+    exporterVersion: "1.0.0",
+    adapterId: null,
+    adapterVersion: null,
+    contentHash: "a".repeat(64),
+    sizeBytes: 10,
+    path: `snapshots/${gameId}/${revisionId}.wgsnap`,
+    flushState: "unconfirmed",
+    verifiedAt: null,
+    verifiedExporterVersion: null,
+    addedAt,
+  });
+
+  it("answers with the task id once the lock is held, then reports progress and the outcome", async () => {
+    const { handlers, repos, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const finished = Promise.withResolvers<void>();
+    snapshots.export.mockImplementation(async (_gameId, options) => {
+      options.onLocked();
+      options.onProgress({ step: "lock" });
+      options.onProgress({ step: "read", bytesDone: 512 });
+      await finished.promise;
+      options.onProgress({ step: "write" });
+      return { ok: true, data: row(game.gameId, uuidv7()) };
+    });
+    const frameKeys = [{ origin: "https://cdn.example", topLevelSite: "https://a.example" }];
+    const { taskId } = dataOf(
+      "snapshot:export",
+      await handlers["snapshot:export"]({ gameId: game.gameId, frameKeys }),
+    );
+    expect(snapshots.export.mock.calls[0]?.[1]).toMatchObject({ frameKeys });
+    finished.resolve();
+    await vi.waitFor(() => expect(snapshots.sendProgress).toHaveBeenCalledTimes(4));
+    const base = { taskId, gameId: game.gameId, kind: "export" };
+    expect(snapshots.sendProgress.mock.calls.map(([event]) => event)).toEqual([
+      { ...base, step: "lock", status: "running" },
+      { ...base, step: "read", status: "running", bytesDone: 512 },
+      { ...base, step: "write", status: "running" },
+      { ...base, step: "write", status: "done" },
+    ]);
+    expect(repos.games.get(game.gameId)).not.toBeNull();
+  });
+
+  it("returns a refusal before the lock (GAME_RUNNING, AC-11) as the call's result, with no task", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.export.mockResolvedValue({
+      ok: false,
+      code: "GAME_RUNNING",
+      message: "Close the game first.",
+    });
+    expect(await handlers["snapshot:export"]({ gameId: game.gameId })).toEqual({
+      ok: false,
+      code: "GAME_RUNNING",
+      message: "Close the game first.",
+    });
+    expect(snapshots.sendProgress).not.toHaveBeenCalled();
+  });
+
+  it("reports a failure after the lock with its code and message", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.export.mockImplementation(async (_gameId, options) => {
+      options.onLocked();
+      options.onProgress({ step: "write" });
+      return {
+        ok: false,
+        code: "SNAP_TOTAL_TOO_LARGE",
+        message: "the uncompressed archive is too large",
+      };
+    });
+    dataOf("snapshot:export", await handlers["snapshot:export"]({ gameId: game.gameId }));
+    await vi.waitFor(() =>
+      expect(snapshots.sendProgress).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          step: "write",
+          status: "failed",
+          code: "SNAP_TOTAL_TOO_LARGE",
+          message: "the uncompressed archive is too large",
+        }),
+      ),
+    );
+  });
+
+  it("is NOT_FOUND for a game not in the library", async () => {
+    const { handlers, snapshots } = setUp();
+    expect(await handlers["snapshot:export"]({ gameId: uuidv7() })).toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(snapshots.export).not.toHaveBeenCalled();
+  });
+
+  it("lists the game's rows and its base revision's, without file paths", async () => {
+    const { handlers, repos } = setUp();
+    const a = dataOf("library:add", await handlers["library:add"]({ url: "https://a.example/" }));
+    const b = dataOf("library:add", await handlers["library:add"]({ url: "https://b.example/" }));
+    const own = row(a.gameId, uuidv7());
+    const other = row(b.gameId, uuidv7());
+    repos.snapshots.addIfAbsent(own);
+    repos.snapshots.addIfAbsent(other);
+    repos.games.update(a.gameId, { baseRevisionId: other.revisionId });
+    const { snapshots } = dataOf(
+      "snapshot:list",
+      await handlers["snapshot:list"]({ gameId: a.gameId }),
+    );
+    expect(snapshots.map((s) => s.revisionId)).toEqual([own.revisionId, other.revisionId]);
+    expect(snapshots[0]).toMatchObject({
+      gameId: a.gameId,
+      flushState: "unconfirmed",
+      exporter: { id: "generic-web-storage", version: "1.0.0" },
+      adapter: null,
+    });
+    expect(JSON.stringify(snapshots)).not.toContain(".wgsnap");
+  });
+
+  it("saveAs copies the stored file to the place chosen in the save dialog, and nothing on Cancel", async () => {
+    const { handlers, repos, snapshots, dialogs } = setUp({
+      saveTo: [null, "/chosen/save.wgsnap"],
+    });
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const stored = row(game.gameId, uuidv7());
+    repos.snapshots.addIfAbsent(stored);
+    const request = { gameId: game.gameId, revisionId: stored.revisionId };
+    expect(dataOf("snapshot:saveAs", await handlers["snapshot:saveAs"](request))).toEqual({
+      saved: false,
+    });
+    expect(snapshots.copy).not.toHaveBeenCalled();
+    expect(dataOf("snapshot:saveAs", await handlers["snapshot:saveAs"](request))).toEqual({
+      saved: true,
+    });
+    expect(snapshots.copy).toHaveBeenCalledWith(
+      snapshots.fileOf(stored.path),
+      "/chosen/save.wgsnap",
+    );
+    expect(dialogs.saveFile.mock.calls[0]?.[0]).toMatchObject({
+      defaultPath: expect.stringMatching(/\.wgsnap$/),
+      filters: [{ name: "WGLauncher snapshot", extensions: ["wgsnap"] }],
+    });
+    expect(
+      await handlers["snapshot:saveAs"]({ gameId: game.gameId, revisionId: uuidv7() }),
+    ).toMatchObject({ code: "NOT_FOUND" });
   });
 });

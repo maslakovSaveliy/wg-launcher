@@ -111,8 +111,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `settings:get` while the database is read-only; a refused sender gets `INVALID_ARGUMENT` "Refused." and one
   `IPC_FORBIDDEN_SENDER` record per call; the same URL twice is confirmed in a native dialog by main (Cancel is
   `CANCELLED`); `games.cover_path` holds the cover's file name, not a path; settings have an empty allowlist; the
-  bridge is `window.wg` (version 2) without `onTaskProgress` until Task 13; "Export verified" cannot appear yet
-  because no exporter version exists in this build; a corrupt `library.db` shows a native error dialog, then exit 1
+  bridge is `window.wg` (version 2; version 4 with `onTaskProgress` since Task 13); "Export verified" needs a
+  verified snapshot of the running exporter (`generic-web-storage` 1.0.0 since Task 13), which only Task 14's verify
+  can produce; a corrupt `library.db` shows a native error dialog, then exit 1
   (the test flavor records it in `<userData>/test-error-dialogs.jsonl`).
 - 2026-10-28 Phase 1 Task 10 (window state, fullscreen, playtime, Assumed unless noted): Ruling R21 (a saved size
   without a position keeps its size, clamped and centered on the primary display); the F-6 "UI control" is the View
@@ -139,6 +140,14 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   reader refuses key paths IndexedDB refuses (snapshot-format.md section 7.2), unreferenced blobs and a missing view
   constructor are refused, a blocked delete is `IMP_WIPE_FAILED`, a vanished localStorage key is
   `EXP_QUIESCENCE_VIOLATION`, the flush timeout is strict; what the importer guarantees is in save-transfer.md section 4.
+- 2026-10-28 Phase 1 Task 13 (quiescent job runner, snapshot worker, export, Assumed unless noted): the settled
+  details are in save-transfer.md section 3 ("Chunks"), section 5 ("Implementation (Phase 1 Task 13)") and section 6
+  ("Export"), architecture.md sections 6 and 11. In short: entries travel in chunks of at most 1 MiB, cloned, never
+  transferred; one `utilityProcess` per job; the `.wgsnap` is written as `.partial`, read back through
+  `validateSnapshot` and only then renamed and recorded; `snapshot:export` answers `{taskId}` once the lock is held;
+  IPC requests may hold arrays of at most 32 dense items (`register.ts`); bridge version 4 with `onTaskProgress`;
+  `@wg-launcher/exporters/wire` is the DOM-free entry the main process and the worker use; the quiescent preload has
+  its own `tsconfig.preload.json` (DOM lib). The storage check runs on demand only (Open questions).
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -216,6 +225,15 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   when the transaction of the probe's `add` is aborted (open check 2 closed, no fallback); an explicit key 2^53 makes
   the next `add` fail with `ConstraintError`. [V, same, `browser/export-errors.spec.ts`] After a Cache Storage `put`,
   `navigator.storage.estimate().usageDetails.caches` is above zero when read from an isolated world.
+- [V, 2026-10-28, Electron 45.0.0, macOS arm64, `apps/desktop/e2e/export.spec.ts` and `quiescent.spec.ts`] In the
+  quiescent window: Chromium reverts the IndexedDB key generator on the aborted probe (two exports, same
+  `contentHash`; the game's next key 8 after 7 steps; open check 2 closed in Electron too); the preload's isolated
+  world reads Date, ArrayBuffer, Uint8Array and Blob with their exact prototypes (progress-lab exported without
+  `EXP_UNSUPPORTED_VALUE`); `navigator.storage.estimate().usageDetails` is available there (open check 8: Cache
+  Storage and the worker registration appear in `notExported`); the page-level service-worker bypass also covers a
+  cross-site iframe, and without any bypass the iframe's partitioned worker started and the canary stopped the job
+  (open check 3). A clean job parses, per document, `electron/js2c/event_emitter_dispatch`, the preload file and a
+  6-character `void 0` without a URL, all in the preload's world (save-transfer.md section 5, "Canary calibration").
 - [V, 2026-10-25, pnpm 12.15.0, scratch workspace and this repository] `pnpm licenses list --prod --recursive --json`
   lists neither our `AGPL-3.0-or-later` workspace packages nor hides their dependencies, so `pnpm licenses:check` passes;
   [A] a later pnpm may list them, so the gate exempts a member only while its license is exactly `AGPL-3.0-or-later`
@@ -502,6 +520,29 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   missing. [V, 2026-10-28, bundled Chromium 156.0.8078.4, mutation run of `browser/import-errors.spec.ts`] CDP
   `Storage.overrideQuotaForOrigin` makes an 8 MiB put fail with `QuotaExceededError`, and `deleteDatabase` fires
   `blocked` while another world of the page holds a connection that ignores `versionchange`. [V, same spec]
+- A message posted from a sandboxed preload's `MessagePort` with its `ArrayBuffer` in the transfer list reached a
+  `utilityProcess`'s `MessagePortMain` as `null`; the same message without the transfer list (cloned) arrived whole,
+  and a `Uint8Array` arrives as a `Uint8Array`. So the frame protocol never transfers. [V, 2026-10-28, a throwaway
+  probe app on Electron 45.0.0, macOS arm64]
+- zod 4.6.7 builds an object schema's fast parser with `new Function` and probes `new Function("")` when the schema is
+  created (`util.allowsEval`, read in the `$ZodObject` constructor), so in the quiescent preload the canary saw a
+  28-character script without a URL. `z.config({jitless: true})` before any schema is created removes both
+  (`apps/desktop/src/preload/zod-jitless.ts`, imported first). [V, 2026-10-28, zod `v4/core/schemas.js` and `util.js`
+  of 4.6.7; e2e RED before, GREEN after]
+- Playwright 1.64.1 `_electron` attaches to every `webContents` of the app, a hidden quiescent window included, and
+  evaluates an empty script in its own isolated world `__playwright_utility_world_page@<id>` there; the canary names
+  that world as the harness in the test flavor only. Electron 45 names the preload's world "Electron Isolated
+  Context" in a top-level frame but leaves it unnamed in a cross-site iframe's own CDP target. [V, 2026-10-28,
+  `Runtime.executionContextCreated` logged in the desktop e2e]
+- `webContents.debugger`'s `message` event gives the page's own session as `sessionId` `""`, but `sendCommand`
+  refuses `""` ("Empty session id is not allowed"): pass `undefined` for the page. [V, 2026-10-28, Electron 45.0.0]
+- Vitest 5 `toEqual` over two 2 MiB `Uint8Array`s took several seconds (a 5 s timeout); compare bytes in a loop. [V,
+  2026-10-28, `packages/exporters/src/frame-server.test.ts`]
+- `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" is flaky on the dev machine: its last step (a window
+  closed in the page's own fullscreen is saved as not fullscreen) failed in runs of the whole file and of the suite,
+  on the code before Task 13 (commit 0b853e2, 3 of 3 runs of the file, a git worktree) as on Task 13's, and passed in
+  every run of the test alone. The cause is taken to be timing (the macOS fullscreen animation, as the test's own
+  comment says) [A]. [V, 2026-10-28, dev machine under a load average above 30]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]
@@ -545,3 +586,10 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
   presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
+- When does the storage check run? architecture.md section 11 says after a game exits, after an import or a delete,
+  never while a game window is focused; Task 13 has `runStorageCheck` but starts it nowhere yet, because a user's
+  export right after closing the game would meet its `background` lease and get `GAME_BUSY` (a task never cancels a
+  background lease, architecture.md section 4 "Lock details"). Default proposal: a task waits for or cancels a running
+  check; owner decision.
+- The cap of two snapshot jobs at once (security.md section 8) is not enforced yet; each game has at most one through
+  its lock. Default: add it with the restore jobs (Task 14).

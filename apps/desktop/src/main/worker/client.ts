@@ -1,7 +1,7 @@
 // The main process's handle on one snapshot worker (a `utilityProcess` per job, killed when the job ends, so a job
 // never shares memory or state with another). Every event is validated with `WorkerEvent`; a worker that exits or
 // sends something unexpected fails every pending request with INTERNAL.
-import type { FrameInventory } from "@wg-launcher/exporters/wire";
+import type { FrameExportRequest, FrameInventory } from "@wg-launcher/exporters/wire";
 import type { ErrorCode, Result } from "@wg-launcher/shared";
 import type { Logger } from "../log/logger.js";
 import { type ManifestFields, type WorkerCommand, WorkerEvent } from "./protocol.js";
@@ -29,10 +29,7 @@ export interface SnapshotWorker {
   /** Starts the job (one per worker); its entries are held to `limits`. */
   begin(limits: Limits): void;
   inventory(port: unknown): Promise<Result<FrameInventory, ErrorCode>>;
-  exportFrame(
-    port: unknown,
-    op: Omit<Extract<WorkerCommand, { type: "frame" }>["op"] & { op: "export" }, "op">,
-  ): Promise<Result<ExportCounts, ErrorCode>>;
+  exportFrame(port: unknown, request: FrameExportRequest): Promise<Result<ExportCounts, ErrorCode>>;
   write(options: WriteOptions): Promise<Result<Written, ErrorCode>>;
   /** Entry bytes received so far, as the worker measured them. */
   onReceived(listener: (bytes: number) => void): void;
@@ -132,8 +129,9 @@ export async function startSnapshotWorker(deps: {
       const event = await request({ type: "frame", op: { op: "inventory" } }, [port]);
       return event.type === "inventory" ? { ok: true, data: event.inventory } : failed(event);
     },
-    async exportFrame(port, op) {
-      const event = await request({ type: "frame", op: { op: "export", ...op } }, [port]);
+    async exportFrame(port, { keyIndex, storageKey, scope }) {
+      const op = { op: "export", keyIndex, storageKey, scope };
+      const event = await request({ type: "frame", op }, [port]);
       return event.type === "exported" ? { ok: true, data: event.summary } : failed(event);
     },
     async write(options) {

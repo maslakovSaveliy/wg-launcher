@@ -241,9 +241,9 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
 - **Implementation (Phase 1 Task 9).** `Assumed` unless noted.
   - The schemas are `packages/shared/src/ipc.ts` (`IPC_CONTRACT`; every request and response object is a
     `z.strictObject`, which a unit test checks by walking the schemas); the bridge's shape is
-    `packages/shared/src/bridge.ts` (`window.wg`: one function per channel, `onGameState`, `bridgeVersion` 3 since Task 11 added `createShortcut`), which the
-    preload imports without zod. `task:progress` and `onTaskProgress` come with the first task that reports progress
-    (Task 13), so the bridge does not have them yet.
+    `packages/shared/src/bridge.ts` (`window.wg`: one function per channel, `onGameState`, `onTaskProgress`,
+    `bridgeVersion` 4 since Task 13 added the snapshot functions and `onTaskProgress`), which the preload imports
+    without zod.
   - Main: `apps/desktop/src/main/ipc/` (`sender-check.ts`, `register.ts`, `handlers/`). The sender check compares
     `event.sender` with the launcher's `webContents` by identity, the sender frame with its main frame by process and
     routing id (the `WebFrameMain` wrapper object is not compared), requires `parent === null`, and compares the
@@ -271,6 +271,20 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
     setting exists yet, so every key is refused and nothing is stored.
   - `game:state` is sent on every state change of the game runtime (`GameRuntime`'s `onState`), once per change,
     with `at` in Unix milliseconds; a refused launch reports `idle` again.
+- **Implementation (Phase 1 Task 13).** `Assumed` unless noted.
+  - `snapshot:export {gameId, frameKeys?}`, `snapshot:list {gameId}` and `snapshot:saveAs {gameId, revisionId}`
+    exist (`apps/desktop/src/main/ipc/handlers/snapshots.ts`). An export answers `{taskId}` once the game's lock is
+    held; a refusal before that (`GAME_RUNNING` while the window is open, AC-11, `GAME_BUSY`, `NEEDS_RECOVERY`,
+    `NOT_FOUND`, `INVALID_ARGUMENT` for a frame that is not the game's) is the call's own result. Verified (2026-10-28,
+    `apps/desktop/e2e/export.spec.ts` through `window.wg`).
+  - `task:progress` events carry `kind` `export`, `step` `lock`, `read` (with `bytesDone`, the entry bytes the
+    snapshot worker received, measured) or `write`, and `status`; a failure adds its `code` and a short `message`
+    (no path or value), so the UI can show the real error (Review Focus 5). `bytesTotal` is never sent for an export:
+    nothing knows the total before the read ends. Verified (2026-10-28, same spec: lock, read with bytes, write, done,
+    no `bytesTotal`).
+  - `snapshot:list` returns the rows of the game and of its base revision (plan M8) without their file paths;
+    `snapshot:saveAs` copies the stored file to the place chosen in the native save dialog (`saved: false` on Cancel).
+  - A result's `code` may be any code of the specs (`IpcResult` uses `ErrorCode`), as the error list above says.
 - Game windows have no IPC at all; quiescent windows use only the handshake of
   [save-transfer.md](save-transfer.md#5-quiescent-window). Bulk data never travels as JSON IPC (AGENTS.md data-safety
   invariant 9).
@@ -529,7 +543,10 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 | Compatibility not verified | Always in the MVP: no verification records exist, and the UI never calls a game, runtime or OS verified unless a record in `docs/compat/` backs it (AC-21) |
 
 - A storage check is the quiescent inventory (counts and usage numbers only) over the game's known keys; it runs after
-  a game window exits, after an import or a delete, and never while any game window is focused. `has_data` means at
+  a game window exits, after an import or a delete, and never while any game window is focused. Phase 1 Task 13 has
+  `runStorageCheck(gameId, signal)` (`apps/desktop/src/main/snapshots/storage-check.ts`, a `background` lease that a
+  launch cancels, plan M5); it is not yet started after a game exits, because a user's export right after the close
+  would then meet the check's lease (`GAME_BUSY`); when it runs, and how a user task meets it, is open (Assumed). `has_data` means at
   least one localStorage item or IndexedDB database, or `usageDetails.fileSystem` above zero (OPFS is data too, though
   not exported); this is how "storage usage above zero" is measured. Where `usageDetails` is unavailable, OPFS-only data
   is missed and the badge can be absent although data exists. `Assumed`

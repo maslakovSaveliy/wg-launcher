@@ -4,9 +4,7 @@
 // constant time), and only once per frame; only then does that frame get its end of a message port.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 
-/** The preload's hello (`ipcRenderer.send`), and main's answer that carries the port (`WebFrameMain.postMessage`). */
-export const HELLO_CHANNEL = "wg:quiescent:hello";
-export const PORT_CHANNEL = "wg:quiescent:port";
+export { HELLO_CHANNEL, PORT_CHANNEL } from "./channels.js";
 
 const NONCE = /^[0-9a-f]{32}$/;
 

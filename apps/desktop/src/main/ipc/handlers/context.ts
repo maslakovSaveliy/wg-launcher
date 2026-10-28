@@ -1,13 +1,15 @@
 // The context every IPC handler is built over, and the read-only refusal they share.
 
-import type { IpcCode, Result } from "@wg-launcher/shared";
+import type { ErrorCode, IpcCode, Result, TaskProgressEvent } from "@wg-launcher/shared";
 import type { Covers } from "../../covers.js";
 import type { Repos } from "../../db/repos/index.js";
+import type { Snapshot } from "../../db/repos/snapshots.js";
 import type { Dialogs } from "../../dialogs.js";
 import type { Flavor } from "../../flavor.js";
 import type { GameRuntime } from "../../games/lifecycle.js";
 import type { LockManager } from "../../games/locks.js";
 import type { Logger } from "../../log/logger.js";
+import type { ExportOptions } from "../../snapshots/export.js";
 
 /** What the handlers need when the database is writable. */
 export interface Library {
@@ -21,7 +23,7 @@ export interface HandlerContext {
   library: Library | null;
   /** Why the database is read-only; shown by the UI instead of the library. */
   readOnlyReason?: string;
-  dialogs: Pick<Dialogs, "confirm" | "openFile">;
+  dialogs: Pick<Dialogs, "confirm" | "openFile" | "saveFile">;
   covers: Covers;
   /** `createShortcut` with the platform's writers (`shortcuts.ts`). */
   shortcuts: {
@@ -29,9 +31,21 @@ export interface HandlerContext {
     supported: boolean;
     create(game: { id: string; title: string }): Promise<Result<{ created: boolean }, IpcCode>>;
   };
+  /** The snapshot jobs; null while the database is read-only. */
+  snapshots: Snapshots | null;
   flavor: Flavor;
   log: Logger;
   newId: () => string;
+}
+
+/** What the snapshot channels need (snapshots/export.ts and the file system). */
+export interface Snapshots {
+  export(gameId: string, options: ExportOptions): Promise<Result<Snapshot, ErrorCode>>;
+  /** Sends a `task:progress` event to the launcher page. */
+  sendProgress(event: TaskProgressEvent): void;
+  /** The absolute path of a stored snapshot (rows hold it relative to userData). */
+  fileOf(path: string): string;
+  copy(from: string, to: string): Promise<void>;
 }
 
 /** Returned by every channel that would read or write the library while the database is read-only. */

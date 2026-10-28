@@ -4,17 +4,34 @@
 
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ErrorCode, Result } from "@wg-launcher/shared";
 import { uuidv7 } from "@wg-launcher/shared";
 import { BrowserWindow, session } from "electron";
 import type { Db } from "./db/database.js";
 import { readUserVersion } from "./db/migrate.js";
 import type { Repos } from "./db/repos/index.js";
 import type { PlaySession } from "./db/repos/play-sessions.js";
+import type { Snapshot } from "./db/repos/snapshots.js";
+import type { StorageCheck } from "./db/repos/storage-checks.js";
 import type { WindowState } from "./db/repos/window-state.js";
 import type { ConfirmSpec, Dialogs, ErrorSpec, OpenFileSpec, SaveFileSpec } from "./dialogs.js";
 import type { GameRuntime, GameState, LaunchResult } from "./games/lifecycle.js";
 import type { AppPaths } from "./paths.js";
 import { checkEntryUrl } from "./policy/url-rules.js";
+import { type ExportTestControls, exportSnapshot, type SnapshotDeps } from "./snapshots/export.js";
+import type { StorageKeyRef } from "./snapshots/keys.js";
+import type { JobDeps } from "./snapshots/quiescent/job.js";
+import { runStorageCheck } from "./snapshots/storage-check.js";
+
+/**
+ * What the next quiescent jobs do right after each stub navigation (the canary controls of save-transfer.md section
+ * 10): nothing, run a script in the window's main world, start a service worker of the session, or wait.
+ */
+export type QuiescentControl =
+  | { kind: "none" }
+  | { kind: "main-world-script" }
+  | { kind: "start-worker"; scope: string }
+  | { kind: "hold"; ms: number };
 
 type DialogKind = keyof Dialogs;
 type DialogAnswer =
@@ -78,6 +95,20 @@ export interface TestHooks {
   seedPlaySession(gameId: string, activeMs: number, finished: boolean): void;
   /** Records a storage check (the "Local data" badge's state). */
   saveStorageCheck(gameId: string, hasData: boolean): void;
+  /** Exports a snapshot as `snapshot:export` does, with the test controls (limits, the worker fault, the bypass). */
+  exportSnapshot(
+    gameId: string,
+    options?: { frameKeys?: StorageKeyRef[]; test?: ExportTestControls },
+  ): Promise<Result<Snapshot, ErrorCode>>;
+  runStorageCheck(gameId: string): Promise<Result<StorageCheck, ErrorCode>>;
+  /** Sets what quiescent jobs do after each navigation, until set again. */
+  setQuiescentControl(control: QuiescentControl): void;
+  /** The game's own snapshot rows. */
+  snapshotRows(gameId: string): Snapshot[];
+  /** Starts the session's service worker for `scope` (the service-worker variant of an export). */
+  startServiceWorker(gameId: string, scope: string): Promise<boolean>;
+  /** How many service workers of the game's session run now. */
+  runningServiceWorkers(gameId: string): number;
 }
 
 /**
@@ -134,11 +165,20 @@ export function installTestHooks(init: {
   watchGames(games: { runtime: GameRuntime; repos: Repos }): void;
   watchLauncher(window: BrowserWindow): void;
   watchDatabase(db: Db): void;
+  watchSnapshots(deps: SnapshotDeps): void;
+  afterNavigation: NonNullable<JobDeps["afterNavigation"]>;
+  harnessWorld: NonNullable<JobDeps["harnessWorld"]>;
   onSecondInstance(): void;
 } {
   const queue: DialogAnswer[] = [];
   let testWindows = 0;
   let games: { runtime: GameRuntime; repos: Repos } | null = null;
+  let snapshots: SnapshotDeps | null = null;
+  let control: QuiescentControl = { kind: "none" };
+  const needSnapshots = () => {
+    if (!snapshots) throw new Error("The snapshot jobs are not up (read-only database?).");
+    return snapshots;
+  };
   const needGames = () => {
     if (!games) throw new Error("The game runtime is not up (read-only database?).");
     return games;
@@ -227,6 +267,33 @@ export function installTestHooks(init: {
       else sessions.checkpoint(id, activeMs);
     },
     saveStorageCheck: (gameId, hasData) => needGames().repos.storageChecks.save(gameId, hasData),
+    exportSnapshot: (gameId, options = {}) =>
+      exportSnapshot(
+        gameId,
+        {
+          ...(options.frameKeys ? { frameKeys: options.frameKeys } : {}),
+          ...(options.test ? { test: options.test } : {}),
+        },
+        needSnapshots(),
+      ),
+    runStorageCheck: (gameId) => runStorageCheck(gameId, undefined, needSnapshots()),
+    setQuiescentControl(next) {
+      control = next;
+    },
+    snapshotRows: (gameId) => needGames().repos.snapshots.listForGame(gameId, null),
+    async startServiceWorker(gameId, scope) {
+      try {
+        await session
+          .fromPartition(`persist:game:${gameId}`)
+          .serviceWorkers.startWorkerForScope(scope);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    runningServiceWorkers: (gameId) =>
+      Object.keys(session.fromPartition(`persist:game:${gameId}`).serviceWorkers.getAllRunning())
+        .length,
     closeGame(gameId) {
       const window = needGames().runtime.windowOf(gameId);
       if (!window || window.isDestroyed()) return false;
@@ -255,6 +322,26 @@ export function installTestHooks(init: {
     },
     watchDatabase(db) {
       hooks.database = { readOnly: db.readOnly, userVersion: readUserVersion(db.raw) };
+    },
+    watchSnapshots(deps) {
+      snapshots = deps;
+    },
+    // Playwright's `_electron` attaches to every page, the quiescent window included, and evaluates an empty script
+    // in its own utility world there; that world is the harness, not the game (canary.ts).
+    harnessWorld: (name) => name.startsWith("__playwright_utility_world_"),
+    async afterNavigation(window, ses) {
+      const current = control;
+      if (current.kind === "main-world-script") {
+        await (window as unknown as BrowserWindow).webContents.executeJavaScript(
+          "void 'injected';",
+        );
+      } else if (current.kind === "start-worker") {
+        await (ses as unknown as Electron.Session).serviceWorkers
+          .startWorkerForScope(current.scope)
+          .catch(() => undefined);
+      } else if (current.kind === "hold") {
+        await new Promise((resolve) => setTimeout(resolve, current.ms));
+      }
     },
     onSecondInstance() {
       hooks.secondInstances += 1;

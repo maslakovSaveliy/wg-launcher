@@ -138,9 +138,11 @@ Export, inside one stub frame:
    so: two exports in a row gave the same `keyGenerator` (8 after 7 progress-lab steps) and the same `contentHash`, and
    the game's next step still got key 8; a store whose generator is above its highest key plus 1 exported that
    generator, not the highest key plus 1; an explicit key 2^53 made the probe fail with `ConstraintError`. Verified
-   (2026-10-28, `packages/exporters/browser/key-generator.spec.ts`, bundled Chromium 156.0.8078.4; Electron 45 Assumed
-   until Task 13 runs it there). So the fallback (highest numeric key plus 1) is not needed. This aborted write is the
-   only write an export makes. `Assumed`
+   (2026-10-28, `packages/exporters/browser/key-generator.spec.ts`, bundled Chromium 156.0.8078.4). Electron 45 does the
+   same through the quiescent window: two exports of progress-lab after 7 steps had the same `contentHash` (which
+   covers each store's `keyGenerator`) and the game's next step got key 8. Verified (2026-10-28,
+   `apps/desktop/e2e/export.spec.ts`, Electron 45.0.0, macOS arm64). So the fallback (highest numeric key plus 1) is
+   not needed. This aborted write is the only write an export makes. `Assumed`
 4. Encode with the codec ([snapshot-format.md](snapshot-format.md#6-record-encoding)); hash Blob and File bytes with
    `crypto.subtle.digest("SHA-256")` and send each distinct blob once. Unsupported values fail the whole export with
    `EXP_UNSUPPORTED_VALUE`, `EXP_SHARED_REFERENCE` or `EXP_TOO_DEEP` and the record path (AC-10).
@@ -219,8 +221,12 @@ the spike code. All steps run in the main process unless stated.
    `Target.setAutoAttach {autoAttach: true, waitForDebuggerOnStart: true, flatten: true}` and, for each attached child
    target, the same two commands before `Runtime.runIfWaitingForDebugger`; `Debugger` and `Runtime` enabled everywhere
    for the canary. Only then navigate. Without the bypass the registered worker controlled the stub; with it, it did
-   not. Verified (2026-10-24, RESULTS.md H14b). That the bypass also covers iframes is Assumed (no no-bypass iframe
-   control ran), so Phase 1 MUST add that control.
+   not. Verified (2026-10-24, RESULTS.md H14b). The page-level bypass also covers a cross-site iframe: with no bypass
+   at all, progress-lab's own partitioned worker in the `127.0.0.1` iframe under `localhost` started when the iframe
+   stub loaded and the canary stopped the job (`service-worker-started`); with the page-level bypass alone (none sent
+   to the iframe's own target), and with the full bypass, the job was clean. Verified (2026-10-28, the no-bypass iframe
+   control in `apps/desktop/e2e/quiescent.spec.ts`, Electron 45.0.0, macOS arm64; open check 3). The per-child bypass
+   stays: it costs one command per target.
 7. **Stub navigations.** Keys are grouped by top-level stub origin `T`, taken from the job's `top` keys first. One
    navigation to `<T>/__wg_quiescent__?job=<nonce>` resolves `T`'s own key in the top frame (only if it is part of the
    job) and, as iframes pointing to the same path, every partitioned key whose `topLevelSite` is the site of `T` and
@@ -270,6 +276,64 @@ the spike code. All steps run in the main process unless stated.
   job's iframe stub origins>`; its body holds only those iframes. The spike's subframe preload worked under a stub with
   `script-src 'none'`. Verified (2026-10-24, RESULTS.md H14c). That no page CSP can restrict a preload is Assumed.
 
+**Implementation (Phase 1 Task 13).** `apps/desktop/src/main/snapshots/` (`quiescent/{job,interceptor,stub,layout,
+handshake,canary,channels}.ts`, `export.ts`, `storage-check.ts`, `keys.ts`, `jobs.ts`), the snapshot worker
+`apps/desktop/src/main/worker/` and the preload `apps/desktop/src/preload/quiescent.ts`. `Assumed` unless tagged
+otherwise.
+
+- **Steps.** `runQuiescentJob(gameId, plan, deps, signal)` runs steps 1 to 12 in order; a plan names its lease kind
+  (`task` for what the user asked, `background` for a storage check), its keys, `runFrames` (once per navigation, with
+  that navigation's connected frames) and `commit` or `discard`. `commit` runs after the canary's clean verdict and
+  the window's teardown, still under the lease, which is released last. A launch that cancels a `background` lease
+  (plan M5), the caller's signal, the canary and the watchdog all stop every wait at once; the cancelled job returns
+  `CANCELLED` and lets go of the lease. Verified (2026-10-28, `apps/desktop/e2e/quiescent.spec.ts`: a launch during a
+  held storage check opened the game in under 2.5 s and the check returned `CANCELLED`). Each step throwing once
+  leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
+  behind and releases the lease (QW-3, `job.test.ts`). QW-2 counts the `webContents` on the game's session before
+  the first stub navigation.
+- **Stub URLs.** `<origin>/__wg_quiescent__?job=<nonce>&key=<k>` for a frame that resolves manifest key `k`, without
+  `key` for a top page that only hosts iframes (the preload stays inert there, QW-6). The interceptor serves exactly
+  the job's stub URLs for `GET` on both `http` and `https`, whatever the build (fail closed), and the `webRequest`
+  layer cancels everything else; the job logs the refused origins. Navigations follow step 7 (`layout.ts`).
+- **Handshake.** The preload sends `{job}` on `wg:quiescent:hello`; main checks the sender, the frame URL and the
+  nonce (`timingSafeEqual`), once per frame, then sends one end of a `MessageChannelMain` on `wg:quiescent:port` with
+  `WebFrameMain.postMessage`; the other end goes to the snapshot worker with the frame command. The worker sends the
+  typed commands with a fresh nonce each (`randomBytes(16)`), validates every reply with `FrameReply` and closes the
+  port on anything unexpected; a frame silent for 30 s is `EXP_TIMEOUT`.
+- **Canary calibration.** In a clean job Electron 45 parses, per document of the window (`about:blank`, each stub and
+  each cross-site iframe), exactly three scripts in the preload's isolated world: `electron/js2c/event_emitter_dispatch`,
+  the preload file (its path is the script URL) and a 6-character `void 0` without a URL. Electron names that world
+  "Electron Isolated Context" in a top-level frame and leaves it unnamed in a cross-site iframe's own target. Every
+  other script, a script in the default world, any worker target or a session worker `starting` or `running` stops
+  the job. Verified (2026-10-28, `apps/desktop/e2e/quiescent.spec.ts` "calibration": 2 of each for a plain job, 3 for
+  the iframe job, nothing refused; an injected main-world script and a worker started during the job were each
+  flagged, S-13). Two findings shaped it: zod 4.6.7 builds object parsers with `new Function` and probes
+  `new Function("")` when a schema is created, which the canary saw as a 28-character script without a URL, so the
+  preload sets `z.config({jitless: true})` before any schema exists (`zod-jitless.ts`); and Playwright's `_electron`
+  attaches to every page, the quiescent window included, and evaluates an empty script in its own
+  `__playwright_utility_world_*` world, which the test flavor alone names as the harness's world (counted apart,
+  never in the default world). Verified (2026-10-28, e2e runs before and after each change).
+- **Isolated world.** The preload's world reads IndexedDB values with that world's own prototypes: progress-lab's
+  Date, ArrayBuffer, Uint8Array and Blob values were exported without `EXP_UNSUPPORTED_VALUE` (the exporter's
+  classifiers accept exact prototypes only), with the Blob as one blob entry. `navigator.storage.estimate()` has
+  `usageDetails` there: a session with Cache Storage and a registered worker gave `notExported` `cacheStorage` and
+  `serviceWorkers` (open check 8). Verified (2026-10-28, `apps/desktop/e2e/export.spec.ts`).
+- **Worker.** One `utilityProcess` per job (`out/main/snapshot-worker.js`, a second main entry), killed when the job
+  ends. Main and the worker exchange only `WorkerCommand`/`WorkerEvent` (zod, bounded strings and lists, no data
+  bytes). The worker assembles each frame's chunks under the job's limits (`maxEntryBytes` on the declared size before
+  a byte is kept, `maxEntries`, and `maxTotalBytes` over the data as entries complete), refuses a file outside the
+  frame's own `data/<k>/` or a blob not named by its SHA-256, and reports measured bytes (`received`). `write` runs
+  the writer into `tmp/<revisionId>.wgsnap.partial` (`wx`, flushed with `fsync`), reads that file back through
+  `validateSnapshot` with its `stat` size and the same limits, and renames it to `snapshots/<gameId>/<revisionId>.wgsnap`
+  only when it validates and no file of that revision exists; any failure removes the partial file. So save data
+  above a limit fails with its `SNAP_*` code (`SNAP_TOTAL_TOO_LARGE` from the collector or writer,
+  `SNAP_RATIO_EXCEEDED` and `SNAP_FILE_TOO_LARGE` from the read-back) and a disk error is `INTERNAL` with the error
+  code in the message ("The snapshot file could not be written (EIO).", the test-flavor fault `fail-write`); in both
+  cases nothing is left in `tmp/` or `snapshots/` and no row is written (Review Focus 4 and 5). Verified (2026-10-28,
+  `apps/desktop/src/main/worker/write.test.ts` and `apps/desktop/e2e/export.spec.ts`). The worker keeps a job's
+  entries in memory until `write` (the writer takes whole files), so its memory follows the save data, up to
+  `maxTotalBytes`.
+
 ## 6. Restore protocol
 
 Each step is written to `restore_journal` ([architecture.md](architecture.md#7-sqlite-schema-v1)) before it starts.
@@ -309,6 +373,15 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
 the worker writes `tmp/<revisionId>.wgsnap.partial`, reads it back through the full validator, fsyncs and renames it to
 `snapshots/<gameId>/<revisionId>.wgsnap`; the database row records the manifest fields and `base_revision_id` moves to
 the new revision (below). Export never changes the game's storage apart from the aborted probe of section 4. `Assumed`
+In Phase 1 Task 13 (`apps/desktop/src/main/snapshots/export.ts`, `Assumed`): the game keys are every top-level origin
+(the entry URL's and those observed in `storage_targets`), the frame keys an adapter declares that were observed, and
+the frame keys the user chose in `snapshot:export {frameKeys}`; without a choice, the remembered one (`in_export`).
+A chosen key that is not a frame of the game is `INVALID_ARGUMENT`. A frame of the same site as its top-level page is
+first-party storage, a cross-site frame is partitioned under its top-level site (`keys.ts`). The adapter is the one
+whose `match.origins` holds the entry URL's origin. The row's `path` is relative to userData, and the export commit
+sets `base_revision_id` to the new revision, so a second export's parent is the first. Verified (2026-10-28,
+`apps/desktop/e2e/export.spec.ts`: plain, service-worker running at the start, cross-site iframe with and without the
+frame chosen, the choice remembered, an unknown frame refused, AC-11 while the window is open).
 
 **Revision parents.** `games.base_revision_id` names the revision the partition's data descends from, and every new
 snapshot's `parentRevisionId` is its current value. It moves in exactly three places: an export commit sets it to the
@@ -340,7 +413,9 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
   the window (`null` if it did not). "Before its timeout" means strictly less than `timeoutMs` after the start; input
   at the hook's start or at the close counts; the close must come at or after the hook's finish; a time that is not a
   finite number gives `unconfirmed`.
-- The generic exporter has no hook, so every MVP snapshot without such an adapter is `unconfirmed`. `Assumed`
+- The generic exporter has no hook, so every MVP snapshot without such an adapter is `unconfirmed`. `Assumed`. Phase 1
+  Task 13 takes the manifest's and the row's `flushState` from `decideFlushState` with no hook run, so every export is
+  `unconfirmed`, and `snapshot:list` carries it to the UI. Verified (2026-10-28, `apps/desktop/e2e/export.spec.ts`).
 - The decision is one pure function, `decideFlushState(observation)`. Its unit test (AC-12) uses a fake hook: none,
   success, error, timeout, a value other than `true`, input after the hook started, and a late close; only the success
   case without input and with a prompt close gives `confirmed`. A UI test checks that every place showing an

@@ -1,11 +1,11 @@
 // One library card: recorded state only (badges, last launch and playtime when recorded, the window state from the
 // game runtime). Title and URL are text; the URL is never a link and the cover is the app:// copy, never the game's.
 
-import type { Card, IpcCode } from "@wg-launcher/shared";
+import type { Card, ErrorCode } from "@wg-launcher/shared";
 import { type FormEvent, useState } from "react";
 import { badgeLabel, bridge, formatPlaytime, formatTime, stateLabel } from "../api.js";
 
-type Outcome = { ok: true } | { ok: false; code: IpcCode; message: string };
+type Outcome = { ok: true } | { ok: false; code: ErrorCode; message: string };
 
 export function GameCard({
   card,

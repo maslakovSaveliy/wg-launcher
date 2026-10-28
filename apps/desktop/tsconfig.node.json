@@ -9,5 +9,6 @@
     "src/preload/**/*.ts",
     "scripts/**/*.mjs",
     "electron.vite.config.ts"
-  ]
+  ],
+  "exclude": ["src/preload/quiescent.ts", "src/preload/zod-jitless.ts"]
 }

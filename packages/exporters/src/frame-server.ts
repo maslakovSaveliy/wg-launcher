@@ -8,10 +8,11 @@ import { FrameCommand, MAX_ENTRY_CHUNK_BYTES } from "./protocol.js";
 import type { FrameScope } from "./scope.js";
 import type { EntrySink, FrameError, FrameExporter, FrameResult, FrameTarget } from "./types.js";
 
-/** The parts of a DOM `MessagePort` the server uses. */
+/** The parts of a DOM `MessagePort` the server uses (method syntax, so a DOM port fits). */
 export interface FramePort {
   postMessage(message: unknown): void;
-  onmessage: ((event: { data: unknown }) => void) | null;
+  addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
+  start(): void;
   close(): void;
 }
 
@@ -66,7 +67,6 @@ export function serveFrame(port: FramePort, exporter: FrameExporter): void {
     closed = true;
     busy = false;
     importing = null;
-    port.onmessage = null;
     port.close();
   };
 
@@ -117,7 +117,8 @@ export function serveFrame(port: FramePort, exporter: FrameExporter): void {
     return true;
   };
 
-  port.onmessage = (event) => {
+  port.addEventListener("message", (event) => {
+    if (closed) return;
     const parsed = FrameCommand.safeParse(event.data);
     if (!parsed.success || busy) {
       abort();
@@ -194,5 +195,6 @@ export function serveFrame(port: FramePort, exporter: FrameExporter): void {
         // `entry` or `end` outside an import.
         abort();
     }
-  };
+  });
+  port.start();
 }

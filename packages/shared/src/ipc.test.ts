@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { BRIDGE_CHANNELS } from "./bridge.js";
-import { IPC_CHANNELS, IPC_CONTRACT, type IpcChannel, MAX_IPC_PAYLOAD_BYTES } from "./ipc.js";
+import { BRIDGE_CHANNELS, BRIDGE_VERSION } from "./bridge.js";
+import {
+  IPC_CHANNELS,
+  IPC_CONTRACT,
+  type IpcChannel,
+  MAX_IPC_PAYLOAD_BYTES,
+  taskProgressEventSchema,
+} from "./ipc.js";
 
 const ID = "0190a5b2-7c3d-7e4f-8a1b-2c3d4e5f6a7b";
 
@@ -15,6 +21,12 @@ const VALID: { [C in IpcChannel]: Record<string, unknown> } = {
   "game:launch": { gameId: ID },
   "game:focus": { gameId: ID },
   "shortcut:create": { gameId: ID },
+  "snapshot:export": {
+    gameId: ID,
+    frameKeys: [{ origin: "http://127.0.0.1:4317", topLevelSite: "http://localhost" }],
+  },
+  "snapshot:list": { gameId: ID },
+  "snapshot:saveAs": { gameId: ID, revisionId: ID },
   "settings:get": {},
   "settings:set": {},
 };
@@ -105,5 +117,53 @@ describe("IPC contract (architecture.md section 6)", () => {
 
   it("the payload limit is 64 KiB", () => {
     expect(MAX_IPC_PAYLOAD_BYTES).toBe(65_536);
+  });
+});
+
+describe("snapshot channels and task progress (architecture.md section 6)", () => {
+  const exportRequest = request("snapshot:export");
+
+  it("bumps the bridge version for the snapshot functions and onTaskProgress", () => {
+    expect(BRIDGE_VERSION).toBe(4);
+  });
+
+  it("snapshot:export takes up to 32 frame keys, each an origin and a top-level site or null", () => {
+    const key = { origin: "https://a.example", topLevelSite: null };
+    expect(exportRequest.safeParse({ gameId: ID }).success).toBe(true);
+    expect(exportRequest.safeParse({ gameId: ID, frameKeys: Array(32).fill(key) }).success).toBe(
+      true,
+    );
+    expect(exportRequest.safeParse({ gameId: ID, frameKeys: Array(33).fill(key) }).success).toBe(
+      false,
+    );
+    expect(
+      exportRequest.safeParse({ gameId: ID, frameKeys: [{ ...key, path: "/x" }] }).success,
+    ).toBe(false);
+    expect(exportRequest.safeParse({ gameId: ID, frameKeys: [{ origin: "x" }] }).success).toBe(
+      false,
+    );
+  });
+
+  it("snapshot rows carry no file path", () => {
+    const row = IPC_CONTRACT["snapshot:list"].response.shape.snapshots.element;
+    expect(Object.keys(row.shape)).not.toContain("path");
+  });
+
+  it("task progress has real steps and measured bytes only, and a code with a failure", () => {
+    const base = { taskId: ID, gameId: ID, kind: "export", step: "read", status: "running" };
+    expect(taskProgressEventSchema.safeParse({ ...base, bytesDone: 10 }).success).toBe(true);
+    expect(taskProgressEventSchema.safeParse({ ...base, percent: 50 }).success).toBe(false);
+    expect(taskProgressEventSchema.safeParse({ ...base, bytesDone: -1 }).success).toBe(false);
+    expect(
+      taskProgressEventSchema.safeParse({
+        ...base,
+        status: "failed",
+        code: "SNAP_TOTAL_TOO_LARGE",
+        message: "The save data is above a snapshot limit.",
+      }).success,
+    ).toBe(true);
+    expect(
+      taskProgressEventSchema.safeParse({ ...base, status: "failed", code: "NOPE" }).success,
+    ).toBe(false);
   });
 });

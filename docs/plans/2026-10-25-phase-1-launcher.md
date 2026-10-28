@@ -413,16 +413,20 @@ Promise<Result<JobOutcome>>` implementing save-transfer §5 steps 1–12 exactly
 Promise<Result<SnapshotRow>>`; `runStorageCheck(gameId, signal): Promise<Result<StorageCheck>>` (holds a `background`
 lease, M5); worker message protocol `WorkerCommand` / `WorkerEvent` (zod) over `MessagePort`; worker fault hook
 `fail-write` (test flavor).
-- [ ] Unit: interceptor answers only the job's exact stub URLs, 403 empty body otherwise, no passthrough (QW-1); each
+- [x] Unit: interceptor answers only the job's exact stub URLs, 403 empty body otherwise, no passthrough (QW-1); each
   step throws once → nothing stays registered (QW-3); handshake rejects wrong `webContents`, wrong frame URL, wrong or
   short nonce (QW-4); stub headers and CSP (QW-10); log lines contain no values or key names (QW-9).
-- [ ] e2e/integration: export progress-lab plain, with service worker, cross-site iframe; canary flags an injected
+- [x] e2e/integration: export progress-lab plain, with service worker, cross-site iframe; canary flags an injected
   main-world script and a started worker; **the no-bypass iframe control** (open check 3); AC-11 (export refused while the
   window is open); AC-20/S-17 (snapshot of a session with cookies, Cache Storage and a worker contains none);
   Review Focus 4 and 5; manifest `flushState` `unconfirmed`; M5 (launch during a running storage check cancels it).
-- [ ] Run failing, implement, run passing.
-- [ ] MEMORY.md, save-transfer §5: outcome of the iframe bypass control and of `usageDetails` in an isolated world [V].
-- [ ] Commit `feat(desktop): export snapshots through the quiescent window`.
+  Also the key-generator probe in Electron 45 (open check 2), the canary's calibration and `snapshot:export` over IPC
+  with its `task:progress` events, `snapshot:list` and `snapshot:saveAs`.
+- [x] Run failing, implement, run passing.
+- [x] MEMORY.md, save-transfer §5: outcome of the iframe bypass control and of `usageDetails` in an isolated world [V].
+- [x] Commit `feat(desktop): export snapshots through the quiescent window`. (Preceded by
+  `refactor(desktop): move launch wiring out of the main entry` and the building blocks; the storage check runs on
+  demand only: wiring it to a game's exit waits for a decision, see the task report.)
 
 ### Task 14: Restore R1–R8, rollback, recovery, storage-key mapping, delete local saves, clear cache, verify (L)
 **Files:** `src/main/snapshots/{restore.ts,journal.ts,key-check.ts,recovery.ts,delete-saves.ts,clear-cache.ts,verify.ts,
@@ -509,13 +513,13 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 | # | Check (where it is settled) | Fallback if it fails |
 | --- | --- | --- |
 | 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window. **Settled in Task 8: it works** (worker and renderer gone about 110 ms after the close; architecture.md section 4) |
-| 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference. **Settled in Task 12: it reverts** in bundled Chromium 156 (two exports equal, the game's next key unchanged; save-transfer.md section 4); Electron is run in Task 13 |
-| 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION` |
+| 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference. **Settled in Task 12: it reverts** in bundled Chromium 156 (two exports equal, the game's next key unchanged; save-transfer.md section 4); **and in Electron 45 (Task 13):** two exports in a row have the same `contentHash` and the game's next step gets key 8 (`apps/desktop/e2e/export.spec.ts`) |
+| 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION`. **Settled in Task 13: it does** (without any bypass the iframe's partitioned worker started and the canary stopped the job; with the page-level bypass alone, and with the full bypass, the job was clean; `apps/desktop/e2e/quiescent.spec.ts`, save-transfer.md section 5) |
 | 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types |
 | 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides) |
 | 6 | React 19 runs under `trusted-types 'none'` (Task 5): settled 2026-10-28, it does (security.md section 6) | Allow one named policy, keep `require-trusted-types-for 'script'` |
 | 7 | `node:sqlite` runs without a warning in Electron 45 main (Task 6) | better-sqlite3 13.0.3 per ADR-0004 revisit trigger |
-| 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data) |
+| 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data). **Settled in Task 13: it is** (the preload's world saw Cache Storage and the worker registration, so the manifest lists them in `notExported`; `apps/desktop/e2e/export.spec.ts`) |
 | 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc. **Settled in Task 10: it does** (e2e with `sendInputEvent`; Chromium does not deliver that Esc to the page; architecture.md section 9) |
 | 10 | `.webloc` with `wglauncher://` opens the packaged app (Task 16) | Offer "copy launch link" instead of a macOS shortcut file |
 | 11 | Windows shortcut and deep link (no machine) | Code and unit tests only, labeled not tested |

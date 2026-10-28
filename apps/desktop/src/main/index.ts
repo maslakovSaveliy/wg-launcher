@@ -2,9 +2,15 @@
 // before anything else; `second-instance` and `open-url` are registered right after the lock, and the app:// scheme
 // before `ready`.
 
-import { writeFile } from "node:fs/promises";
+import { copyFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { GAME_STATE_CHANNEL, type GameStateEvent, uuidv7 } from "@wg-launcher/shared";
+import {
+  GAME_STATE_CHANNEL,
+  type GameStateEvent,
+  TASK_PROGRESS_CHANNEL,
+  type TaskProgressEvent,
+  uuidv7,
+} from "@wg-launcher/shared";
 import { app, type BrowserWindow, ipcMain, Menu, session, shell } from "electron";
 import { appMenuTemplate } from "./app-menu.js";
 import {
@@ -34,6 +40,8 @@ import { redact } from "./log/redact.js";
 import { type AppPaths, appPaths, prepareAppPaths, resolveUserData } from "./paths.js";
 import { parseDeepLink, parseLaunchInput } from "./policy/deep-link.js";
 import { createShortcut, shortcutsSupported } from "./shortcuts.js";
+import { exportSnapshot } from "./snapshots/export.js";
+import { createSnapshotDeps } from "./snapshots/jobs.js";
 import { fixPartitioningSwitch } from "./start-up.js";
 
 /** What later parts of the main process (database, IPC, jobs) are built on. */
@@ -163,6 +171,25 @@ async function start(userData: string): Promise<AppContext> {
   };
   const games = db.readOnly ? null : createGames(db, log, dialogs, openExternal, sendState);
   if (games) hooks?.watchGames(games);
+  // Snapshot jobs share the runtime's lock manager, so a job and a game window never meet (AC-11, M5).
+  const snapshotDeps = games
+    ? createSnapshotDeps({
+        repos: games.repos,
+        paths,
+        locks: games.locks,
+        log,
+        newId: () => uuidv7(),
+        ...(hooks
+          ? { afterNavigation: hooks.afterNavigation, harnessWorld: hooks.harnessWorld }
+          : {}),
+      })
+    : null;
+  if (snapshotDeps) hooks?.watchSnapshots(snapshotDeps);
+  // task:progress goes to the launcher page only (architecture.md section 6).
+  const sendProgress = (event: TaskProgressEvent) => {
+    if (!launcher || launcher.isDestroyed()) return;
+    launcher.webContents.send(TASK_PROGRESS_CHANNEL, event);
+  };
   // App quit runs the close procedure of every open game window in parallel, at most 3 s (architecture.md 4).
   let quitting = false;
   app.on("before-quit", (event) => {
@@ -202,6 +229,14 @@ async function start(userData: string): Promise<AppContext> {
       ...(db.readOnly ? { readOnlyReason: db.reason } : {}),
       dialogs,
       covers: createCovers({ coversDir: paths.covers, tmpDir: paths.tmp }),
+      snapshots: snapshotDeps
+        ? {
+            export: (gameId, options) => exportSnapshot(gameId, options, snapshotDeps),
+            sendProgress,
+            fileOf: (path) => join(userData, path),
+            copy: (from, to) => copyFile(from, to),
+          }
+        : null,
       shortcuts: {
         supported: shortcutsSupported(process.platform),
         create: (game) =>
