@@ -5,16 +5,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { GAME_STATE_CHANNEL, type GameStateEvent, uuidv7 } from "@wg-launcher/shared";
-import {
-  app,
-  type BrowserWindow,
-  ipcMain,
-  Menu,
-  powerMonitor,
-  screen,
-  session,
-  shell,
-} from "electron";
+import { app, type BrowserWindow, ipcMain, Menu, session, shell } from "electron";
 import { appMenuTemplate } from "./app-menu.js";
 import {
   DEV_LAUNCHER_ORIGIN,
@@ -24,39 +15,17 @@ import {
   registerAppScheme,
 } from "./app-protocol.js";
 import { createCovers } from "./covers.js";
-import { type Db, openDatabase, type WritableDb } from "./db/database.js";
-import { createRepos } from "./db/repos/index.js";
+import { type Db, openDatabase } from "./db/database.js";
 import { type Dialogs, type ErrorSpec, liveParent, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
-import { closeGameWindow } from "./games/close-procedure.js";
-import { recordFrames } from "./games/frames.js";
-import { wireFullscreen } from "./games/fullscreen.js";
-import { gameSession, installBaselineHandlers } from "./games/game-session.js";
-import { GameRuntime, type GameState } from "./games/lifecycle.js";
-import { LockManager } from "./games/locks.js";
-import {
-  createPlaytimeHub,
-  type PlaytimeRecorder,
-  settleUnfinishedSessions,
-} from "./games/playtime-recorder.js";
-import { createExternalOpener, createGameWindow } from "./games/window-factory.js";
-import {
-  applySavedFlags,
-  displayAreas,
-  initialBounds,
-  trackWindowState,
-} from "./games/window-state.js";
+import { installBaselineHandlers } from "./games/game-session.js";
+import type { GameRuntime, GameState } from "./games/lifecycle.js";
 import { createHandlers } from "./ipc/handlers/index.js";
 import { registerIpc } from "./ipc/register.js";
-import {
-  createLaunchQueue,
-  createNoticeChain,
-  handleLaunchRequest,
-  registerDeepLinkScheme,
-} from "./launch-input.js";
+import { createLaunchQueue, registerDeepLinkScheme } from "./launch-input.js";
+import { createGames, wireLaunches } from "./launch-wiring.js";
 import {
   createLauncherWindow,
-  focusLauncher,
   LAUNCHER_PARTITION,
   setUpLauncherSession,
 } from "./launcher-window.js";
@@ -142,80 +111,6 @@ const partitioning = fixPartitioningSwitch(app.commandLine);
 
 /** Launch requests (argv, `second-instance`, `open-url`), held until the runtime and the launcher are up. */
 const launchQueue = createLaunchQueue();
-
-/** The game runtime with the real windows, sessions and close procedure (architecture.md sections 4 and 5). */
-function createGames(
-  db: WritableDb,
-  log: Logger,
-  dialogs: Dialogs,
-  openExternal: (url: string) => Promise<void>,
-  onState: (gameId: string, state: GameState) => void,
-) {
-  const repos = createRepos(db);
-  // Before any launch: sessions a crash left unfinished (architecture.md section 10).
-  settleUnfinishedSessions(repos.playSessions, log);
-  const locks = new LockManager({ log });
-  const playtime = createPlaytimeHub({
-    sessions: repos.playSessions,
-    games: repos.games,
-    clock: () => performance.now(),
-    log,
-    isScreenLocked: () => powerMonitor.getSystemIdleState(1) === "locked",
-  });
-  for (const event of ["suspend", "resume", "lock-screen", "unlock-screen"] as const) {
-    powerMonitor.on(event as "suspend", () => playtime.power(event));
-  }
-  const recorders = new Map<string, PlaytimeRecorder>();
-  const runtime = new GameRuntime({
-    games: repos.games,
-    locks,
-    onState,
-    log,
-    dialogs,
-    flavor: FLAVOR,
-    openWindow: ({ gameId, title, entryUrl }) => {
-      // The session's handlers exist before the window, so the page never meets Electron's allow-all default.
-      gameSession(gameId, { log });
-      const askExternal = createExternalOpener({ gameId, dialogs, openExternal, log });
-      const saved = repos.windowState.get(gameId);
-      const window = createGameWindow({
-        gameId,
-        title,
-        entryUrl,
-        flavor: FLAVOR,
-        log,
-        askExternal: (url) => void askExternal(url),
-        bounds: initialBounds(saved, displayAreas(screen)),
-      });
-      recordFrames(window.webContents, gameId, repos.storageTargets, log);
-      const fullscreen = wireFullscreen(window, { gameId, log });
-      // Before the runtime's own listeners, so the first `close` saves the state the user saw (architecture.md 9).
-      trackWindowState(window, {
-        gameId,
-        save: (state) => repos.windowState.save(state),
-        displayIdOf: (bounds) => String(screen.getDisplayMatching(bounds).id),
-        log,
-        isPageFullscreen: fullscreen.isPageFullscreen,
-      });
-      applySavedFlags(window, saved);
-      const recorder = playtime.attach(gameId, window);
-      recorders.set(gameId, recorder);
-      window.once("closed", () => {
-        if (recorders.get(gameId) === recorder) recorders.delete(gameId);
-      });
-      return window;
-    },
-    // Step 1 of the close procedure stops playtime, so the procedure's time is not counted (architecture.md 4).
-    closeWindow: (window, gameId) =>
-      closeGameWindow(window as BrowserWindow, {
-        gameId,
-        log,
-        dialogs,
-        stopPlaytime: () => recorders.get(gameId)?.pause(),
-      }),
-  });
-  return { runtime, repos, locks };
-}
 
 async function start(userData: string): Promise<AppContext> {
   const testHooks = __WG_FLAVOR__ === "test" ? await import("./test-hooks.js") : null;
@@ -335,57 +230,16 @@ async function start(userData: string): Promise<AppContext> {
   const launcherUrl = devUrl ?? LAUNCHER_URL;
   await window.loadURL(launcherUrl);
 
-  // "Show the library": the launcher window to the front, opened again if the user closed it while a game ran.
-  let reopening: Promise<void> | null = null;
-  const showLibrary = (): Promise<void> => {
-    const current = liveParent(launcher);
-    if (current) {
-      focusLauncher(current);
-      return Promise.resolve();
-    }
-    reopening ??= (async () => {
-      log.info("launcher.reopened");
-      try {
-        await newLauncher().loadURL(launcherUrl);
-      } catch (error) {
-        log.error("launcher.reopen-failed", { error });
-      } finally {
-        reopening = null;
-      }
-    })();
-    return reopening;
-  };
-  // macOS: a click on the Dock icon while only game windows are open brings the library back.
-  app.on("activate", () => {
-    if (!liveParent(launcher)) void showLibrary();
+  wireLaunches({
+    log,
+    dialogs,
+    games,
+    launchQueue,
+    launcher: () => launcher,
+    newLauncher,
+    launcherUrl,
+    ...(hooks ? { onSecondInstance: () => hooks.onSecondInstance() } : {}),
   });
-  // Notices wait for the library window and for each other, never for the launch queue.
-  const notices = createNoticeChain(async (spec) => {
-    await showLibrary();
-    await dialogs.notify(spec);
-  }, log);
-
-  // The window manager is up: handle the launch requests queued so far, then each as it comes.
-  launchQueue.start(
-    (request) => {
-      if (request.source === "second-instance") {
-        log.info("app.second-instance");
-        hooks?.onSecondInstance();
-      }
-      return handleLaunchRequest(request, {
-        log,
-        focusLauncher: () => void showLibrary(),
-        notify: (spec) => notices.notify(spec),
-        games: games
-          ? {
-              has: (gameId) => games.repos.games.get(gameId) !== null,
-              launch: (gameId) => games.runtime.launch(gameId),
-            }
-          : null,
-      });
-    },
-    (source) => log.warn("launch.dropped", { source }),
-  );
   return { paths, log, dialogs, db, games: games?.runtime ?? null };
 }
 
