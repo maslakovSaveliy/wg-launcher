@@ -1,7 +1,13 @@
 import type { IpcChannel } from "@wg-launcher/shared";
 import { IPC_CHANNELS } from "@wg-launcher/shared";
 import { describe, expect, it, vi } from "vitest";
-import { type Handlers, type IpcMainLike, registerIpc } from "./register.js";
+import {
+  type Handlers,
+  type IpcMainLike,
+  isPlainData,
+  MAX_PAYLOAD_ARRAY_LENGTH,
+  registerIpc,
+} from "./register.js";
 import { checkSender, type IpcEventLike, type LauncherContents } from "./sender-check.js";
 
 const ID = "0190a5b2-7c3d-7e4f-8a1b-2c3d4e5f6a7b";
@@ -157,7 +163,7 @@ describe("registerIpc (S-10)", () => {
     ["library:list", "a typed array", () => new Uint8Array(1_000_000)],
     ["library:list", "a class instance", () => new (class Probe {})()],
     ["game:focus", "a Map inside the payload", () => ({ gameId: ID, extra: new Map([[1, 1]]) })],
-    ["library:list", "an array (no request has one)", () => [1, 2, 3]],
+    ["library:list", "an array as the whole payload (a request is an object)", () => [1, 2, 3]],
     ["library:list", "a sparse array of length 2^32 - 1", () => ({ list: new Array(2 ** 32 - 1) })],
   ] as const)(
     "%s: rejects %s, which JSON would measure as {} (structured clone keeps it)",
@@ -275,5 +281,51 @@ describe("registerIpc (S-10)", () => {
     });
     await call("library:update", {}, { gameId: ID, title: "  Lab  " });
     expect(handlers["library:update"]).toHaveBeenCalledWith({ gameId: ID, title: "Lab" });
+  });
+});
+
+describe("isPlainData: arrays inside a request (architecture.md section 6)", () => {
+  const filled = (length: number) => Array.from({ length }, (_, i) => ({ origin: `k${i}` }));
+
+  it("accepts a dense array up to the maximum length, inside an object", () => {
+    expect(MAX_PAYLOAD_ARRAY_LENGTH).toBe(32);
+    expect(isPlainData({ list: [] })).toBe(true);
+    expect(isPlainData({ list: filled(MAX_PAYLOAD_ARRAY_LENGTH) })).toBe(true);
+    expect(isPlainData({ list: ["a", 1, true, null, { nested: ["b"] }] })).toBe(true);
+  });
+
+  it.each([
+    ["one item above the maximum", () => ({ list: filled(MAX_PAYLOAD_ARRAY_LENGTH + 1) })],
+    [
+      "a sparse array within the length bound",
+      () => {
+        const list = [1, 2, 3];
+        delete list[1];
+        return { list };
+      },
+    ],
+    ["a sparse array of length 2^32 - 1", () => ({ list: new Array(2 ** 32 - 1) })],
+    [
+      "an array with an extra enumerable property",
+      () => ({ list: Object.assign([1, 2], { extra: "x" }) }),
+    ],
+    [
+      "an array with an extra hidden property",
+      () => ({ list: Object.defineProperty([1], "hidden", { value: 1, enumerable: false }) }),
+    ],
+    ["an array subclass", () => ({ list: new (class Items extends Array {})() })],
+    ["an array holding a Map", () => ({ list: [new Map()] })],
+    ["an array as the whole payload", () => [{ origin: "k0" }]],
+  ])("refuses %s", (_name, make) => {
+    expect(isPlainData(make())).toBe(false);
+  });
+
+  it("counts array items against the node budget", () => {
+    // 32 arrays of 32 arrays of 32 numbers: every array is within the length bound, the whole is 33 825 values.
+    const cube = Array.from({ length: 32 }, () =>
+      Array.from({ length: 32 }, () => Array.from({ length: 32 }, () => 1)),
+    );
+    expect(isPlainData({ cube })).toBe(false);
+    expect(isPlainData({ cube: cube.slice(0, 2) })).toBe(true);
   });
 });

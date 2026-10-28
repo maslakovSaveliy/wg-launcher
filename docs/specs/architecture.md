@@ -257,9 +257,13 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
     clone keeps shared references, so a small graph of shared objects could otherwise take about k^7 visits); a value
     that throws while it is walked is refused too. Electron IPC uses structured
     clone, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance arrives intact, and
-    `JSON.stringify` measures most of them as `{}` while `z.strictObject({})` accepts them; they are refused, and so
-    are arrays (no request has one; a sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s in a
-    unit test, Verified 2026-10-28, `register.test.ts` before the fix). Only then is the `JSON.stringify` form
+    `JSON.stringify` measures most of them as `{}` while `z.strictObject({})` accepts them; they are refused. An
+    array is accepted only inside the request object, with at most 32 items (`MAX_PAYLOAD_ARRAY_LENGTH`, the
+    `maxStorageKeys` bound of `snapshot:export`'s `frameKeys`), dense, with no own property but its indexes and
+    `length`, and its items count against the 4 096-value budget; the length is checked before anything walks it,
+    because a sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s in a unit test (Verified
+    2026-10-28, `register.test.ts` before the fix). The array rule is unit-tested at the limit, above it, sparse,
+    with an extra property and as a subclass (Verified 2026-10-28, `register.test.ts`). Only then is the `JSON.stringify` form
     measured in UTF-8 bytes: above 65 536 bytes, or without a JSON form (BigInt), it is `INVALID_ARGUMENT` before zod
     runs. zod issues are
     logged as codes and paths only, never returned. A throwing handler is `INTERNAL` ("Something went wrong.").

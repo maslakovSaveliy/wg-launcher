@@ -1,6 +1,7 @@
 // Registers one `ipcMain.handle` per channel of the contract (architecture.md section 6). Every call goes through the
-// same steps before its handler runs: the sender check, exactly one payload of plain data (no array, Map, Set,
-// ArrayBuffer, Date or class instance, which structured clone would carry), the 64 KiB limit on its JSON form, and
+// same steps before its handler runs: the sender check, exactly one payload of plain data (no Map, Set, ArrayBuffer,
+// Date or class instance, which structured clone would carry; arrays only short and dense, inside the request
+// object), the 64 KiB limit on its JSON form, and
 // the channel's strict zod schema. A refused sender gets no detail and is logged once per call as
 // `IPC_FORBIDDEN_SENDER`; an invalid payload is `INVALID_ARGUMENT`; a throwing handler is `INTERNAL`. Messages are
 // short English with no paths, values or zod output.
@@ -54,16 +55,33 @@ const MAX_PAYLOAD_DEPTH = 8;
 const MAX_PAYLOAD_NODES = 4096;
 
 /**
- * True when `value` is plain data: strings, numbers, booleans, null, undefined and objects whose prototype is
- * `Object.prototype` or null, at most `MAX_PAYLOAD_DEPTH` deep and `MAX_PAYLOAD_NODES` values in all. Electron IPC uses
- * the structured clone algorithm, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance arrives
- * intact; `JSON.stringify` measures most of them as `{}` and `z.strictObject({})` accepts them (no own enumerable
- * keys), so they would pass both later checks at any size. Arrays are refused too: no request has one, and a sparse
- * array of length 2^32 - 1 is cheap to send but kept `JSON.stringify` busy for about 54 s in a unit test. A channel
- * that takes an array adds a length bound here. Never throws: a throwing getter or a revoked Proxy (possible only in
- * process, never over IPC) is not plain data.
+ * Arrays inside a request hold at most this many items (Assumed: the longest list a request carries is
+ * `snapshot:export`'s `frameKeys`, at most `maxStorageKeys`, 32, of snapshot-format.md section 8).
  */
-function isPlainData(value: unknown): boolean {
+export const MAX_PAYLOAD_ARRAY_LENGTH = 32;
+
+/** A dense array of at most MAX_PAYLOAD_ARRAY_LENGTH items with no own property but its indexes and `length`. */
+function isPlainArray(item: unknown[]): boolean {
+  if (Object.getPrototypeOf(item) !== Array.prototype) return false;
+  // The length is checked first, so a sparse array of length 2^32 - 1 is refused before anything walks it.
+  if (item.length > MAX_PAYLOAD_ARRAY_LENGTH) return false;
+  if (Reflect.ownKeys(item).length !== item.length + 1) return false;
+  for (let i = 0; i < item.length; i++) if (!Object.hasOwn(item, i)) return false;
+  return true;
+}
+
+/**
+ * True when `value` is a request of plain data: an object whose prototype is `Object.prototype` or null, holding
+ * strings, numbers, booleans, null, undefined, such objects and dense arrays of at most MAX_PAYLOAD_ARRAY_LENGTH
+ * items, at most `MAX_PAYLOAD_DEPTH` deep and `MAX_PAYLOAD_NODES` values in all (array items count). Electron IPC
+ * uses the structured clone algorithm, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance
+ * arrives intact; `JSON.stringify` measures most of them as `{}` and `z.strictObject({})` accepts them (no own
+ * enumerable keys), so they would pass both later checks at any size. A sparse array of length 2^32 - 1 is cheap to
+ * send but kept `JSON.stringify` busy for about 54 s in a unit test, so an array must be short and dense, without
+ * holes or other own properties, and the whole payload is never an array. Never throws: a throwing getter or a
+ * revoked Proxy (possible only in process, never over IPC) is not plain data.
+ */
+export function isPlainData(value: unknown): boolean {
   let budget = MAX_PAYLOAD_NODES;
   const walk = (item: unknown, depth: number): boolean => {
     budget -= 1;
@@ -71,7 +89,10 @@ function isPlainData(value: unknown): boolean {
     if (item === null || item === undefined) return true;
     const type = typeof item;
     if (type === "string" || type === "number" || type === "boolean") return true;
-    if (type !== "object" || depth >= MAX_PAYLOAD_DEPTH || Array.isArray(item)) return false;
+    if (type !== "object" || depth >= MAX_PAYLOAD_DEPTH) return false;
+    if (Array.isArray(item)) {
+      return depth > 0 && isPlainArray(item) && item.every((child) => walk(child, depth + 1));
+    }
     const proto = Object.getPrototypeOf(item);
     if (proto !== Object.prototype && proto !== null) return false;
     return Object.values(item as object).every((child) => walk(child, depth + 1));
