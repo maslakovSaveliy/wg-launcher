@@ -42,7 +42,6 @@
       });
       document.getElementById("fullscreen").addEventListener("click", () =>
         outcome("fullscreen", async () => {
-          if (document.pointerLockElement) document.exitPointerLock();
           await document.documentElement.requestFullscreen();
           return document.fullscreenElement ? "fullscreen" : "no element";
         }),
@@ -60,6 +59,13 @@
           return "stream";
         }),
       );
+      // Releases pointer lock and resolves when Chromium reports it (the test calls this before the next click).
+      window.releasePointerLock = () =>
+        new Promise((resolve) => {
+          if (!document.pointerLockElement) return resolve("not locked");
+          document.addEventListener("pointerlockchange", () => resolve(document.pointerLockElement ? "still locked" : "released"), { once: true });
+          document.exitPointerLock();
+        });
       // Denied ones that need no gesture. No getUserMedia for audio: with macOS microphone access undecided it would
       // stall before the permission handler (spike H12); the microphone is checked through the check handler only.
       window.runDenied = async () => {

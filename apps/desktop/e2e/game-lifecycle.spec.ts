@@ -146,9 +146,12 @@ test("a hung game is offered Force close, and a crash ends the session as crashe
   );
   await expectState(launched, crashing, "crashed");
   expect(await windowCount(launched)).toBe(1);
-  expect((await eventsNamed(launched, "game.crashed")).map((line) => line.gameId)).toEqual([
-    crashing,
-  ]);
+  // The logger writes asynchronously: the record may follow the state change, so poll for it.
+  await expect
+    .poll(async () =>
+      (await eventsNamed(launched as Launched, "game.crashed")).map((line) => line.gameId),
+    )
+    .toEqual([crashing]);
 
   // Hang: an endless loop in the page. Chromium never reports a renderer as unresponsive while a debugger is
   // attached (Playwright is attached to every page; observed: no event within 90 s of input to the hung page), so the
@@ -182,9 +185,11 @@ test("a hung game is offered Force close, and a crash ends the session as crashe
   await expect.poll(dialogTitles).toContain("The game is not responding");
   await expectState(launched, hanging, "crashed");
   expect(await windowCount(launched)).toBe(1);
-  expect((await eventsNamed(launched, "game.force-close")).map((line) => line.gameId)).toEqual([
-    hanging,
-  ]);
+  await expect
+    .poll(async () =>
+      (await eventsNamed(launched as Launched, "game.force-close")).map((line) => line.gameId),
+    )
+    .toEqual([hanging]);
 });
 
 const alive = (pid: number) => {

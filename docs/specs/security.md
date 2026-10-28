@@ -181,16 +181,19 @@ A release check reads the fuses of the packaged app and fails on any difference 
     matter; `about:BLANK` and every other `about:` page are blocked.
   - Permissions: a `Set` lookup with exact case, so `Fullscreen`, `__proto__` or an empty name are denied.
 - **Wired in Phase 1 Task 8** (`apps/desktop/e2e/game-isolation.spec.ts`; Verified, 2026-10-28, Electron 45.0.0, macOS
-  arm64, one machine, with the macOS screen locked):
+  arm64, one machine, with the macOS screen locked; the allowed-permission bullet below was rerun unlocked, see there):
   - camera `getUserMedia` got no stream (`NotFoundError` on this run; the cause, that Chromium offered no camera
     because the check handler denies `media`, is Assumed), `permissions.query({name: "microphone"})` gave `denied` (the check handler; no
     `getUserMedia` for audio is ever made in e2e, so no OS prompt can appear), geolocation error code 1, notifications
     `denied`, display capture and `getScreenDetails` `NotAllowedError`; each name was logged once
     (`game.permission-denied`, origin only), `media` once although it was requested and checked. Chromium also checks
     `automatic-fullscreen` on `requestFullscreen()`; it is denied like any other name and fullscreen still works.
-  - fullscreen and keyboard lock succeeded after their own clicks; pointer lock failed with `WrongDocumentError`
-    because the screen was locked (MEMORY.md, H13), so pointer lock success is not verified by this run; the test
-    checks the locked-screen outcome then and the success otherwise.
+  - fullscreen and keyboard lock succeeded after their own clicks; with the screen locked, pointer lock failed with
+    `WrongDocumentError` (MEMORY.md, H13), so that run did not verify it. Rerun with the screen unlocked (Verified,
+    2026-10-28, `e2e/game-isolation.spec.ts` "permissions", 3 runs plus the full desktop suite, Electron 45.0.0, macOS
+    arm64): pointer lock, fullscreen and keyboard lock all succeeded in a game window, each after its own injected
+    click, pointer lock first and released (`pointerlockchange`) before the next click, with the window focused. The
+    test checks the `WrongDocumentError` outcome, annotated "pointer lock not verified", when the screen is locked.
   - an off-site link and a `window.open` to an https URL were prevented and offered through the queued dialog; only
     the confirmed one reached the `shell.openExternal` stub; `window.open("file:...")` asked nothing; a download was
     cancelled and logged; a same-site redirect at start loaded and a cross-site one was offered and ended the launch.

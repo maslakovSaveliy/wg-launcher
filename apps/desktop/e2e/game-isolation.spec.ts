@@ -218,13 +218,28 @@ test("permissions: five denied and logged, three allowed after their own click (
         ? { ok: false, error: expect.stringMatching(/^WrongDocumentError/) }
         : { ok: true, value: "locked" },
     );
-  if (locked) {
-    test.info().annotations.push({
-      type: "pointer lock not verified",
-      description: "the macOS screen was locked during the run",
-    });
-  }
+  test.info().annotations.push(
+    locked
+      ? {
+          type: "pointer lock not verified",
+          description: "the macOS screen was locked during the run",
+        }
+      : {
+          type: "pointer lock verified",
+          description: "the macOS screen was unlocked: lock succeeded",
+        },
+  );
   expect((await results()).focusBeforePointerLock).toBe(true);
+  if (!locked) {
+    // A held lock would leave the pointer captured by #pointer-lock and the next click would never land: release
+    // it and wait for Chromium's pointerlockchange before the next permission is exercised.
+    expect(
+      await page.evaluate(() =>
+        (window as unknown as { releasePointerLock(): Promise<string> }).releasePointerLock(),
+      ),
+    ).toBe("released");
+    expect(await page.evaluate(() => document.pointerLockElement === null)).toBe(true);
+  }
   await page.click("#fullscreen");
   await expect
     .poll(async () => (await results()).fullscreen)

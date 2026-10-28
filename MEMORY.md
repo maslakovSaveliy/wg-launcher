@@ -430,8 +430,16 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   never does (30 s timeout): click through `page.mouse.click` at coordinates read with `page.evaluate`. [V, 2026-10-28,
   Playwright 1.64.1, `e2e/game-isolation.spec.ts` `trustedClick`]
 - Pointer lock fails with `WrongDocumentError` while the macOS screen is locked (`ioreg -n Root -d1 -a` shows
-  `CGSSessionScreenIsLocked` true); the permissions e2e test checks that outcome then and annotates "pointer lock not
-  verified". [V, 2026-10-28, run with the owner away]
+  `CGSSessionScreenIsLocked` true; the key is absent when unlocked); the permissions e2e test checks that outcome then
+  and annotates "pointer lock not verified". [V, 2026-10-28, run with the owner away] With the screen unlocked pointer
+  lock, fullscreen and keyboard lock all SUCCEED in a game window (each after its own injected click, window focused).
+  A held pointer lock makes Playwright's next `page.click` fail ("#pointer-lock intercepts pointer events", 30 s
+  timeout), so the test releases it (`document.exitPointerLock()`, wait for `pointerlockchange`) before the next
+  click; removing that step reproduced the failure. [V, 2026-10-28, `e2e/game-isolation.spec.ts` "permissions", 3 runs
+  and the full desktop suite unlocked, Electron 45.0.0, macOS arm64]
+- The main log is written asynchronously (queue), so an e2e test must poll for a record (`expect.poll` over
+  `eventsNamed`), never read `main.log` once right after a state change: the force-close test did and was flaky. [A,
+  2026-10-28, from `logger.ts`; the flake itself was not reproduced, 3 runs of the fixed spec passed]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]
