@@ -232,8 +232,9 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
 - **Errors:** `{ok: false, code, message}`; success is `{ok: true, data}`. `message` is short English for the UI with no
   paths, query strings or save data. Codes: `INVALID_ARGUMENT`, `NOT_FOUND`, `URL_NOT_ALLOWED`, `GAME_RUNNING`,
   `GAME_BUSY`, `NEEDS_RECOVERY`, `CANCELLED`, `LIBRARY_READ_ONLY`, `INTERNAL`, and the `SNAP_*`, `EXP_*` and `IMP_*`
-  codes of the other specs. `LIBRARY_READ_ONLY` is what every channel that writes (or launches) returns while the
-  database is read-only (section 7). `Assumed`
+  codes of the other specs. `LIBRARY_READ_ONLY` is what every channel except `library:list` and `settings:get`
+  returns while the database is read-only, reads such as `library:orphans` and `game:focus` included (section 7).
+  `Assumed`
 - **No paths cross IPC.** The renderer never sends a file path or an arbitrary URL to open; files are chosen in native
   dialogs owned by main, and destructive actions (remove, delete local saves, import, a storage-key mapping) are confirmed
   in a native dialog whose text main writes. `Assumed`
@@ -251,8 +252,14 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
     `http://localhost:5173` (`app-protocol.ts`, the `DEV_SERVER` of `electron.vite.config.ts`).
   - A refused sender gets `{ok: false, code: "INVALID_ARGUMENT", message: "Refused."}`, the same for every check, and
     each refused call writes one `IPC_FORBIDDEN_SENDER` record (channel, the frame URL through `redact`, whether it was
-    a subframe). A call must carry exactly one payload; its `JSON.stringify` form is measured in UTF-8 bytes and above
-    65 536 bytes, or without a JSON form (BigInt, undefined), it is `INVALID_ARGUMENT` before zod runs. zod issues are
+    a subframe). A call must carry exactly one payload of plain data: strings, numbers, booleans, null, undefined
+    and objects whose prototype is `Object.prototype` or null, at most 8 levels deep. Electron IPC uses structured
+    clone, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance arrives intact, and
+    `JSON.stringify` measures most of them as `{}` while `z.strictObject({})` accepts them; they are refused, and so
+    are arrays (no request has one; a sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s in a
+    unit test, Verified 2026-10-28, `register.test.ts` before the fix). Only then is the `JSON.stringify` form
+    measured in UTF-8 bytes: above 65 536 bytes, or without a JSON form (BigInt), it is `INVALID_ARGUMENT` before zod
+    runs. zod issues are
     logged as codes and paths only, never returned. A throwing handler is `INTERNAL` ("Something went wrong.").
   - `settings:get` and `settings:set` exist with an empty allowlist (`settingsSchema` is `z.strictObject({})`): no
     setting exists yet, so every key is refused and nothing is stored.
@@ -455,17 +462,20 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
   - Titles are counted in code points (200 emoji are 200 characters) after `trim()`; the schema trims, so a handler
     stores the trimmed title.
   - Covers: `apps/desktop/src/main/covers.ts`. The chosen path must be a regular file (`lstat`, then `open` with
-    `O_NOFOLLOW` where the OS has it and `fstat` on the handle, so a symbolic link is refused); at most 10 MiB, read
+    `O_NOFOLLOW` and `O_NONBLOCK` where the OS has them and `fstat` on the handle, so a symbolic link is refused and
+    a FIFO swapped in after the `lstat` cannot block the open); at most 10 MiB, read
     with one byte of headroom so a file growing after the stat is caught; the type comes from the bytes only (PNG
     signature, JPEG `ff d8 ff`, RIFF with `WEBP` at offset 8; the file's extension is ignored). The copy is named
     `<gameId>-<16 hex from 8 random bytes>.<png|jpg|webp>`, written as `.partial` in `tmp/`, flushed, renamed into
     `covers/`. `games.cover_path` holds that file name, not a path; the card's cover URL is
-    `app://launcher/covers/<name>`. The old file is deleted after the row points at the new one (or at none), and a
+    `app://launcher/covers/<name>`. The old file, read from the row again after the dialog (so two overlapping picks
+    leave one file), is deleted after the row points at the new one (or at none), and a
     copy made for a game removed while the dialog was open is deleted again.
   - Remove from library: refused with `GAME_RUNNING` while the game has a window (its session lease); otherwise main
     holds a `task` lease while its confirmation is open, so the game cannot launch meanwhile. The confirmation says
     what is removed (the card with title, cover, window position, playtime) and what is kept (snapshots, backups,
-    the saves on this computer under "Data of removed games"). Settings lists the orphans; deleting their data is
+    whatever the game saved on this computer, listed under "Data of removed games"; the text never claims that
+    saves exist, since a game may have stored nothing). Settings lists the orphans; deleting their data is
     `library:deleteOrphanData`, a later task.
 - **Delete semantics** exactly as [PRD section 9](../product/prd.md#9-delete-semantics), each with its own native
   confirmation saying what will be lost (AC-16):

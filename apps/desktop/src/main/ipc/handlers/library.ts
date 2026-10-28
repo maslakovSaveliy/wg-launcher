@@ -139,6 +139,10 @@ export function libraryHandlers(
         coverPath = copied.data;
       }
 
+      // Read again after the dialog and the copy: another update may have changed the cover meanwhile. The read and
+      // the update are synchronous, so nothing runs between them, and the file removed below is the one the row
+      // held when this update replaced it.
+      const previous = library.repos.games.get(gameId)?.coverPath ?? null;
       const updated = library.repos.games.update(gameId, {
         ...(title === undefined ? {} : { title }),
         ...(coverPath === undefined ? {} : { coverPath }),
@@ -148,7 +152,7 @@ export function libraryHandlers(
         await dropCover(coverPath ?? null);
         return NOT_FOUND;
       }
-      if (coverPath !== undefined && game.coverPath !== coverPath) await dropCover(game.coverPath);
+      if (coverPath !== undefined && previous !== coverPath) await dropCover(previous);
       log.info("library.updated", { gameId, title: title !== undefined, cover: cover ?? null });
       return { ok: true, data: cardOf(library, updated) };
     },
@@ -171,8 +175,9 @@ export function libraryHandlers(
           message: `Remove "${game.title}" from the library?`,
           detail:
             "Removed: the card with its title, cover, window position and playtime. " +
-            "Kept: the game's snapshots and backups, and its saves on this computer, which are listed under " +
-            '"Data of removed games" in Settings. Adding the address again creates a new, empty entry.',
+            "Kept: the game's snapshots and backups, and whatever the game saved on this computer, which stays " +
+            'there and is listed under "Data of removed games" in Settings. Adding the address again creates a new, ' +
+            "empty entry.",
           confirmLabel: "Remove from library",
         });
         if (!confirmed) return fail("CANCELLED", "The game was not removed.");

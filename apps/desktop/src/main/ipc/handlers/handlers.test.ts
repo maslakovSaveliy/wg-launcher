@@ -234,6 +234,29 @@ describe("library:update (AC-17)", () => {
     expect(readdirSync(coversDir)).toEqual([]);
   });
 
+  it("two overlapping picks leave only the last copy: each removes the cover the row held when it was updated", async () => {
+    const { handlers, file, coversDir, dialogs } = setUp();
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    dialogs.openFile.mockResolvedValueOnce(file("zero.png", PNG));
+    await handlers["library:update"]({ gameId, cover: "pick" });
+    const first = Promise.withResolvers<string | null>();
+    const second = Promise.withResolvers<string | null>();
+    dialogs.openFile.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    // Both dialogs are open before either answers.
+    const a = handlers["library:update"]({ gameId, cover: "pick" });
+    const b = handlers["library:update"]({ gameId, cover: "pick" });
+    first.resolve(file("one.jpg", JPEG));
+    await a;
+    second.resolve(file("two.png", PNG));
+    const last = dataOf("library:update", await b);
+    expect(readdirSync(coversDir).map((name) => `app://launcher/covers/${name}`)).toEqual([
+      last.coverUrl,
+    ]);
+  });
+
   it("a cancelled pick and a file that is not an image change nothing", async () => {
     const { handlers, file, coversDir, dialogs } = setUp();
     const { gameId } = dataOf(

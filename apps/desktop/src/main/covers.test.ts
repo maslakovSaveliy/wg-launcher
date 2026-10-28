@@ -1,11 +1,17 @@
+import { execFileSync } from "node:child_process";
 import {
+  closeSync,
+  constants,
   existsSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { COVER_NAME } from "./app-protocol.js";
@@ -105,6 +111,33 @@ describe("covers (architecture.md section 12)", () => {
       const link = join(dir, "link.png");
       symlinkSync(target, link);
       expect(await covers.set(GAME, link)).toEqual({
+        ok: false,
+        code: "INVALID_ARGUMENT",
+        message: "The cover must be a regular file.",
+      });
+      expect(readdirSync(coversDir)).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "refuses a FIFO swapped in after lstat, without blocking in open",
+    async () => {
+      const { dir, coversDir, tmpDir, source } = setUp();
+      const regular = source("real.png", PNG);
+      const fifo = join(dir, "swapped.png");
+      execFileSync("mkfifo", [fifo]);
+      expect(lstatSync(fifo).isFIFO()).toBe(true);
+      // lstat sees the regular file; the path that is then opened is the FIFO (the race the open must survive).
+      const covers = createCovers({ coversDir, tmpDir, lstat: () => lstat(regular) });
+      const outcome = await Promise.race([
+        covers.set(GAME, fifo),
+        new Promise((resolve) => setTimeout(() => resolve("blocked"), 1000)),
+      ]);
+      if (outcome === "blocked") {
+        // Unblock the open that waits for a writer, so the test process can end.
+        closeSync(openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK));
+      }
+      expect(outcome).toEqual({
         ok: false,
         code: "INVALID_ARGUMENT",
         message: "The cover must be a regular file.",

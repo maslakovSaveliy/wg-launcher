@@ -144,6 +144,53 @@ describe("registerIpc (S-10)", () => {
     expect(log.warn.mock.calls.some(([name]) => name === "IPC_FORBIDDEN_SENDER")).toBe(false);
   });
 
+  it.each([
+    [
+      "library:list",
+      "a 100 000-entry Map",
+      () => new Map(Array.from({ length: 100_000 }, (_, i) => [i, i])),
+    ],
+    ["settings:set", "a 10 MB ArrayBuffer", () => new ArrayBuffer(10_000_000)],
+    ["library:orphans", "a Set", () => new Set([1, 2, 3])],
+    ["settings:get", "a Date", () => new Date(0)],
+    ["library:list", "a typed array", () => new Uint8Array(1_000_000)],
+    ["library:list", "a class instance", () => new (class Probe {})()],
+    ["game:focus", "a Map inside the payload", () => ({ gameId: ID, extra: new Map([[1, 1]]) })],
+    ["library:list", "an array (no request has one)", () => [1, 2, 3]],
+    ["library:list", "a sparse array of length 2^32 - 1", () => ({ list: new Array(2 ** 32 - 1) })],
+  ] as const)(
+    "%s: rejects %s, which JSON would measure as {} (structured clone keeps it)",
+    async (channel, _name, make) => {
+      const { call, handlers, log } = setUp();
+      const payload = make();
+      expect(await call(channel, {}, payload)).toEqual(INVALID);
+      expect(handlers[channel]).not.toHaveBeenCalled();
+      expect(log.warn).toHaveBeenCalledWith(
+        "ipc.invalid-payload",
+        expect.objectContaining({ channel }),
+      );
+    },
+  );
+
+  it("rejects nesting deeper than the bound and a cyclic payload without throwing", async () => {
+    const { call, handlers } = setUp();
+    let deep: Record<string, unknown> = {};
+    for (let i = 0; i < 100; i++) deep = { a: deep };
+    expect(await call("library:list", {}, deep)).toEqual(INVALID);
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(await call("library:list", {}, cyclic)).toEqual(INVALID);
+    expect(handlers["library:list"]).not.toHaveBeenCalled();
+  });
+
+  it("accepts plain objects, including one without a prototype", async () => {
+    const { call, handlers } = setUp();
+    expect((await call("library:list", {}, Object.create(null))) as { ok: boolean }).toMatchObject({
+      ok: true,
+    });
+    expect(handlers["library:list"]).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a payload above 64 KiB serialized, and accepts one just at the limit", async () => {
     const { call, handlers } = setUp();
     // `{"url":"` + text + `"}` is 10 bytes of JSON around the text.

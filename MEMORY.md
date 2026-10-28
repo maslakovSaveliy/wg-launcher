@@ -321,6 +321,12 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - WHATWG `new URL("app://launcher/x")` has `origin` `"null"` (non-special schemes get an opaque origin) but
   `protocol` `app:` and `host` `launcher`, so the IPC sender check builds the origin from scheme and host. [V,
   2026-10-28, Node 24.13.0, `node -e`]
+- Electron IPC payloads are structured clones, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class
+  instance reaches the handler intact; `JSON.stringify` gives `{}` for most of them and zod 4.6.7
+  `z.strictObject({})` accepts them (no own enumerable keys), so a JSON size check alone is bypassed (review finding,
+  Task 9 fix round 1). A sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s. `register.ts`
+  therefore refuses arrays and non-plain objects before measuring. [V, 2026-10-28, Vitest 5.0.5 on Node 24.13.0,
+  `apps/desktop/src/main/ipc/register.test.ts` failing before the fix]
 - zod 4.6.7: `.refine()` on a `z.strictObject` returns the same `ZodObject` with `def.catchall` of type `never` (no
   wrapper), so a schema walk can check strictness; `.trim()` on a string schema trims the parsed output. [V,
   2026-10-28, `packages/shared/src/ipc.test.ts`; a mutation to `z.object` made it fail]

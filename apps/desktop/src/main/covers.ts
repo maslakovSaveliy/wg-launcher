@@ -2,7 +2,8 @@
 // magic bytes (never by its extension), copied to `covers/<gameId>-<16 lowercase hex>.<png|jpg|webp>` (the exact
 // `COVER_NAME` pattern the app:// handler serves). The copy is written as a `.partial` file in `tmp/`, flushed and
 // renamed into place. The source must be a regular file: a symbolic link is refused (`O_NOFOLLOW` where the OS has
-// it, then `lstat` and `fstat` on the opened handle), so a link cannot make the app copy another file.
+// it, then `lstat` and `fstat` on the opened handle), so a link cannot make the app copy another file, and the open
+// uses `O_NONBLOCK` where the OS has it, so a FIFO swapped in after the `lstat` cannot block it.
 
 import { randomBytes } from "node:crypto";
 import { constants, type Stats } from "node:fs";
@@ -41,6 +42,8 @@ export interface CoversOptions {
   tmpDir: string;
   /** For tests; defaults to `crypto.randomBytes`. */
   random?: (n: number) => Uint8Array;
+  /** For tests (a file swapped between the check and the open); defaults to `fs.promises.lstat`. */
+  lstat?: (path: string) => Promise<Stats>;
 }
 
 export interface Covers {
@@ -53,10 +56,13 @@ export interface Covers {
 const hex = (bytes: Uint8Array) =>
   Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
-async function readRegularFile(source: string): Promise<Uint8Array | CoverResult> {
+async function readRegularFile(
+  source: string,
+  lstatOf: (path: string) => Promise<Stats>,
+): Promise<Uint8Array | CoverResult> {
   let link: Stats;
   try {
-    link = await lstat(source);
+    link = await lstatOf(source);
   } catch {
     return refuse(UNREADABLE);
   }
@@ -64,7 +70,12 @@ async function readRegularFile(source: string): Promise<Uint8Array | CoverResult
   if (link.size > MAX_COVER_BYTES) return refuse(TOO_LARGE);
   let handle: Awaited<ReturnType<typeof open>>;
   try {
-    handle = await open(source, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    // O_NONBLOCK: a FIFO swapped in after the lstat would block `open` until a writer comes; with it the open
+    // returns and the fstat below refuses the FIFO. Regular-file reads ignore the flag.
+    handle = await open(
+      source,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+    );
   } catch {
     return refuse(UNREADABLE);
   }
@@ -95,7 +106,7 @@ export function createCovers(options: CoversOptions): Covers {
   return {
     async set(gameId, source) {
       if (!isUuidV7(gameId)) return refuse("That is not a game id.");
-      const bytes = await readRegularFile(source);
+      const bytes = await readRegularFile(source, options.lstat ?? lstat);
       if (!(bytes instanceof Uint8Array)) return bytes;
       const ext = coverType(bytes);
       if (ext === null) return refuse(NOT_AN_IMAGE);

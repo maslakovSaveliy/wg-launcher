@@ -24,8 +24,8 @@ export function Settings() {
       <section aria-labelledby="orphans-heading">
         <h3 id="orphans-heading">Data of removed games</h3>
         <p>
-          These games were removed from the library. Their saves are still on this computer.
-          Deleting them is not available in this version yet.
+          These games were removed from the library. Whatever they saved on this computer stays
+          there. Deleting it is not available in this version yet.
         </p>
         {error && <p role="alert">{error}</p>}
         {orphans?.length === 0 && <p>No data of removed games.</p>}
