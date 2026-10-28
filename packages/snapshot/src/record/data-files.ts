@@ -184,16 +184,24 @@ function countOf(item: CborItem, min: number, what: string): number {
     : invalid(`${what} must be an integer >= ${min}`);
 }
 
+// IndexedDB's "valid key path" string: "", or ECMAScript IdentifierNames joined by single dots. A key path IndexedDB
+// refuses could never be created on restore, so the reader refuses it while validating (before anything is written).
+const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+const isKeyPathString = (path: string) =>
+  path === "" || path.split(".").every((p) => IDENTIFIER.test(p));
+
 function keyPathOf(item: CborItem, nullable: boolean): KeyPath | null {
   if (item.k === "simple" && item.v === null && nullable) {
     return null;
   }
-  if (item.k === "array" && item.v.length > 0) {
-    return item.v.map(
-      (element) => stringOf(element) ?? invalid("key path entries must be strings"),
-    );
+  const path =
+    item.k === "array" && item.v.length > 0
+      ? item.v.map((element) => stringOf(element) ?? invalid("key path entries must be strings"))
+      : (stringOf(item) ?? invalid("key path must be a string or a non-empty array of strings"));
+  if (!(typeof path === "string" ? [path] : path).every(isKeyPathString)) {
+    invalid("key path is not a valid IndexedDB key path");
   }
-  return stringOf(item) ?? invalid("key path must be a string or a non-empty array of strings");
+  return path;
 }
 
 function keyGeneratorOf(item: CborItem, autoIncrement: boolean): number | null {
@@ -239,9 +247,14 @@ function storeOf(item: CborItem): StoreSchema {
   const names = ["name", "keyPath", "autoIncrement", "keyGenerator", "indexes", "records"];
   const m = members(item, names, "store");
   const autoIncrement = boolOf(get(m, "autoIncrement"), "autoIncrement");
+  const keyPath = keyPathOf(get(m, "keyPath"), true);
+  // createObjectStore refuses autoIncrement with an empty or an array key path (InvalidAccessError).
+  if (autoIncrement && (keyPath === "" || Array.isArray(keyPath))) {
+    invalid("an autoIncrement store cannot have an empty or an array key path");
+  }
   return {
     name: nameOf(get(m, "name"), "store"),
-    keyPath: keyPathOf(get(m, "keyPath"), true),
+    keyPath,
     autoIncrement,
     keyGenerator: keyGeneratorOf(get(m, "keyGenerator"), autoIncrement),
     indexes: sortedByName(listOf(get(m, "indexes"), "indexes").map(indexOf), "indexes"),

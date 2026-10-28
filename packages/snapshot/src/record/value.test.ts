@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { bytesToHex, sha256Hex } from "../../test/notation.js";
 import { ExportError, SnapError } from "../errors.js";
 import { type CborItem, decodeSequence, encodeItem } from "./cbor.js";
@@ -371,5 +371,42 @@ describe("checkValueItem and fromItem", () => {
     expect(() => fromItem({ k: "float", v: 1 }, () => new Blob([]))).toThrow(SnapError);
     const { item } = await exportValue(new Blob(["abc"]));
     expect(() => fromItem(item, () => new Blob(["ab"]))).toThrow(SnapError);
+  });
+});
+
+describe("fromItem in an engine without a view constructor", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("refuses a Float16Array or a partial Float16 view with SNAP_RECORD_INVALID, not a raw TypeError", async () => {
+    vi.stubGlobal("Float16Array", undefined);
+    vi.resetModules();
+    const build = await import("./value-build.js");
+    const f16: CborItem = { k: "tag", tag: 84, v: { k: "bytes", v: new Uint8Array(2) } };
+    const partial: CborItem = {
+      k: "tag",
+      tag: 33110,
+      v: {
+        k: "array",
+        v: [
+          { k: "uint", v: 84 },
+          { k: "bytes", v: new Uint8Array(4) },
+          { k: "uint", v: 2 },
+          { k: "uint", v: 1 },
+        ],
+      },
+    };
+    for (const item of [f16, partial]) {
+      let error: unknown;
+      try {
+        build.fromItem(item, () => new Blob([]));
+      } catch (caught) {
+        error = caught;
+      }
+      expect((error as { name?: string }).name).toBe("SnapError");
+      expect((error as { code?: string }).code).toBe("SNAP_RECORD_INVALID");
+    }
   });
 });

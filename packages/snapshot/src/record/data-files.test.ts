@@ -33,8 +33,20 @@ function snapError(run: () => unknown): SnapError {
 const simple = (v: boolean | null): CborItem => ({ k: "simple", v });
 const num = (n: number): CborItem =>
   Number.isSafeInteger(n) && n >= 0 ? uint(n) : { k: "float", v: n };
+/** The string encoding: text, or tag 33102 (UTF-16LE code units) for a string with a lone surrogate. */
+const str = (v: string): CborItem =>
+  v.isWellFormed()
+    ? text(v)
+    : {
+        k: "tag",
+        tag: 33102,
+        v: {
+          k: "bytes",
+          v: new Uint8Array(new Uint16Array([...v].map((c) => c.charCodeAt(0))).buffer),
+        },
+      };
 const keyPath = (p: string | string[] | null): CborItem =>
-  p === null ? simple(null) : typeof p === "string" ? text(p) : { k: "array", v: p.map(text) };
+  p === null ? simple(null) : typeof p === "string" ? str(p) : { k: "array", v: p.map(str) };
 
 /** The envelope of section 7.2 built by hand, so a test can write what encodeSchema refuses to write. */
 function rawSchema(s: DbSchema, extra: [string, CborItem][] = []): Uint8Array {
@@ -199,6 +211,60 @@ describe("schema.cbor (section 7.2)", () => {
   ])("refuses %s, when encoding and when decoding", (_name, schema) => {
     expect(() => encodeSchema(schema)).toThrow(TypeError);
     expect(snapError(() => decodeSchema(rawSchema(schema))).code).toBe("SNAP_RECORD_INVALID");
+  });
+
+  // IndexedDB's "valid key path": "", an identifier, identifiers joined by dots, or a non-empty list of those; an
+  // autoIncrement store's key path is neither "" nor a list (createObjectStore throws InvalidAccessError).
+  it.each<[string, DbSchema]>([
+    [
+      "autoIncrement with an array key path",
+      {
+        ...idbfs,
+        stores: [{ ...store, keyPath: ["a", "b"], autoIncrement: true, keyGenerator: 1 }],
+      },
+    ],
+    [
+      "autoIncrement with an empty key path",
+      { ...idbfs, stores: [{ ...store, keyPath: "", autoIncrement: true, keyGenerator: 1 }] },
+    ],
+    [
+      "a store key path with an empty segment",
+      { ...idbfs, stores: [{ ...store, keyPath: "a..b" }] },
+    ],
+    ["a store key path with a leading dot", { ...idbfs, stores: [{ ...store, keyPath: ".a" }] }],
+    ["a store key path with a trailing dot", { ...idbfs, stores: [{ ...store, keyPath: "a." }] }],
+    ["a store key path starting with a digit", { ...idbfs, stores: [{ ...store, keyPath: "1a" }] }],
+    ["a store key path with a space", { ...idbfs, stores: [{ ...store, keyPath: "a b" }] }],
+    ["a store key path with a hyphen", { ...idbfs, stores: [{ ...store, keyPath: "a-b" }] }],
+    [
+      "a store key path with a lone surrogate",
+      { ...idbfs, stores: [{ ...store, keyPath: "a\ud800" }] },
+    ],
+    [
+      "an array key path with an invalid item",
+      { ...idbfs, stores: [{ ...store, keyPath: ["a", "b c"] }] },
+    ],
+    [
+      "an index key path that is not a key path",
+      { ...idbfs, stores: [{ ...store, indexes: [{ ...index, keyPath: "x.1" }] }] },
+    ],
+  ])("refuses %s, which IndexedDB would refuse to create", (_name, schema) => {
+    expect(() => encodeSchema(schema)).toThrow(TypeError);
+    expect(snapError(() => decodeSchema(rawSchema(schema))).code).toBe("SNAP_RECORD_INVALID");
+  });
+
+  it("accepts every valid key path form", () => {
+    const schema: DbSchema = {
+      name: "db",
+      version: 1,
+      stores: [
+        { ...store, name: "a", keyPath: "" },
+        { ...store, name: "b", keyPath: "$_x.\u00e4b.c9" },
+        { ...store, name: "c", keyPath: ["", "a.b"], indexes: [{ ...index, keyPath: "" }] },
+        { ...store, name: "d", keyPath: "id.n", autoIncrement: true, keyGenerator: 1 },
+      ],
+    };
+    expect(decodeSchema(encodeSchema(schema))).toEqual(schema);
   });
 
   it("refuses an unknown or a missing member and unsorted stores", () => {

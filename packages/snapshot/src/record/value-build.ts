@@ -46,7 +46,10 @@ function buildTag(tag: number, content: CborItem, blobs: (sha256: string) => Blo
     return new View(viewBuffer(content));
   }
   if (VIEW_SIZES.has(tag)) {
-    throw new TypeError(`this engine has no constructor for view tag ${tag}`);
+    throw new SnapError(
+      "SNAP_RECORD_INVALID",
+      `this engine has no constructor for view tag ${tag}`,
+    );
   }
   if (tag === TAG.str16 || tag === TAG.bigint) {
     return tag === TAG.str16 ? decodeStr16(content) : BigInt((content as { v: string }).v);
@@ -80,7 +83,10 @@ function buildTag(tag: number, content: CborItem, blobs: (sha256: string) => Blo
       const [viewTag, , offset, length] = items.map((item) => (item as { v: number }).v);
       const PartialView = VIEW_CONSTRUCTORS.get(viewTag as number);
       if (PartialView === undefined) {
-        throw new TypeError(`this engine has no constructor for view tag ${viewTag}`);
+        throw new SnapError(
+          "SNAP_RECORD_INVALID",
+          `this engine has no constructor for view tag ${viewTag}`,
+        );
       }
       return new PartialView(viewBuffer(items[1] as CborItem), offset, length);
     }

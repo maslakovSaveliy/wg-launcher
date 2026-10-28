@@ -339,7 +339,11 @@ record count). This captures what PRD section 10 requires (database version, key
 `Owner` for the scope, `Assumed` for the layout.
 
 Every map has exactly these members. Names and key-path strings use the string encoding; an array key path is not
-empty, and an index with an array key path is not `multiEntry` (IndexedDB refuses both). Store and index names are
+empty, and an index with an array key path is not `multiEntry` (IndexedDB refuses both). Every key path is an IndexedDB
+"valid key path": the empty string, or ECMAScript IdentifierNames joined by single dots, or a non-empty array of those;
+an `autoIncrement` store's key path is neither the empty string nor an array (`createObjectStore` refuses both), so
+a restore can always create the schema. `Assumed` (from the "valid key path" definition and `createObjectStore` steps
+of <https://www.w3.org/TR/IndexedDB/>, not re-read for this rule; Phase 1 Task 12 fix round 1). Store and index names are
 strictly ascending in code-unit order. `keyGenerator` is an integer from 1 to 2^53 encoded as a number, so 2^53 (not a
 safe integer) is the float `fa 5a000000`. `Assumed`
 
