@@ -325,7 +325,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   instance reaches the handler intact; `JSON.stringify` gives `{}` for most of them and zod 4.6.7
   `z.strictObject({})` accepts them (no own enumerable keys), so a JSON size check alone is bypassed (review finding,
   Task 9 fix round 1). A sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s. `register.ts`
-  therefore refuses arrays and non-plain objects before measuring. [V, 2026-10-28, Vitest 5.0.5 on Node 24.13.0,
+  therefore refuses arrays and non-plain objects before measuring, visiting at most 4 096 values (shared references
+  survive structured clone: 7 levels of 10 keys sharing one next object took 568 ms to walk unbounded) inside a
+  try/catch. [V, 2026-10-28, Vitest 5.0.5 on Node 24.13.0,
   `apps/desktop/src/main/ipc/register.test.ts` failing before the fix]
 - zod 4.6.7: `.refine()` on a `z.strictObject` returns the same `ZodObject` with `def.catchall` of type `never` (no
   wrapper), so a schema walk can check strictness; `.trim()` on a string schema trims the parsed output. [V,

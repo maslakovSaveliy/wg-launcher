@@ -183,6 +183,47 @@ describe("registerIpc (S-10)", () => {
     expect(handlers["library:list"]).not.toHaveBeenCalled();
   });
 
+  it("refuses a shared-reference graph that would take millions of visits, quickly", async () => {
+    const { call, handlers } = setUp();
+    // 7 levels below the top, each with 10 keys pointing at the same next object: tiny to send (structured clone
+    // keeps shared references) but 10^7 visits for a walk without a node budget.
+    let node: Record<string, unknown> = {};
+    for (let level = 0; level < 7; level++) {
+      const next: Record<string, unknown> = {};
+      for (let key = 0; key < 10; key++) next[`k${key}`] = node;
+      node = next;
+    }
+    const started = performance.now();
+    expect(await call("library:list", {}, node)).toEqual(INVALID);
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(handlers["library:list"]).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "a throwing getter",
+      () =>
+        Object.defineProperty({}, "boom", {
+          enumerable: true,
+          get() {
+            throw new Error("getter");
+          },
+        }),
+    ],
+    [
+      "a revoked Proxy",
+      () => {
+        const { proxy, revoke } = Proxy.revocable({}, {});
+        revoke();
+        return proxy;
+      },
+    ],
+  ])("refuses %s as INVALID_ARGUMENT instead of throwing", async (_name, make) => {
+    const { call, handlers } = setUp();
+    await expect(call("library:list", {}, make())).resolves.toEqual(INVALID);
+    expect(handlers["library:list"]).not.toHaveBeenCalled();
+  });
+
   it("accepts plain objects, including one without a prototype", async () => {
     const { call, handlers } = setUp();
     expect((await call("library:list", {}, Object.create(null))) as { ok: boolean }).toMatchObject({

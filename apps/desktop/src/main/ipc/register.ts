@@ -47,21 +47,40 @@ const FAILED = { ok: false, code: "INTERNAL", message: "Something went wrong." }
 const MAX_PAYLOAD_DEPTH = 8;
 
 /**
- * True when `value` is plain data: strings, numbers, booleans, null, undefined and objects whose prototype is
- * `Object.prototype` or null, at most `MAX_PAYLOAD_DEPTH` deep. Electron IPC uses the structured clone algorithm, so a
- * `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance arrives intact; `JSON.stringify` measures most of
- * them as `{}` and `z.strictObject({})` accepts them (no own enumerable keys), so they would pass both later checks at
- * any size. Arrays are refused too: no request has one, and a sparse array of length 2^32 - 1 is cheap to send but
- * kept `JSON.stringify` busy for about 54 s in a unit test. A channel that takes an array adds a length bound here.
+ * At most this many values are visited (Assumed: a real request has fewer than ten). Structured clone keeps shared
+ * references, so a graph whose 8 levels each hold k keys pointing at one next object is tiny to send but would take
+ * about k^7 visits without a budget.
  */
-function isPlainData(value: unknown, depth = 0): boolean {
-  if (value === null || value === undefined) return true;
-  const type = typeof value;
-  if (type === "string" || type === "number" || type === "boolean") return true;
-  if (type !== "object" || depth >= MAX_PAYLOAD_DEPTH || Array.isArray(value)) return false;
-  const proto = Object.getPrototypeOf(value);
-  if (proto !== Object.prototype && proto !== null) return false;
-  return Object.values(value as object).every((item) => isPlainData(item, depth + 1));
+const MAX_PAYLOAD_NODES = 4096;
+
+/**
+ * True when `value` is plain data: strings, numbers, booleans, null, undefined and objects whose prototype is
+ * `Object.prototype` or null, at most `MAX_PAYLOAD_DEPTH` deep and `MAX_PAYLOAD_NODES` values in all. Electron IPC uses
+ * the structured clone algorithm, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance arrives
+ * intact; `JSON.stringify` measures most of them as `{}` and `z.strictObject({})` accepts them (no own enumerable
+ * keys), so they would pass both later checks at any size. Arrays are refused too: no request has one, and a sparse
+ * array of length 2^32 - 1 is cheap to send but kept `JSON.stringify` busy for about 54 s in a unit test. A channel
+ * that takes an array adds a length bound here. Never throws: a throwing getter or a revoked Proxy (possible only in
+ * process, never over IPC) is not plain data.
+ */
+function isPlainData(value: unknown): boolean {
+  let budget = MAX_PAYLOAD_NODES;
+  const walk = (item: unknown, depth: number): boolean => {
+    budget -= 1;
+    if (budget < 0) return false;
+    if (item === null || item === undefined) return true;
+    const type = typeof item;
+    if (type === "string" || type === "number" || type === "boolean") return true;
+    if (type !== "object" || depth >= MAX_PAYLOAD_DEPTH || Array.isArray(item)) return false;
+    const proto = Object.getPrototypeOf(item);
+    if (proto !== Object.prototype && proto !== null) return false;
+    return Object.values(item as object).every((child) => walk(child, depth + 1));
+  };
+  try {
+    return walk(value, 0);
+  } catch {
+    return false;
+  }
 }
 
 /** UTF-8 length of the payload's JSON form, or null when it has none (undefined, BigInt, a function). */

@@ -253,7 +253,9 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
   - A refused sender gets `{ok: false, code: "INVALID_ARGUMENT", message: "Refused."}`, the same for every check, and
     each refused call writes one `IPC_FORBIDDEN_SENDER` record (channel, the frame URL through `redact`, whether it was
     a subframe). A call must carry exactly one payload of plain data: strings, numbers, booleans, null, undefined
-    and objects whose prototype is `Object.prototype` or null, at most 8 levels deep. Electron IPC uses structured
+    and objects whose prototype is `Object.prototype` or null, at most 8 levels deep and 4 096 values in all (structured
+    clone keeps shared references, so a small graph of shared objects could otherwise take about k^7 visits); a value
+    that throws while it is walked is refused too. Electron IPC uses structured
     clone, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class instance arrives intact, and
     `JSON.stringify` measures most of them as `{}` while `z.strictObject({})` accepts them; they are refused, and so
     are arrays (no request has one; a sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s in a
