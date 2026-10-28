@@ -55,11 +55,11 @@ export interface FullscreenWindow {
   };
 }
 
-/** Wires the Esc hold of section 9 to one game window. */
+/** Wires the Esc hold of section 9 to one game window; tells whether the page holds its own fullscreen. */
 export function wireFullscreen(
   window: FullscreenWindow,
   deps: { gameId: string; log: Pick<Logger, "info"> },
-): void {
+): { isPageFullscreen(): boolean } {
   let pageFullscreen = false;
   const hold = createEscHold(() => {
     if (!window.isFullScreen() || pageFullscreen) return;
@@ -76,4 +76,5 @@ export function wireFullscreen(
   window.webContents.on("before-input-event", (_event, input) => hold.input(input));
   window.on("blur", hold.cancel);
   window.on("closed", hold.cancel);
+  return { isPageFullscreen: () => pageFullscreen };
 }

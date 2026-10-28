@@ -26,7 +26,7 @@ import {
 import { createCovers } from "./covers.js";
 import { type Db, openDatabase, type WritableDb } from "./db/database.js";
 import { createRepos } from "./db/repos/index.js";
-import { type Dialogs, type ErrorSpec, nativeDialogs } from "./dialogs.js";
+import { type Dialogs, type ErrorSpec, liveParent, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
 import { closeGameWindow } from "./games/close-procedure.js";
 import { recordFrames } from "./games/frames.js";
@@ -48,7 +48,12 @@ import {
 } from "./games/window-state.js";
 import { createHandlers } from "./ipc/handlers/index.js";
 import { registerIpc } from "./ipc/register.js";
-import { createLaunchQueue, handleLaunchRequest, registerDeepLinkScheme } from "./launch-input.js";
+import {
+  createLaunchQueue,
+  createNoticeChain,
+  handleLaunchRequest,
+  registerDeepLinkScheme,
+} from "./launch-input.js";
 import {
   createLauncherWindow,
   focusLauncher,
@@ -59,7 +64,7 @@ import { createLogger, type Logger } from "./log/logger.js";
 import { redact } from "./log/redact.js";
 import { type AppPaths, appPaths, prepareAppPaths, resolveUserData } from "./paths.js";
 import { parseDeepLink, parseLaunchInput } from "./policy/deep-link.js";
-import { createShortcut } from "./shortcuts.js";
+import { createShortcut, shortcutsSupported } from "./shortcuts.js";
 import { fixPartitioningSwitch } from "./start-up.js";
 
 /** What later parts of the main process (database, IPC, jobs) are built on. */
@@ -183,15 +188,16 @@ function createGames(
         bounds: initialBounds(saved, displayAreas(screen)),
       });
       recordFrames(window.webContents, gameId, repos.storageTargets, log);
+      const fullscreen = wireFullscreen(window, { gameId, log });
       // Before the runtime's own listeners, so the first `close` saves the state the user saw (architecture.md 9).
       trackWindowState(window, {
         gameId,
         save: (state) => repos.windowState.save(state),
         displayIdOf: (bounds) => String(screen.getDisplayMatching(bounds).id),
         log,
+        isPageFullscreen: fullscreen.isPageFullscreen,
       });
       applySavedFlags(window, saved);
-      wireFullscreen(window, { gameId, log });
       const recorder = playtime.attach(gameId, window);
       recorders.set(gameId, recorder);
       window.once("closed", () => {
@@ -280,24 +286,29 @@ async function start(userData: string): Promise<AppContext> {
   setUpLauncherSession(launcherSession, log);
   handleAppProtocol(launcherSession, join(import.meta.dirname, "../renderer"), paths.covers);
 
-  const window = createLauncherWindow({
-    session: launcherSession,
-    preload: join(import.meta.dirname, "../preload/launcher.cjs"),
-    log,
-  });
-  launcher = window;
-  hooks?.watchLauncher(window);
+  const newLauncher = () => {
+    const created = createLauncherWindow({
+      session: launcherSession,
+      preload: join(import.meta.dirname, "../preload/launcher.cjs"),
+      log,
+    });
+    launcher = created;
+    hooks?.watchLauncher(created);
+    return created;
+  };
+  const window = newLauncher();
 
   // Before the first load, so the page never calls a channel that has no handler.
   registerIpc({
     ipc: ipcMain,
-    launcher: () => (window.isDestroyed() ? null : window.webContents),
+    launcher: () => liveParent(launcher)?.webContents ?? null,
     handlers: createHandlers({
       library: games ? { repos: games.repos, runtime: games.runtime, locks: games.locks } : null,
       ...(db.readOnly ? { readOnlyReason: db.reason } : {}),
       dialogs,
       covers: createCovers({ coversDir: paths.covers, tmpDir: paths.tmp }),
       shortcuts: {
+        supported: shortcutsSupported(process.platform),
         create: (game) =>
           createShortcut(game, {
             platform: process.platform,
@@ -321,25 +332,60 @@ async function start(userData: string): Promise<AppContext> {
   app.on("window-all-closed", () => app.quit());
 
   const devUrl = FLAVOR === "dev" ? process.env.ELECTRON_RENDERER_URL : undefined;
-  await window.loadURL(devUrl ?? LAUNCHER_URL);
-  // The window manager is up: handle the launch requests queued so far, then each as it comes.
-  launchQueue.start((request) => {
-    if (request.source === "second-instance") {
-      log.info("app.second-instance");
-      hooks?.onSecondInstance();
+  const launcherUrl = devUrl ?? LAUNCHER_URL;
+  await window.loadURL(launcherUrl);
+
+  // "Show the library": the launcher window to the front, opened again if the user closed it while a game ran.
+  let reopening: Promise<void> | null = null;
+  const showLibrary = (): Promise<void> => {
+    const current = liveParent(launcher);
+    if (current) {
+      focusLauncher(current);
+      return Promise.resolve();
     }
-    return handleLaunchRequest(request, {
-      log,
-      focusLauncher: () => focusLauncher(window),
-      notify: (spec) => dialogs.notify(spec),
-      games: games
-        ? {
-            has: (gameId) => games.repos.games.get(gameId) !== null,
-            launch: (gameId) => games.runtime.launch(gameId),
-          }
-        : null,
-    });
+    reopening ??= (async () => {
+      log.info("launcher.reopened");
+      try {
+        await newLauncher().loadURL(launcherUrl);
+      } catch (error) {
+        log.error("launcher.reopen-failed", { error });
+      } finally {
+        reopening = null;
+      }
+    })();
+    return reopening;
+  };
+  // macOS: a click on the Dock icon while only game windows are open brings the library back.
+  app.on("activate", () => {
+    if (!liveParent(launcher)) void showLibrary();
   });
+  // Notices wait for the library window and for each other, never for the launch queue.
+  const notices = createNoticeChain(async (spec) => {
+    await showLibrary();
+    await dialogs.notify(spec);
+  }, log);
+
+  // The window manager is up: handle the launch requests queued so far, then each as it comes.
+  launchQueue.start(
+    (request) => {
+      if (request.source === "second-instance") {
+        log.info("app.second-instance");
+        hooks?.onSecondInstance();
+      }
+      return handleLaunchRequest(request, {
+        log,
+        focusLauncher: () => void showLibrary(),
+        notify: (spec) => notices.notify(spec),
+        games: games
+          ? {
+              has: (gameId) => games.repos.games.get(gameId) !== null,
+              launch: (gameId) => games.runtime.launch(gameId),
+            }
+          : null,
+      });
+    },
+    (source) => log.warn("launch.dropped", { source }),
+  );
   return { paths, log, dialogs, db, games: games?.runtime ?? null };
 }
 

@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createLaunchQueue,
+  createNoticeChain,
   handleLaunchRequest,
   type LaunchHandlerDeps,
   type LaunchRequest,
+  MAX_PENDING_NOTICES,
+  MAX_QUEUED_LAUNCH_REQUESTS,
   registerDeepLinkScheme,
 } from "./launch-input.js";
 import { parseDeepLink, parseLaunchInput } from "./policy/deep-link.js";
@@ -43,6 +46,92 @@ describe("createLaunchQueue (early second-instance and open-url, architecture.md
   });
 });
 
+describe("bounds (review fix 2)", () => {
+  it("drops requests beyond MAX_QUEUED_LAUNCH_REQUESTS before start and reports them at start", async () => {
+    expect(MAX_QUEUED_LAUNCH_REQUESTS).toBe(16);
+    const queue = createLaunchQueue();
+    for (let i = 0; i < MAX_QUEUED_LAUNCH_REQUESTS + 3; i++) {
+      queue.push({ source: i === 0 ? "argv" : "open-url", input: { kind: "none" } });
+    }
+    const handled: string[] = [];
+    const dropped: string[] = [];
+    queue.start(
+      async (request) => {
+        handled.push(request.source);
+      },
+      (source) => dropped.push(source),
+    );
+    await queue.idle();
+    expect(handled).toHaveLength(MAX_QUEUED_LAUNCH_REQUESTS);
+    expect(handled[0]).toBe("argv");
+    expect(dropped).toEqual(["open-url", "open-url", "open-url"]);
+  });
+
+  it("counts requests waiting behind a slow one, and accepts new ones once they are handled", async () => {
+    const queue = createLaunchQueue();
+    const gate = Promise.withResolvers<void>();
+    const dropped: string[] = [];
+    let handled = 0;
+    queue.start(
+      async () => {
+        await gate.promise;
+        handled += 1;
+      },
+      (source) => dropped.push(source),
+    );
+    for (let i = 0; i < MAX_QUEUED_LAUNCH_REQUESTS + 1; i++) {
+      queue.push({ source: "second-instance", input: { kind: "none" } });
+    }
+    expect(dropped).toEqual(["second-instance"]);
+    gate.resolve();
+    await queue.idle();
+    expect(handled).toBe(MAX_QUEUED_LAUNCH_REQUESTS);
+    queue.push({ source: "second-instance", input: { kind: "none" } });
+    await queue.idle();
+    expect(handled).toBe(MAX_QUEUED_LAUNCH_REQUESTS + 1);
+    expect(dropped).toHaveLength(1);
+  });
+});
+
+describe("createNoticeChain (review fix 2)", () => {
+  it("shows notices one at a time in order, and a failing one does not stop the next", async () => {
+    const shown: string[] = [];
+    const gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
+    const notify = vi.fn(async (spec: { title: string; message: string }) => {
+      shown.push(spec.title);
+      const gate = gates[shown.length - 1];
+      if (gate) await gate.promise;
+      if (spec.title === "b") throw new Error("dialog failed");
+    });
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
+    const chain = createNoticeChain(notify, log);
+    chain.notify({ title: "a", message: "" });
+    chain.notify({ title: "b", message: "" });
+    chain.notify({ title: "c", message: "" });
+    await Promise.resolve();
+    expect(shown).toEqual(["a"]);
+    gates[0]?.resolve();
+    gates[1]?.resolve();
+    await chain.idle();
+    expect(shown).toEqual(["a", "b", "c"]);
+    expect(log.error).toHaveBeenCalledWith("launch.notice-failed", { error: expect.any(Error) });
+  });
+
+  it("drops notices beyond MAX_PENDING_NOTICES while the user has not answered, and logs it", async () => {
+    expect(MAX_PENDING_NOTICES).toBe(4);
+    const gate = Promise.withResolvers<void>();
+    const notify = vi.fn(async () => gate.promise);
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
+    const chain = createNoticeChain(notify, log);
+    for (let i = 0; i < MAX_PENDING_NOTICES + 2; i++) chain.notify({ title: `n${i}`, message: "" });
+    expect(log.warn).toHaveBeenCalledTimes(2);
+    expect(log.warn).toHaveBeenCalledWith("launch.notice-dropped", { title: "n4" });
+    gate.resolve();
+    await chain.idle();
+    expect(notify).toHaveBeenCalledTimes(MAX_PENDING_NOTICES);
+  });
+});
+
 function setUp(options: { known?: boolean; readOnly?: boolean } = {}) {
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
   const launch = vi.fn(async () => ({ ok: true as const, data: { window: "opened" as const } }));
@@ -63,6 +152,19 @@ const request = (source: LaunchRequest["source"], argv: string[]): LaunchRequest
 });
 
 describe("handleLaunchRequest (AC-19, S-11)", () => {
+  it("does not wait for the user to close a notice, so the next request is handled at once (review fix 2)", async () => {
+    const { deps } = setUp({ known: false });
+    deps.notify = vi.fn(() => new Promise<void>(() => undefined)); // never answered
+    const handled = handleLaunchRequest(request("argv", [`--launch-game=${ID}`]), deps);
+    await expect(
+      Promise.race([
+        handled.then(() => "done"),
+        new Promise((r) => setTimeout(() => r("blocked"), 50)),
+      ]),
+    ).resolves.toBe("done");
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+  });
+
   it("opens a known game and logs it as valid with the id only", async () => {
     const { deps, log, launch } = setUp();
     await handleLaunchRequest(request("argv", ["electron", ".", `--launch-game=${ID}`]), deps);

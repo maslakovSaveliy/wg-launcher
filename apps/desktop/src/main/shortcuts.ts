@@ -63,18 +63,30 @@ export function windowsShortcutOptions(
   };
 }
 
+/** Shortcuts exist on macOS (`.webloc`) and Windows (`.lnk`) only; Linux is not a target yet (PRD section 11). */
+export function shortcutsSupported(platform: NodeJS.Platform): boolean {
+  return platform === "darwin" || platform === "win32";
+}
+
 const MAX_NAME_CHARS = 100;
 const FALLBACK_NAME = "WGLauncher game";
+/** Windows device names, reserved with any extension and in any case (`NUL.tar.gz` is `NUL`). */
+const RESERVED_WINDOWS_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
-/** A file name from the game's title: no separators, reserved or control characters, no leading dot. */
+/**
+ * A file name from the game's title: no separators, reserved or control characters, no format characters (such as
+ * U+202E, which can make a name read differently), no leading dot, never a Windows device name.
+ */
 export function shortcutFileName(title: string, extension: string): string {
   const cleaned = title
+    .replace(/\p{Cf}/gu, "")
     .replace(/[/\\:*?"<>|\p{Cc}]/gu, "-")
     .trim()
     .replace(/^\.+/, "")
     .trim();
   const name = [...cleaned].slice(0, MAX_NAME_CHARS).join("").trimEnd();
-  return `${name === "" ? FALLBACK_NAME : name}${extension}`;
+  const device = RESERVED_WINDOWS_NAME.test((name.split(".")[0] ?? "").trimEnd());
+  return `${name === "" || device ? FALLBACK_NAME : name}${extension}`;
 }
 
 export interface ShortcutDeps {
@@ -104,7 +116,7 @@ export async function createShortcut(
   deps: ShortcutDeps,
 ): Promise<ShortcutResult> {
   const windows = deps.platform === "win32";
-  if (!windows && deps.platform !== "darwin") {
+  if (!shortcutsSupported(deps.platform)) {
     return {
       ok: false,
       code: "INTERNAL",

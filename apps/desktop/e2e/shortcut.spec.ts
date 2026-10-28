@@ -7,7 +7,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { uuidv7 } from "@wg-launcher/shared";
-import { addGame, eventsNamed, expectState, logLines, windowCount } from "./games.js";
+import {
+  addGame,
+  eventsNamed,
+  expectState,
+  gameState,
+  logLines,
+  openGame,
+  windowCount,
+} from "./games.js";
 import { type Launched, launchApp, runSecondInstance, startProgressLab } from "./harness.js";
 
 let launched: Launched | undefined;
@@ -137,6 +145,35 @@ test("a second instance with a malformed or unknown id shows the library with a 
   expect(log).not.toContain("evil.example");
 });
 
+test("a launch request after the launcher was closed while a game runs opens the launcher again with the notice (review fix 3)", async () => {
+  launched = await launchApp();
+  const app = launched;
+  const gameId = await addGame(app, `${app.progressLab.local}/`, "Running game");
+  await openGame(app, gameId);
+  const launcherWindows = () =>
+    app.app.evaluate(
+      ({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().filter(
+          (window) =>
+            !window.isDestroyed() && window.webContents.getURL().startsWith("app://launcher"),
+        ).length,
+    );
+  await app.app.evaluate(({ BrowserWindow }) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.webContents.getURL().startsWith("app://launcher")) window.close();
+    }
+  });
+  await expect.poll(launcherWindows).toBe(0);
+  expect(await gameState(app, gameId)).toBe("running");
+
+  expect(await runSecondInstance(app.userData, [`--launch-game=${uuidv7()}`])).toBe(0);
+  await expect.poll(launcherWindows).toBe(1);
+  await expect
+    .poll(async () => (await notices(app)).map((notice) => notice.title))
+    .toEqual(["The game is not in the library"]);
+  expect(await windowCount(app)).toBe(2);
+});
+
 test("Create shortcut writes a .webloc with the deep link and nothing else; no per-game bundle exists (F-8)", async () => {
   launched = await launchApp();
   const app = launched;
@@ -150,15 +187,13 @@ test("Create shortcut writes a .webloc with the deep link and nothing else; no p
   await app.launcher.getByRole("button", { name: "Settings" }).click();
   await app.launcher.getByRole("button", { name: "Library" }).click();
   const card = app.launcher.locator(`li.card[data-game-id="${gameId}"]`);
-  await card.getByRole("button", { name: "Create shortcut" }).click();
-
-  if (process.platform !== "darwin") {
-    // Linux is not a target yet; Windows .lnk creation is unit-tested only (no machine).
-    await expect(card.getByRole("alert")).toHaveText(
-      "Shortcuts can be created on macOS and Windows only.",
-    );
+  await expect(card.getByRole("button", { name: "Play" })).toBeVisible();
+  if (process.platform !== "darwin" && process.platform !== "win32") {
+    // Linux is not a target yet: no control is offered that could only fail (review fix 4).
+    await expect(card.getByRole("button", { name: "Create shortcut" })).toHaveCount(0);
     return;
   }
+  await card.getByRole("button", { name: "Create shortcut" }).click();
   await expect.poll(() => readdir(target)).toEqual(["Webloc game.webloc"]);
   expect(await readFile(join(target, "Webloc game.webloc"), "utf8")).toBe(
     [

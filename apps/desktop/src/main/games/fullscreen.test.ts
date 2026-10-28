@@ -27,8 +27,8 @@ function key(window: FakeWindow, type: "keyDown" | "keyUp", name: string, isAuto
 function setUp() {
   const window = new FakeWindow();
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
-  wireFullscreen(window, { gameId: GAME, log });
-  return { window, log };
+  const wired = wireFullscreen(window, { gameId: GAME, log });
+  return { window, log, wired };
 }
 
 beforeEach(() => {
@@ -137,6 +137,15 @@ describe("wireFullscreen (architecture.md section 9, AC-18)", () => {
     key(window, "keyDown", "Escape");
     vi.advanceTimersByTime(ESC_HOLD_MS);
     expect(window.calls).toEqual(["setFullScreen false"]);
+  });
+
+  it("tells whether the page holds a fullscreen of its own (window-state.ts saves that as not fullscreen)", () => {
+    const { window, wired } = setUp();
+    expect(wired.isPageFullscreen()).toBe(false);
+    window.emit("enter-html-full-screen");
+    expect(wired.isPageFullscreen()).toBe(true);
+    window.emit("leave-html-full-screen");
+    expect(wired.isPageFullscreen()).toBe(false);
   });
 
   it("cancels a hold when the window loses focus or closes (the key-up may never arrive)", () => {

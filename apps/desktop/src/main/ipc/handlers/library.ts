@@ -80,7 +80,10 @@ export function libraryHandlers(
         };
       }
       const cards = library.repos.games.list().map((game) => cardOf(library, game));
-      return { ok: true, data: { library: "ready", cards } };
+      return {
+        ok: true,
+        data: { library: "ready", cards, canCreateShortcuts: context.shortcuts.supported },
+      };
     },
 
     async "library:add"({ url, title }) {

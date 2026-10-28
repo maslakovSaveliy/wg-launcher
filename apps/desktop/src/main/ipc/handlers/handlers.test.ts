@@ -15,7 +15,12 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
 
 function setUp(
-  options: { flavor?: Flavor; confirm?: boolean[]; files?: Array<string | null> } = {},
+  options: {
+    flavor?: Flavor;
+    confirm?: boolean[];
+    files?: Array<string | null>;
+    shortcutsSupported?: boolean;
+  } = {},
 ) {
   const dir = tempDir();
   const clock = fakeClock();
@@ -34,6 +39,7 @@ function setUp(
     openFile: vi.fn(async (_spec: OpenFileSpec): Promise<string | null> => files.shift() ?? null),
   };
   const shortcuts = {
+    supported: options.shortcutsSupported ?? true,
     create: vi.fn(async (_game: { id: string; title: string }) => ({
       ok: true as const,
       data: { created: true },
@@ -102,7 +108,7 @@ describe("library:add (architecture.md section 12, AC-17)", () => {
       { id: "compat-not-verified" },
     ]);
     const list = dataOf("library:list", await handlers["library:list"]({}));
-    expect(list).toEqual({ library: "ready", cards: [card] });
+    expect(list).toEqual({ library: "ready", cards: [card], canCreateShortcuts: true });
   });
 
   it.each([
@@ -177,7 +183,7 @@ describe("library:add (architecture.md section 12, AC-17)", () => {
       readOnlyReason: db.readOnly ? db.reason : "",
       dialogs: { confirm: vi.fn(), openFile: vi.fn() },
       covers: createCovers({ coversDir: dir, tmpDir: dir }),
-      shortcuts: { create: vi.fn() },
+      shortcuts: { supported: true, create: vi.fn() },
       flavor: "test",
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() },
       newId: uuidv7,
@@ -366,6 +372,7 @@ describe("library:remove and library:orphans (architecture.md section 12)", () =
     expect(dataOf("library:list", await handlers["library:list"]({}))).toEqual({
       library: "ready",
       cards: [],
+      canCreateShortcuts: true,
     });
   });
 
@@ -440,6 +447,15 @@ describe("shortcut:create (architecture.md section 8)", () => {
       created: true,
     });
     expect(shortcuts.create).toHaveBeenCalledWith({ id: gameId, title: "Example" });
+  });
+
+  it("tells the UI through library:list whether shortcuts can be made here, so it offers no control that always fails", async () => {
+    for (const supported of [true, false]) {
+      const { handlers } = setUp({ shortcutsSupported: supported });
+      expect(dataOf("library:list", await handlers["library:list"]({}))).toMatchObject({
+        canCreateShortcuts: supported,
+      });
+    }
   });
 
   it("is NOT_FOUND for a game that is not in the library, and asks nothing", async () => {

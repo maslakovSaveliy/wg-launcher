@@ -18,37 +18,90 @@ export interface LaunchRequest {
   input: LaunchInput;
 }
 
+/** At most this many requests wait to be handled; more are dropped and logged (Assumed: a person clicks fewer). */
+export const MAX_QUEUED_LAUNCH_REQUESTS = 16;
+
 /**
  * Holds requests until `start`, then hands each to the handler, one at a time in arrival order. A handler that
- * throws does not stop the next request.
+ * throws does not stop the next request. At most `MAX_QUEUED_LAUNCH_REQUESTS` wait (before `start`, or behind a
+ * request being handled); a request beyond that is dropped and reported to `onDrop` (those dropped before `start`,
+ * when no log exists yet, are reported at `start`).
  */
 export function createLaunchQueue() {
   const pending: LaunchRequest[] = [];
+  const droppedEarly: LaunchSource[] = [];
   let handler: ((request: LaunchRequest) => Promise<void>) | null = null;
+  let onDrop: ((source: LaunchSource) => void) | null = null;
+  let waiting = 0;
   let chain = Promise.resolve();
-  const run = (request: LaunchRequest) => {
-    const handle = handler;
-    if (!handle) return;
-    chain = chain.then(() => handle(request)).catch(() => undefined);
+  const run = (handle: (request: LaunchRequest) => Promise<void>, request: LaunchRequest) => {
+    chain = chain
+      .then(() => handle(request))
+      .catch(() => undefined)
+      .finally(() => {
+        waiting -= 1;
+      });
   };
   return {
     push(request: LaunchRequest): void {
-      if (handler) run(request);
+      if (waiting >= MAX_QUEUED_LAUNCH_REQUESTS) {
+        if (onDrop) onDrop(request.source);
+        else droppedEarly.push(request.source);
+        return;
+      }
+      waiting += 1;
+      if (handler) run(handler, request);
       else pending.push(request);
     },
-    start(next: (request: LaunchRequest) => Promise<void>): void {
+    start(
+      next: (request: LaunchRequest) => Promise<void>,
+      dropped: (source: LaunchSource) => void = () => undefined,
+    ): void {
       handler = next;
-      for (const request of pending.splice(0)) run(request);
+      onDrop = dropped;
+      for (const source of droppedEarly.splice(0)) dropped(source);
+      for (const request of pending.splice(0)) run(next, request);
     },
     /** Resolves when every request pushed so far was handled (tests). */
     idle: (): Promise<void> => chain,
   };
 }
 
+/** At most this many notices wait for the user's OK; more are dropped and logged (Assumed). */
+export const MAX_PENDING_NOTICES = 4;
+
+/**
+ * Shows notices one at a time, in the order they were asked for, without making the caller wait for the user's OK:
+ * the launch queue goes on while a notice is open. A failing notice is logged and does not stop the next.
+ */
+export function createNoticeChain(notify: Dialogs["notify"], log: Pick<Logger, "warn" | "error">) {
+  let pending = 0;
+  let chain = Promise.resolve();
+  return {
+    notify(spec: { title: string; message: string }): Promise<void> {
+      if (pending >= MAX_PENDING_NOTICES) {
+        log.warn("launch.notice-dropped", { title: spec.title });
+        return Promise.resolve();
+      }
+      pending += 1;
+      chain = chain
+        .then(() => notify(spec))
+        .catch((error: unknown) => log.error("launch.notice-failed", { error }))
+        .finally(() => {
+          pending -= 1;
+        });
+      return Promise.resolve();
+    },
+    /** Resolves when every notice asked for so far was answered (tests). */
+    idle: (): Promise<void> => chain,
+  };
+}
+
 export interface LaunchHandlerDeps {
-  log: Pick<Logger, "info" | "warn">;
-  /** Shows the library: the launcher window shown, restored and focused. */
+  log: Pick<Logger, "info" | "warn" | "error">;
+  /** Shows the library: the launcher window shown, restored and focused (opened again if it was closed). */
   focusLauncher(): void;
+  /** Shows a notice; never awaited here, so a notice the user has not answered blocks no later request. */
   notify: Dialogs["notify"];
   /** Null while the database is read-only (nothing can be launched). */
   games: { has(gameId: string): boolean; launch(gameId: string): Promise<LaunchResult> } | null;
@@ -65,7 +118,9 @@ export async function handleLaunchRequest(
   const { log } = deps;
   const showLibrary = async (title: string, message: string) => {
     deps.focusLauncher();
-    await deps.notify({ title, message });
+    deps
+      .notify({ title, message })
+      .catch((error: unknown) => log.error("launch.notice-failed", { error }));
   };
 
   if (input.kind === "none") {

@@ -45,8 +45,14 @@ export interface Dialogs {
   notify(spec: ErrorSpec): Promise<void>;
 }
 
-/** Electron's native dialogs, modal to the window `parent` returns when there is one. */
-export function nativeDialogs(parent: () => BrowserWindow | null): Dialogs {
+/** The window itself, or null when there is none or it was destroyed (a dialog then appears unparented). */
+export function liveParent<W extends { isDestroyed(): boolean }>(window: W | null): W | null {
+  return window && !window.isDestroyed() ? window : null;
+}
+
+/** Electron's native dialogs, modal to the window `parent` returns while it is alive, else unparented. */
+export function nativeDialogs(getParent: () => BrowserWindow | null): Dialogs {
+  const parent = () => liveParent(getParent());
   return {
     async confirm(spec) {
       const options = {

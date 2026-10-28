@@ -473,7 +473,8 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
   Manual checklist, each result recorded with date, versions, machine: deep link not running / running / second
   instance (AC-19), the `wglauncher://` scheme registered by the packaged app (`Info.plist` and the prod-only
   `setAsDefaultProtocolClient`); a `.webloc` made by "Create shortcut" opens the game, not running and running
-  (open check 10); a malformed and an unknown deep link show the notice over the library; media with the macOS microphone and camera permission undecided,
+  (open check 10); a malformed and an unknown deep link show the notice over the library; with only a game window
+  open, a Dock click and a shortcut bring the launcher window back; media with the macOS microphone and camera permission undecided,
   denied, granted → `NotAllowedError`, no OS prompt, app keeps running (security §5 item 3; open check 5); real-input
   fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual): View → Toggle Full Screen clicked and
   Ctrl+Cmd+F pressed in a game window, a short real Esc reaches the game, Esc held 1.5 s ends the launcher's

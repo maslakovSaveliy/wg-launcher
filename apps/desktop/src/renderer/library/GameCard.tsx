@@ -7,7 +7,16 @@ import { badgeLabel, bridge, formatPlaytime, formatTime, stateLabel } from "../a
 
 type Outcome = { ok: true } | { ok: false; code: IpcCode; message: string };
 
-export function GameCard({ card, onChanged }: { card: Card; onChanged: () => Promise<void> }) {
+export function GameCard({
+  card,
+  canCreateShortcuts,
+  onChanged,
+}: {
+  card: Card;
+  /** False where main cannot make shortcuts (Linux): the button is not shown (AGENTS.md honesty rule 1). */
+  canCreateShortcuts: boolean;
+  onChanged: () => Promise<void>;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
@@ -72,9 +81,11 @@ export function GameCard({ card, onChanged }: { card: Card; onChanged: () => Pro
             Remove cover
           </button>
         )}
-        <button type="button" onClick={() => void run(() => bridge().createShortcut({ gameId }))}>
-          Create shortcut
-        </button>
+        {canCreateShortcuts && (
+          <button type="button" onClick={() => void run(() => bridge().createShortcut({ gameId }))}>
+            Create shortcut
+          </button>
+        )}
         <button type="button" onClick={() => void run(() => bridge().removeGame({ gameId }))}>
           Remove from library
         </button>

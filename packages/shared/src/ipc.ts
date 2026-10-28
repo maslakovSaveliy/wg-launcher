@@ -77,7 +77,13 @@ export const IPC_CONTRACT = {
     request: empty,
     // A database written by a newer app is read-only: the UI shows the reason instead of a library.
     response: z.discriminatedUnion("library", [
-      z.strictObject({ library: z.literal("ready"), cards: z.array(cardSchema) }),
+      z.strictObject({
+        library: z.literal("ready"),
+        cards: z.array(cardSchema),
+        // Whether "Create shortcut" can work on this system (macOS and Windows), so the UI never offers a control
+        // that always fails.
+        canCreateShortcuts: z.boolean(),
+      }),
       z.strictObject({ library: z.literal("read-only"), reason: z.string() }),
     ]),
   },

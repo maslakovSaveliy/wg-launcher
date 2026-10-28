@@ -203,6 +203,15 @@ test("Esc ends a fullscreen the page requested, as Chromium handles it (plan ope
   // took nothing (it has no Esc hold for a page's fullscreen).
   expect(await keysSeen(page)).toEqual([]);
   expect(await eventsNamed(app, "game.fullscreen-esc-exit")).toEqual([]);
+
+  // A game closed in its own fullscreen is saved as not fullscreen, so it does not come back as the launcher's.
+  await trustedClick(page, "#fullscreen");
+  await expect.poll(pageFullscreen).toBe(true);
+  await expectFullscreen(app, gameId, true);
+  await page.waitForTimeout(1_500);
+  await closeGame(app, gameId);
+  await expectState(app, gameId, "exited");
+  expect(await windowStateOf(app, gameId)).toMatchObject({ fullscreen: false });
 });
 
 test("the card shows playtime and badges from recorded state only; short sessions are dropped at close and at start-up (AC-14, AC-15 wiring)", async () => {

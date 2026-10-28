@@ -3,6 +3,7 @@ import {
   createShortcut,
   type ShortcutDeps,
   shortcutFileName,
+  shortcutsSupported,
   weblocContent,
   windowsShortcutOptions,
   xmlEscape,
@@ -70,6 +71,33 @@ describe("shortcutFileName", () => {
     );
   });
 
+  it("drops format characters such as U+202E (right-to-left override), which could disguise the name (review fix 5)", () => {
+    expect(shortcutFileName("evil\u202Eknl.exe", ".lnk")).toBe("evilknl.exe.lnk");
+    expect(shortcutFileName("a\u200Bb\u2066c\uFEFF", ".webloc")).toBe("abc.webloc");
+    expect(shortcutFileName("\u202E\u200F", ".lnk")).toBe("WGLauncher game.lnk");
+  });
+
+  it("never gives a Windows reserved device name, with or without an extension, in any case (review fix 5)", () => {
+    for (const reserved of [
+      "CON",
+      "prn",
+      "Aux",
+      "nul",
+      "COM1",
+      "com9",
+      "LPT1",
+      "lpt9",
+      "CON.txt",
+      "nul.tar.gz",
+      "Con ",
+    ]) {
+      expect(shortcutFileName(reserved, ".lnk"), reserved).toBe("WGLauncher game.lnk");
+    }
+    for (const fine of ["CONSOLE", "COM10", "LPT0", "my con", "AUXILIARY"]) {
+      expect(shortcutFileName(fine, ".lnk"), fine).toBe(`${fine}.lnk`);
+    }
+  });
+
   it("never starts with a dot, never is empty, and is at most 100 characters before the extension", () => {
     expect(shortcutFileName("..hidden", ".lnk")).toBe("hidden.lnk");
     expect(shortcutFileName("  ", ".lnk")).toBe("WGLauncher game.lnk");
@@ -95,6 +123,15 @@ function deps(patch: Partial<ShortcutDeps> = {}): ShortcutDeps & {
   };
   return Object.assign(base, patch) as never;
 }
+
+describe("shortcutsSupported (review fix 4)", () => {
+  it("is true on macOS and Windows only", () => {
+    expect(shortcutsSupported("darwin")).toBe(true);
+    expect(shortcutsSupported("win32")).toBe(true);
+    expect(shortcutsSupported("linux")).toBe(false);
+    expect(shortcutsSupported("freebsd")).toBe(false);
+  });
+});
 
 describe("createShortcut (shortcut:create)", () => {
   const game = { id: ID, title: "My Game" };

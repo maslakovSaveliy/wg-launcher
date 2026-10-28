@@ -38,7 +38,12 @@ class FakeWindow extends EventEmitter {
   }
 }
 
-function setUp(options: { save?: (state: Omit<WindowState, "updatedAt">) => void } = {}) {
+function setUp(
+  options: {
+    save?: (state: Omit<WindowState, "updatedAt">) => void;
+    isPageFullscreen?: () => boolean;
+  } = {},
+) {
   const window = new FakeWindow();
   const saved: Array<Omit<WindowState, "updatedAt">> = [];
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
@@ -48,6 +53,7 @@ function setUp(options: { save?: (state: Omit<WindowState, "updatedAt">) => void
     save: options.save ?? ((state) => saved.push(state)),
     displayIdOf,
     log,
+    isPageFullscreen: options.isPageFullscreen ?? (() => false),
   });
   return { window, saved, log, displayIdOf };
 }
@@ -108,6 +114,21 @@ describe("trackWindowState (architecture.md section 9)", () => {
       },
     ]);
     expect(displayIdOf).toHaveBeenCalledWith({ x: 2000, y: 30, width: 1000, height: 640 });
+  });
+
+  it("saves a fullscreen the page requested as not fullscreen, so it never comes back as the launcher's (review fix 1)", () => {
+    let page = true;
+    const { window, saved } = setUp({ isPageFullscreen: () => page });
+    window.fullscreen = true;
+    window.emit("enter-full-screen");
+    vi.advanceTimersByTime(WINDOW_STATE_DEBOUNCE_MS);
+    window.emit("close", closeEvent());
+    expect(saved.map((state) => state.fullscreen)).toEqual([false, false]);
+    // Once the page has left its fullscreen, a fullscreen the launcher sets is saved again.
+    page = false;
+    window.emit("show");
+    window.emit("close", closeEvent());
+    expect(saved.at(-1)?.fullscreen).toBe(true);
   });
 
   it("also saves after maximize and fullscreen changes", () => {

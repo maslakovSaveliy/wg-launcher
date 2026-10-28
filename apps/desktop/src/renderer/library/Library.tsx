@@ -9,7 +9,7 @@ import { GameCard } from "./GameCard.js";
 
 type LibraryView =
   | { kind: "loading" }
-  | { kind: "ready"; cards: Card[] }
+  | { kind: "ready"; cards: Card[]; canCreateShortcuts: boolean }
   | { kind: "read-only"; reason: string }
   | { kind: "error"; message: string };
 
@@ -21,7 +21,10 @@ export function Library() {
     if (!result.ok) setView({ kind: "error", message: result.message });
     else if (result.data.library === "read-only")
       setView({ kind: "read-only", reason: result.data.reason });
-    else setView({ kind: "ready", cards: result.data.cards });
+    else {
+      const { cards, canCreateShortcuts } = result.data;
+      setView({ kind: "ready", cards, canCreateShortcuts });
+    }
   }, []);
 
   useEffect(() => {
@@ -51,7 +54,12 @@ export function Library() {
           ) : (
             <ul className="cards">
               {view.cards.map((card) => (
-                <GameCard key={card.gameId} card={card} onChanged={load} />
+                <GameCard
+                  key={card.gameId}
+                  card={card}
+                  canCreateShortcuts={view.canCreateShortcuts}
+                  onChanged={load}
+                />
               ))}
             </ul>
           )}

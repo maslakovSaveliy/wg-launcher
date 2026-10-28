@@ -205,7 +205,7 @@ no longer have `Buffer`, `events`, `timers` or `url`, so the bridge uses none of
 
 | Channel | Request | Response `data` |
 | --- | --- | --- |
-| `library:list` | `{}` | `{library: "ready", cards}` (card: id, title, url, cover URL, badges, last launch, playtime, session state, needs recovery) or `{library: "read-only", reason}` (section 7) |
+| `library:list` | `{}` | `{library: "ready", cards, canCreateShortcuts}` (card: id, title, url, cover URL, badges, last launch, playtime, session state, needs recovery) or `{library: "read-only", reason}` (section 7) |
 | `library:add` | `{url, title?}` | The new card (rules in section 12) |
 | `library:update` | `{gameId, title?, cover?: "pick" \| "remove"}` | The card; `pick` opens the file dialog in main |
 | `library:remove` | `{gameId}` | `{}` (section 12) |
@@ -391,9 +391,21 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     `showErrorBox` would block it): "The launch link is not valid", "The game is not in the library", "The game
     cannot be opened" or "The game is closing". The renderer gets no new event; nothing navigates. A second start
     without a launch argument only brings the launcher to the front, as before.
+  - *Fix round 1.* The launch queue does not wait for a notice: notices go through their own chain
+    (`createNoticeChain`), one at a time in order, so a valid shortcut clicked while a notice is open is handled at
+    once. At most `MAX_QUEUED_LAUNCH_REQUESTS` (16) requests wait and at most `MAX_PENDING_NOTICES` (4) notices; more
+    are dropped and logged (`launch.dropped` with the source, `launch.notice-dropped` with the title). "Show the
+    library" opens the launcher window again when the user closed it while a game ran (`launcher.reopened`), and on
+    macOS a Dock click (`activate`) with no launcher window does the same; a dialog whose parent window was destroyed
+    appears unparented (`liveParent`). `library:list` carries `canCreateShortcuts` (`shortcutsSupported`: macOS and
+    Windows), and the card shows "Create shortcut" only where it can work. e2e: with the launcher closed and a game
+    running, a second instance with an unknown id opened the launcher again and showed "The game is not in the
+    library". Verified (2026-10-28, `apps/desktop/e2e/shortcut.spec.ts`, Electron 45.0.0, macOS arm64). The Dock click
+    is part of the Task 16 manual checks.
   - `shortcut:create {gameId}` (`apps/desktop/src/main/shortcuts.ts`): a native save dialog in main, defaulting to
     `app.getPath("desktop")` and a file name made from the title (separators, reserved and control characters become
-    `-`, no leading dot, at most 100 characters, "WGLauncher game" when nothing is left); the extension is added
+    `-`, format characters such as U+202E are removed, no leading dot, at most 100 characters, "WGLauncher game" when
+    nothing is left or the name is a Windows device name such as `CON`, `nul.txt` or `COM1`); the extension is added
     when the chosen name lacks it. On macOS it writes the `.webloc` plist whose only content is
     `<string>wglauncher://launch/<id></string>` (XML-escaped; the id is checked to be a lowercase UUIDv7 first). On
     Windows it calls `shell.writeShortcutLink(path, "create", {target: process.execPath, args:
@@ -442,7 +454,12 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     hides the window; nothing more is saved until a "Stay" shows the window again) and 500 ms after the last `move`,
     `resize`, `maximize`, `unmaximize`, `enter-full-screen` or `leave-full-screen`; nothing after `closed`; a failed
     write is logged (`game.window-state-save-failed`), never thrown. The display id is
-    `String(screen.getDisplayMatching(normalBounds).id)`. A game window is created at `restoreBounds` of its row, and
+    `String(screen.getDisplayMatching(normalBounds).id)`. A fullscreen the page requested itself (from
+    `enter-html-full-screen` until `leave-html-full-screen`) is saved as `fullscreen = 0`, because `isFullScreen()` is
+    true then too: otherwise the next launch would put the window into a fullscreen the page did not ask for and
+    whose exit it cannot drive (fix round 1). A page fullscreen entered over a fullscreen the launcher set is saved as
+    not fullscreen as well (Assumed: rare, and the safe side). e2e: a game closed in its own fullscreen was saved
+    with `fullscreen` false (Verified, 2026-10-28, `apps/desktop/e2e/window.spec.ts`). A game window is created at `restoreBounds` of its row, and
     the saved maximized and fullscreen flags are applied on its first `show` (it is created hidden).
   - The UI control of F-6 is the menu item itself: `apps/desktop/src/main/app-menu.ts` sets an application menu of
     Electron's standard roles with a View menu holding `togglefullscreen` (clickable, and its accelerator is the

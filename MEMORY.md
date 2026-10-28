@@ -123,7 +123,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   registered right after the single-instance lock and queued until the runtime and the launcher page are up
   (`launch-input.ts`); malformed, unknown and refused launches are native notices (`Dialogs.notify`) over the
   library, no renderer event; `shortcut:create` is macOS and Windows only; `setAsDefaultProtocolClient` only in the
-  packaged prod build: architecture.md section 8 ("Implementation (Phase 1 Task 11)").
+  packaged prod build: architecture.md section 8 ("Implementation (Phase 1 Task 11)"). Fix round 1 (Ruling R30):
+  notices no longer block the launch queue, both are bounded, a closed launcher is opened again to show the library,
+  "Create shortcut" is hidden where unsupported, and a page's own fullscreen is saved as not fullscreen.
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.

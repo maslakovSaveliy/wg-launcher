@@ -34,6 +34,11 @@ export interface WindowStateDeps {
   /** `String(screen.getDisplayMatching(bounds).id)`. */
   displayIdOf(bounds: Bounds): string | null;
   log: Pick<Logger, "error">;
+  /**
+   * True while the page holds a fullscreen it requested itself (`wireFullscreen`): that is saved as not fullscreen,
+   * so it never comes back at the next launch as a fullscreen the launcher set, whose exit the page could not drive.
+   */
+  isPageFullscreen(): boolean;
 }
 
 /**
@@ -59,7 +64,7 @@ export function trackWindowState(window: TrackedWindow, deps: WindowStateDeps): 
         height: normal.height,
         displayId: deps.displayIdOf(normal),
         maximized: window.isMaximized(),
-        fullscreen: window.isFullScreen(),
+        fullscreen: window.isFullScreen() && !deps.isPageFullscreen(),
       });
     } catch (error) {
       deps.log.error("game.window-state-save-failed", { gameId: deps.gameId, error });

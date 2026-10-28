@@ -25,6 +25,8 @@ export interface HandlerContext {
   covers: Covers;
   /** `createShortcut` with the platform's writers (`shortcuts.ts`). */
   shortcuts: {
+    /** `shortcutsSupported(process.platform)`. */
+    supported: boolean;
     create(game: { id: string; title: string }): Promise<Result<{ created: boolean }, IpcCode>>;
   };
   flavor: Flavor;
