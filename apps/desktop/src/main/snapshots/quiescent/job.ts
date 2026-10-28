@@ -62,6 +62,11 @@ export interface JobContext {
   signal: AbortSignal;
   /** Bytes the plan moved, for the watchdog's deadline. */
   addBytes(bytes: number): void;
+  /**
+   * Called by `commit` right after its result became durable (the export's database transaction): from then on a
+   * stop never discards the commit, whose outcome the job waits for.
+   */
+  committed(): void;
 }
 
 export interface JobPlan<T> {
@@ -228,10 +233,14 @@ export async function runQuiescentJob<T>(
     },
     Math.min(500, timing.deadlineMs),
   );
+  let durable = false;
   const context: JobContext = {
     signal: abort.signal,
     addBytes: (n) => {
       bytes += n;
+    },
+    committed: () => {
+      durable = true;
     },
   };
 
@@ -257,7 +266,9 @@ export async function runQuiescentJob<T>(
       if (abort.signal.aborted) resolve("stopped");
       abort.signal.addEventListener("abort", () => resolve("stopped"), { once: true });
     });
-    const settled = await Promise.race([committing, stoppedFirst]);
+    let settled = await Promise.race([committing, stoppedFirst]);
+    // A commit that recorded its result before the stop landed stands: wait for it instead of discarding it.
+    if (settled === "stopped" && durable) settled = await committing;
     let outcome: Result<T, ErrorCode>;
     if (settled === "stopped") {
       outcome = stopped ?? fail("CANCELLED", "The job was cancelled.");

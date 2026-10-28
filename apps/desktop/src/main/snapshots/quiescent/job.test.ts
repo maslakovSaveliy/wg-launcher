@@ -564,6 +564,23 @@ describe("runQuiescentJob (save-transfer.md section 5)", () => {
     });
   });
 
+  it("keeps a commit that has recorded its result although the job is stopped before the commit settles", async () => {
+    const setUp = fakes();
+    setUp.plan.commit.mockImplementationOnce(async (context) => {
+      // The row is recorded here (the export's transaction); then a stop lands before the commit has returned.
+      context.committed();
+      setUp.leaseController.abort();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { ok: true, data: "committed" };
+    });
+    expect(await runQuiescentJob(GAME, setUp.plan, setUp.deps)).toEqual({
+      ok: true,
+      data: "committed",
+    });
+    expect(setUp.plan.discard).not.toHaveBeenCalled();
+    expect(setUp.nothingLeft()).toEqual(CLEAN);
+  });
+
   it("aborts the job's signal with the watchdog's EXP_TIMEOUT, which a commit can read", async () => {
     const setUp = fakes();
     setUp.deps.timing = { ...FAST, deadlineMs: 100 };

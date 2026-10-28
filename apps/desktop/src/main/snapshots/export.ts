@@ -142,6 +142,8 @@ export interface CommitRequest {
   fault?: "fail-write";
   signal: AbortSignal;
   onWrite?(): void;
+  /** Called once the row and the base revision are recorded (`JobContext.committed`). */
+  onCommitted?(): void;
 }
 
 /**
@@ -228,6 +230,8 @@ export async function commitExport(
       repos.games.update(gameId, { baseRevisionId: revisionId });
       return row;
     });
+    // Recorded: a stop from now on must not discard this revision's file (job.ts).
+    request.onCommitted?.();
     log.info("snapshot.export.done", {
       gameId,
       revisionId,
@@ -347,6 +351,7 @@ export async function exportSnapshot(
               remember,
               signal: context.signal,
               onWrite: () => report({ step: "write" }),
+              onCommitted: context.committed,
               ...(options.test?.fault ? { fault: options.test.fault } : {}),
             },
             deps,

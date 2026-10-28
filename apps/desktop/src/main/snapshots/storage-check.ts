@@ -46,6 +46,7 @@ export async function runStorageCheck(
         async commit(context) {
           if (context.signal.aborted) return failureOf(context.signal);
           deps.repos.storageChecks.save(gameId, hasData);
+          context.committed();
           const saved = deps.repos.storageChecks.get(gameId);
           if (!saved)
             return { ok: false, code: "INTERNAL", message: "The check was not recorded." };

@@ -78,7 +78,12 @@ describe("the export commit (save-transfer.md section 6, Export)", () => {
   it("records the row, moves the base revision and remembers the frame choice, together", async () => {
     const { deps, request, repos, gameId, revisionId, inExport, files } = setUp();
     expect(inExport()).toEqual([false]);
-    const result = await commitExport(request({}), deps);
+    // The job learns the commit point once the row exists (a later stop then keeps the result).
+    const onCommitted = vi.fn(() =>
+      expect(repos.snapshots.listForGame(gameId, null)).toHaveLength(1),
+    );
+    const result = await commitExport(request({ onCommitted }), deps);
+    expect(onCommitted).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ ok: true, data: { revisionId, flushState: "unconfirmed" } });
     expect(repos.games.get(gameId)?.baseRevisionId).toBe(revisionId);
     expect(inExport()).toEqual([true]);
@@ -92,8 +97,13 @@ describe("the export commit (save-transfer.md section 6, Export)", () => {
 
   it("removes the final file when the worker failed after its rename, and writes no row", async () => {
     const { deps, request, repos, gameId, worker, files, inExport } = setUp();
-    const result = await commitExport(request({ worker: worker("died-after-rename") }), deps);
+    const onCommitted = vi.fn();
+    const result = await commitExport(
+      request({ worker: worker("died-after-rename"), onCommitted }),
+      deps,
+    );
     expect(result).toMatchObject({ ok: false, code: "INTERNAL" });
+    expect(onCommitted).not.toHaveBeenCalled();
     expect(files()).toEqual({ tmp: [], snapshots: [] });
     expect(repos.snapshots.listForGame(gameId, null)).toEqual([]);
     expect(inExport()).toEqual([false]);

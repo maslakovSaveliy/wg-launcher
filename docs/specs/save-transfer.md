@@ -296,7 +296,12 @@ otherwise.
   the exit before it removes the revision's files). At most two jobs run at once in the process, and a user task
   takes a storage check's slot by cancelling it (security.md section 8, architecture.md section 4 "Lock details"). A job's worker is started once and killed when the job ends, also when the job
   was stopped while the worker was still starting (`worker/slot.ts`); the kill resolves once the process has exited,
-  and the worker's pending requests fail then, not before. Each step throwing once
+  and the worker's pending requests fail then, not before. A commit that has recorded its row (`JobContext.committed`,
+  called right after the export's transaction) stands even when the job is stopped before the commit returns: the job
+  waits for it and never discards it. If the killed worker's exit is not seen within 2 s (logged
+  `snapshot.worker-kill-timeout`), the discard removes the revision's files anyway, and a process still alive could
+  then rename its partial into `snapshots/<gameId>/<revisionId>.wgsnap`: an orphan file with no row, which nothing
+  removes until a later cleanup of unreferenced snapshot files exists (none does in Phase 1). `Assumed` Each step throwing once
   leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
   behind and releases the lease (QW-3, `job.test.ts`). QW-2 counts the `webContents` on the game's session before
   the first stub navigation.
