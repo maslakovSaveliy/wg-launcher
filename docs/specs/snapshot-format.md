@@ -376,7 +376,9 @@ its bytes, otherwise `SNAP_RECORD_INVALID`. `Assumed`
   [progress-lab README](../../fixtures/test-games/progress-lab/README.md)). The W3C draft says an explicit numeric key
   sets the current number to its floor plus 1 only when that is higher, an aborted transaction reverts the current
   number, and above 2^53 the generator fails with `ConstraintError`. Verified (2026-10-25,
-  <https://www.w3.org/TR/IndexedDB/>, Working Draft of 2025-08-13). Whether Chromium reverts on abort is Unverified.
+  <https://www.w3.org/TR/IndexedDB/>, Working Draft of 2025-08-13). Chromium reverts the generator on abort. Verified
+  (2026-10-28, `packages/exporters/browser/key-generator.spec.ts`, bundled Chromium 156.0.8078.4); in Electron 45
+  Assumed.
 - So the maximum key does not determine the generator (records may have been deleted after higher keys were
   generated). The exporter records the current number by a probe that adds a placeholder and aborts the transaction;
   the importer raises the generator to it after the records; the restore check sees any difference, because

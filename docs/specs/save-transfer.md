@@ -97,6 +97,19 @@ interface FrameInventory {
   and 6. Because a throwing script in an isolated world resolves to `undefined` (Verified (2026-10-24,
   <https://www.electronjs.org/docs/latest/api/web-frame>)), every command catches its own errors and returns an
   explicit error message; a missing reply is `EXP_TIMEOUT`.
+- **Settled in Phase 1 Task 12** (`packages/exporters/src/types.ts`, `protocol.ts`; `Assumed`):
+  `createFrameExporter(env)` takes the frame's Web APIs (`{localStorage, indexedDB, crypto, storage?}`), so a test can
+  replace one. `exportFrame({keyIndex, storageKey, scope}, sink)` and `importFrame(source, {keyIndex, storageKey,
+  scope})` take the manifest index `k` of the frame's key (for the `data/<k>/` paths) and the key itself (for error
+  details); `wipeSelected(scope)` serves R5 of a selective restore. Each returns `{ok: true, data}` or `{ok: false,
+  error: {code, message, detail?}}` and never throws; `code` is an `EXP_*` or `IMP_*` code or `INTERNAL` for an
+  unexpected failure, and `detail` names the storage key, database, store, record key, property path and entry path
+  where they apply, never a value. A sink receives each entry whole, once (`write(path, bytes)`); a source yields the
+  frame's entries in any order. A `Selection` is `"all"` or `{include, exclude}`, per storage kind.
+- The frame protocol (zod, strict objects, both directions): commands `inventory`, `export`, `import` (followed by
+  `entry` messages and one `end`) and `wipe-selected`; replies `entry` (the export's entries), `inventory`, `summary`,
+  `wiped` and `error`. Every message carries its command's request nonce, 32 lowercase hex digits (128 bits, QW-4), and
+  an entry's bytes are one `ArrayBuffer` (transferred over the port, QW-7), never a string. `Assumed`
 
 ## 4. Generic exporter
 
@@ -110,9 +123,13 @@ Export, inside one stub frame:
 3. For each `autoIncrement` store, probe the key generator: a separate read-write transaction on that store calls
    `add(placeholder)` (`null` without a key path, `{}` with one, so the key is injected), reads the generated key and
    aborts the transaction. That key is `keyGenerator`. A `ConstraintError` is `EXP_KEY_GENERATOR_EXHAUSTED`. The W3C
-   draft says an abort reverts the generator (Verified (2026-10-25, <https://www.w3.org/TR/IndexedDB/>)); that Chromium
-   does so is Unverified, and a Phase 1 test MUST show that two exports in a row give the same `keyGenerator` and an
-   unchanged `contentHash`. This aborted write is the only write an export makes. `Assumed`
+   draft says an abort reverts the generator (Verified (2026-10-25, <https://www.w3.org/TR/IndexedDB/>)). Chromium does
+   so: two exports in a row gave the same `keyGenerator` (8 after 7 progress-lab steps) and the same `contentHash`, and
+   the game's next step still got key 8; a store whose generator is above its highest key plus 1 exported that
+   generator, not the highest key plus 1; an explicit key 2^53 made the probe fail with `ConstraintError`. Verified
+   (2026-10-28, `packages/exporters/browser/key-generator.spec.ts`, bundled Chromium 156.0.8078.4; Electron 45 Assumed
+   until Task 13 runs it there). So the fallback (highest numeric key plus 1) is not needed. This aborted write is the
+   only write an export makes. `Assumed`
 4. Encode with the codec ([snapshot-format.md](snapshot-format.md#6-record-encoding)); hash Blob and File bytes with
    `crypto.subtle.digest("SHA-256")` and send each distinct blob once. Unsupported values fail the whole export with
    `EXP_UNSUPPORTED_VALUE`, `EXP_SHARED_REFERENCE` or `EXP_TOO_DEEP` and the record path (AC-10).
@@ -135,6 +152,21 @@ Import, inside one stub frame, after the wipe (section 6):
    one) and delete it in the same transaction. Explicit numeric keys move the generator up and deletes never move it
    down. Verified (2026-10-25, <https://www.w3.org/TR/IndexedDB/>, key generators); in Chromium, Verified for explicit
    keys (2026-10-24, RESULTS.md H14a). The restore check covers the rest.
+
+Implementation (Phase 1 Task 12, `packages/exporters`). `Assumed` unless tagged otherwise:
+
+- The importer receives the frame's entries (its `data/<k>/…` files and the blobs they reference) in any order and
+  decodes every file and builds every value once before its first write, so an entry it cannot turn into storage fails
+  the import with nothing written: `IMP_RECORD_INVALID`, with the entry path and, for a record, the database, store and
+  record key. That covers a RegExp source that does not compile in this engine (Ruling R7; the worker's validator
+  already refused it in R1, so this is defense in depth), a blob whose bytes do not match its name, a missing or
+  duplicated entry, a record count that differs from the schema and, for a selective restore, a localStorage key or
+  database outside the selection. Verified for the RegExp and the selection cases (2026-10-28,
+  `packages/exporters/browser/import-errors.spec.ts`, bundled Chromium 156).
+- A database that already exists in the target (an `upgradeneeded` with `oldVersion` above 0, no `upgradeneeded`, or
+  a `VersionError`) is `IMP_TARGET_NOT_EMPTY`; a `put` whose value yields no key at the key path (`DataError`) is
+  `IMP_KEY_MISMATCH` like a key that compares unequal. Reads and writes go in transactions of 256 records.
+- Any other failure inside a frame is `INTERNAL` with the error's type name only, never a value.
 
 ## 5. Quiescent window
 
@@ -276,6 +308,11 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
   game page and it returned exactly `true` before its timeout; no user input reached the game window between the start
   of the hook and the close; and the launcher closed the window itself within 2 s after the hook finished. `Assumed`
   (the numbers and the input rule)
+- Settled in Phase 1 Task 12 (`packages/exporters/src/flush.ts`, `Assumed`): the observation carries the declared
+  hook, the hook's `timeoutMs`, whether the flush flow requested the export, the hook run (`not-run`, `returned` with its
+  value, `threw`, `timed-out`, with start and finish times), the times of user input and the time the launcher closed
+  the window (`null` if it did not). Input at the hook's start or at the close counts; the close must come at or after
+  the hook's finish; a time that is not a finite number gives `unconfirmed`.
 - The generic exporter has no hook, so every MVP snapshot without such an adapter is `unconfirmed`. `Assumed`
 - The decision is one pure function, `decideFlushState(observation)`. Its unit test (AC-12) uses a fake hook: none,
   success, error, timeout, a value other than `true`, input after the hook started, and a late close; only the success
@@ -290,8 +327,8 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
 ## 8. Declarative adapters
 
 Adapters are JSON data, never code (AGENTS.md security invariant 7). In v1 they ship inside the app
-(`packages/exporters/adapters/*.json`), are validated at build time and at load, and user-supplied adapters are not
-loaded. `Assumed`
+(`packages/exporters/src/adapters/*.json`), are validated by the unit tests and when `src/adapters/index.ts` loads, and
+user-supplied adapters are not loaded. `Assumed`
 
 ```json
 {
@@ -310,14 +347,14 @@ loaded. `Assumed`
 
 - The schema is closed: unknown members, a wrong type or an over-long value make the adapter invalid. `id` matches
   `^[a-z0-9-]{1,64}$`; `version` is SemVer; at most 64 items per list and 256 characters per string. `Assumed`
-- `match.origins` are exact origins compared with the game's top-level origin. `frameKeys` lists partitioned keys
+- `match.origins` are exact origins compared with the game's top-level origin, at least one per adapter (`Assumed`). `frameKeys` lists partitioned keys
   (`{origin, topLevelSite}`) that belong to the game, which the user then need not confirm.
 - localStorage selectors are key prefixes; IndexedDB selectors are whole database names, matched exactly. No regular
   expressions or globs (no ReDoS, predictable scope). Store-level filtering is not offered, because a database restored
   at its version without some of its stores would break the game's upgrade logic. `Assumed`
 - `flush.hook` is `none` or `emscripten-idbfs` with `module` (matching the identifier pattern of section 7, default
   `Module`) and `timeoutMs`
-  (at most 30 000). The `emscripten-idbfs` hook calls `FS.syncfs(false, callback)` on that module object. `Assumed`
+  (an integer from 1 to 30 000). The `emscripten-idbfs` hook calls `FS.syncfs(false, callback)` on that module object. `Assumed`
 - Filtering is a declared choice: the manifest names the adapter and its version, so a snapshot's scope can always be
   explained. A selective restore never wipes data outside the selection (section 6, R5).
 
@@ -363,7 +400,5 @@ QW-3); sender and nonce checks (QW-4); canary flags a deliberately injected main
 - The generic exporter can capture tokens a site keeps in localStorage (cookies are never read). Default: no heuristic
   filtering, because it would drop data silently; the export dialog shows the origins and counts, and snapshots stay
   local unless the user moves them. Recorded as a residual risk in [security.md](security.md). `Assumed`
-- If Chromium does not revert the generator on abort (section 4), the fallback is to record the highest numeric key
-  plus 1 and accept the documented difference. `Assumed`
 - Game-native "download save" buttons do not work in the MVP: downloads and the File System Access API are denied
   ([security.md](security.md#5-permission-and-navigation-policy)). `Assumed`

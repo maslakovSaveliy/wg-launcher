@@ -393,16 +393,16 @@ the partitioning override of its config).
 `EntrySink {write(path: string, bytes: Uint8Array): Promise<void>}`, `EntrySource` (async iterator of `{path, bytes}`);
 `FrameCommand` / `FrameReply` zod schemas (`inventory`, `export`, `import`, `wipe-selected`, with 128-bit request nonces);
 `decideFlushState(o: FlushObservation): "confirmed" | "unconfirmed"`; `parseAdapter(json): Adapter` (closed schema of §8).
-- [ ] Browser tests: export progress-lab after 7 steps, import into a fresh context, progress-lab's own `#progress-hash`
+- [x] Browser tests: export progress-lab after 7 steps, import into a fresh context, progress-lab's own `#progress-hash`
   equal; Date/ArrayBuffer/Uint8Array/Blob preserved (AC-7 value part); key-generator probe twice → same `keyGenerator`
   and same `contentHash` (open check 2: Chromium reverting on abort); after import the next `add` key equals the
   exported generator; `IMP_TARGET_NOT_EMPTY`; a quota error maps to `IMP_QUOTA_EXCEEDED` (lowered quota via a fake
   `localStorage`); exporter never touches `document.cookie`/`cookieStore` (spy).
-- [ ] Unit: AC-12 `decideFlushState` (none, success, error, timeout, non-`true`, input after start, late close);
+- [x] Unit: AC-12 `decideFlushState` (none, success, error, timeout, non-`true`, input after start, late close);
   adapter schema rejects unknown members, regex-like strings are plain prefixes, `module` pattern.
-- [ ] Run failing, implement, run passing. If the probe is unstable, apply the save-transfer fallback (highest key + 1)
-  and record it.
-- [ ] Commit `feat(exporters): add the generic web storage exporter`.
+- [x] Run failing, implement, run passing. If the probe is unstable, apply the save-transfer fallback (highest key + 1)
+  and record it. (The probe is stable in bundled Chromium 156: no fallback; save-transfer §4.)
+- [x] Commit `feat(exporters): add the generic web storage exporter`.
 
 ### Task 13: Quiescent job runner, snapshot worker, export (L)
 **Files:** `src/main/snapshots/quiescent/{job.ts,interceptor.ts,stub.ts,canary.ts,handshake.ts}`,
@@ -509,7 +509,7 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 | # | Check (where it is settled) | Fallback if it fails |
 | --- | --- | --- |
 | 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window. **Settled in Task 8: it works** (worker and renderer gone about 110 ms after the close; architecture.md section 4) |
-| 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference |
+| 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference. **Settled in Task 12: it reverts** in bundled Chromium 156 (two exports equal, the game's next key unchanged; save-transfer.md section 4); Electron is run in Task 13 |
 | 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION` |
 | 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types |
 | 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides) |

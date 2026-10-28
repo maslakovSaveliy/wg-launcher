@@ -76,7 +76,7 @@ Verified (2026-10-28, electron-vite 6.0.0, Vite 8.3.5, run locally; the import w
 | Path | Content | When it is created |
 | --- | --- | --- |
 | `apps/desktop` | `main` (with the snapshot worker entry), `preload` (launcher bridge and quiescent preload), `renderer` | Exists since Phase 1 Task 5 (skeleton; the worker and quiescent preload come later) |
-| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | `shared` and `snapshot` exist (Phase 1 Tasks 1 to 4); `exporters` when its first code exists |
+| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | `shared` and `snapshot` exist (Phase 1 Tasks 1 to 4), `exporters` since Phase 1 Task 12 |
 | `fixtures/` | Controlled test games (`progress-lab` now) | Exists |
 | `spikes/` | Throwaway experiments with their own lockfiles, outside the workspace | Exists |
 | `crates/` | Rust, only when an ADR-0003 trigger fires | Later |

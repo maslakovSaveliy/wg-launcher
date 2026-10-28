@@ -57,10 +57,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
-  # Runs the progress-lab fixture's own browser tests in the bundled Chromium. It proves the fixture
-  # and the storage behavior it checks, not game compatibility.
+  # Runs the progress-lab fixture's own browser tests and the exporter's browser tests in the bundled
+  # Chromium. They prove the fixture, the exporter and the storage behavior they check, not game compatibility.
   e2e:
-    name: Fixture browser tests (${{ matrix.os }})
+    name: Fixture and exporter browser tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -86,6 +86,8 @@ jobs:
       # Only the bundled Chromium: the `chrome` project needs an installed Google Chrome and is local only.
       # The desktop suite runs in its own job below.
       - run: pnpm test:e2e:fixture --project=chromium
+      # The exporter's browser tests use the same Playwright and bundled Chromium.
+      - run: pnpm test:e2e:exporters
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -94,6 +96,8 @@ jobs:
           path: |
             fixtures/test-games/progress-lab/playwright-report/
             fixtures/test-games/progress-lab/test-results/
+            packages/exporters/playwright-report/
+            packages/exporters/test-results/
           retention-days: 7
 
   # Builds the desktop app's test flavor and runs its Playwright `_electron` suite. It proves the build and tests,

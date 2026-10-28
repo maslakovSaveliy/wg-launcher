@@ -126,6 +126,15 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   packaged prod build: architecture.md section 8 ("Implementation (Phase 1 Task 11)"). Fix round 1 (Ruling R30):
   notices no longer block the launch queue, both are bounded, a closed launcher is opened again to show the library,
   "Create shortcut" is hidden where unsupported, and a page's own fullscreen is saved as not fullscreen.
+- 2026-10-28 Phase 1 Task 12 (`packages/exporters`, Assumed unless noted): interfaces, frame protocol and error
+  values in save-transfer.md section 3 ("Settled in Phase 1 Task 12"), importer rules in section 4 ("Implementation"),
+  the flush observation in section 7, adapter location and limits in section 8. New result code `IMP_RECORD_INVALID`
+  (an entry the importer cannot turn into storage, Ruling R7 included); the importer decodes every file and builds every
+  value before its first write. `value.ts` of the snapshot record layer is split into `value-export.ts`,
+  `value-check.ts` and `value-build.ts` (shared vocabulary stays in `value.ts`); `encodeStoreRecord` encodes one record,
+  byte-identical when concatenated (R6). The browser tests (`pnpm test:e2e:exporters`, also in CI's fixture job) bundle
+  the exporter per worker with Vite 8.3.5 (a devDependency already in the lockfile) and run it in a CDP isolated world
+  of a `page.route` stub page at the game's origin, with `serviceWorkers: "block"`; Task 13 wires the real preload.
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -193,6 +202,16 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `EXP_UNSUPPORTED_VALUE`): snapshot-format.md sections 6.2, 6.3 and 7. API choices (`onBlob` once per value, caller
   deduplicates; `encodeLocalStorage` gives `null` for no items; `encode*` sort and throw `TypeError` on duplicates or a
   schema the reader would refuse) are in the comments of `src/record/value.ts` and `src/record/data-files.ts`.
+- [V, 2026-10-28, bundled Chromium 156.0.8078.4, `packages/exporters/browser/round-trip.spec.ts`] The exporter in a
+  CDP isolated world (`Page.createIsolatedWorld`) reads Date, Map, Set, typed arrays (Float16Array included),
+  DataView, partial views, ArrayBuffer, Blob, File, RegExp, boxed primitives and BigInt from IndexedDB with that world's
+  own prototypes, so the exact-prototype classifiers hold (Task 2 carry); restored by the importer, the page's main
+  world reads them back with its own classes, and a re-export gives byte-identical entries. Float16Array round-trips
+  there. [A] Electron's preload isolated world behaves the same (Task 13 runs it).
+- [V, 2026-10-28, same Chromium, `browser/key-generator.spec.ts`] Chromium reverts an `autoIncrement` key generator
+  when the transaction of the probe's `add` is aborted (open check 2 closed, no fallback); an explicit key 2^53 makes
+  the next `add` fail with `ConstraintError`. [V, same, `browser/export-errors.spec.ts`] After a Cache Storage `put`,
+  `navigator.storage.estimate().usageDetails.caches` is above zero when read from an isolated world.
 - [V, 2026-10-25, pnpm 12.15.0, scratch workspace and this repository] `pnpm licenses list --prod --recursive --json`
   lists neither our `AGPL-3.0-or-later` workspace packages nor hides their dependencies, so `pnpm licenses:check` passes;
   [A] a later pnpm may list them, so the gate exempts a member only while its license is exactly `AGPL-3.0-or-later`
@@ -468,6 +487,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - The main log is written asynchronously (queue), so an e2e test must poll for a record (`expect.poll` over
   `eventsNamed`), never read `main.log` once right after a state change: the force-close test did and was flaky. [A,
   2026-10-28, from `logger.ts`; the flake itself was not reproduced, 3 runs of the fixed spec passed]
+- CDP `Page.createIsolatedWorld` then `Runtime.evaluate` with its `contextId` runs code in an isolated world of a
+  Playwright page without `Page.enable` or `Runtime.enable`; a global the evaluated bundle defines (`var wgExporters`)
+  stays out of the main world. Biome's `noEmptyPattern` flags Playwright's `async ({}, use)` worker fixtures, which
+  need the empty pattern: `biome-ignore` with the reason. [V, 2026-10-28, Playwright 1.64.1, Biome 2.6.2,
+  `packages/exporters/browser/harness.ts`]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]
