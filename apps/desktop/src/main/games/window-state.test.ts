@@ -308,7 +308,7 @@ describe("restoring a window", () => {
     expect(window.calls).toHaveLength(FULLSCREEN_RESTORE_ATTEMPTS);
   });
 
-  it("does not ask again once the window is closed or has left fullscreen", () => {
+  it("does not ask again once the window is closed, starts closing or has left fullscreen", () => {
     const closed = new FakeWindow();
     applySavedFlags(closed, row({ fullscreen: true }), flagDeps());
     closed.emit("show");
@@ -316,6 +316,24 @@ describe("restoring a window", () => {
     closed.emit("closed");
     vi.advanceTimersByTime(10 * FULLSCREEN_RESTORE_RETRY_MS);
     expect(closed.calls).toEqual(["setFullScreen true"]);
+
+    // The close procedure starts at the first `close`, hides the window and destroys it only later: a retry due in
+    // between would put a hidden window that is closing into fullscreen.
+    const closing = new FakeWindow();
+    applySavedFlags(closing, row({ fullscreen: true }), flagDeps());
+    closing.emit("show");
+    refuse(closing);
+    closing.emit("close", closeEvent());
+    vi.advanceTimersByTime(10 * FULLSCREEN_RESTORE_RETRY_MS);
+    expect(closing.calls).toEqual(["setFullScreen true"]);
+
+    const left = new FakeWindow();
+    applySavedFlags(left, row({ fullscreen: true }), flagDeps());
+    left.emit("show");
+    refuse(left);
+    left.emit("leave-full-screen");
+    vi.advanceTimersByTime(10 * FULLSCREEN_RESTORE_RETRY_MS);
+    expect(left.calls).toEqual(["setFullScreen true"]);
 
     // A refused request that the page's own fullscreen or a user toggle overtook: the window is in fullscreen when
     // the retry is due, so it is not asked again.

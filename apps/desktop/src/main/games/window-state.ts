@@ -106,7 +106,7 @@ export const FULLSCREEN_RESTORE_ATTEMPTS = 8;
 export interface FlagWindow {
   once(event: "show", listener: () => void): unknown;
   on(
-    event: "resize" | "enter-full-screen" | "leave-full-screen" | "closed",
+    event: "resize" | "enter-full-screen" | "leave-full-screen" | "close" | "closed",
     listener: () => void,
   ): unknown;
   removeListener(event: string, listener: () => void): unknown;
@@ -123,8 +123,8 @@ export interface FlagWindow {
  * animating away (closing a game in fullscreen and launching it again) turned `isFullScreen()` true, then false again
  * with a `resize`, and no `enter-full-screen` or `leave-full-screen` came (Electron 45, MEMORY.md). Such a refusal is
  * asked again after `FULLSCREEN_RESTORE_RETRY_MS`, at most `FULLSCREEN_RESTORE_ATTEMPTS` requests in all; the restore
- * ends at `enter-full-screen`, `leave-full-screen` or `closed`, and a window already fullscreen when a retry is due is
- * left alone.
+ * ends at `enter-full-screen`, `leave-full-screen`, the first `close` (the close procedure starts there) or `closed`,
+ * and a window already fullscreen when a retry is due is left alone.
  */
 export function applySavedFlags(
   window: FlagWindow,
@@ -178,11 +178,15 @@ function restoreFullscreen(
     window.removeListener("resize", onResize);
     window.removeListener("enter-full-screen", onEnter);
     window.removeListener("leave-full-screen", stop);
+    window.removeListener("close", stop);
     window.removeListener("closed", stop);
   };
   window.on("resize", onResize);
   window.on("enter-full-screen", onEnter);
   window.on("leave-full-screen", stop);
+  // The close procedure starts at the first `close`, hides the window and destroys it later; `hide` itself is no
+  // signal, because macOS emits it while a window moves into or out of a fullscreen Space.
+  window.on("close", stop);
   window.on("closed", stop);
   request();
 }
