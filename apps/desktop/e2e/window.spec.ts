@@ -130,7 +130,8 @@ test("bounds and fullscreen are restored on the next launch; Esc reaches the gam
     page = await relaunch(app, gameId);
     expect(await windowStateOf(app, gameId)).toMatchObject({ ...bounds, fullscreen: true });
     await expectFullscreen(app, gameId, true);
-    expect((await windowInfo(app, gameId))?.normal).toEqual(bounds);
+    // The normal bounds settle when macOS has finished the fullscreen transition.
+    await expect.poll(async () => (await windowInfo(app, gameId))?.normal).toEqual(bounds);
   });
 
   await test.step("a short Esc reaches the page and leaves the fullscreen alone", async () => {
@@ -182,6 +183,33 @@ async function trustedClick(page: Page, selector: string): Promise<void> {
   await page.mouse.click(center.x, center.y);
 }
 
+/**
+ * Records the fullscreen events of the game's current window, in order (`enter-html-full-screen` when the page asks,
+ * `enter-full-screen` when the window's transition has finished, and their `leave-*` pairs).
+ */
+async function recordFullscreen(app: Launched, gameId: string): Promise<() => Promise<string[]>> {
+  await app.app.evaluate(({ BrowserWindow, webContents }, id) => {
+    const wcId = globalThis.__wgTest?.gameWebContentsId(id);
+    const contents = wcId == null ? undefined : webContents.fromId(wcId);
+    const window = contents ? BrowserWindow.fromWebContents(contents) : null;
+    if (!window) throw new Error("no game window");
+    const events: string[] = [];
+    (globalThis as unknown as { fullscreenEvents: string[] }).fullscreenEvents = events;
+    for (const name of [
+      "enter-html-full-screen",
+      "leave-html-full-screen",
+      "enter-full-screen",
+      "leave-full-screen",
+    ] as const) {
+      window.on(name as "enter-full-screen", () => events.push(name));
+    }
+  }, gameId);
+  return () =>
+    app.app.evaluate(() => [
+      ...((globalThis as unknown as { fullscreenEvents?: string[] }).fullscreenEvents ?? []),
+    ]);
+}
+
 test("Esc ends a fullscreen the page requested, as Chromium handles it (plan open check 9)", async () => {
   pages = await startTestPages();
   launched = await launchApp();
@@ -189,15 +217,19 @@ test("Esc ends a fullscreen the page requested, as Chromium handles it (plan ope
   const gameId = await addGame(app, `${pages.origin}/keys.html`, "keys");
   const page = await openGame(app, gameId);
   const pageFullscreen = () => page.evaluate(() => document.fullscreenElement !== null);
+  const events = await recordFullscreen(app, gameId);
+  const ENTER = ["enter-html-full-screen", "enter-full-screen"];
+  const LEAVE = ["leave-html-full-screen", "leave-full-screen"];
 
   await trustedClick(page, "#fullscreen");
-  await expect.poll(pageFullscreen).toBe(true);
-  await expectFullscreen(app, gameId, true);
-  // macOS animates into fullscreen after isFullScreen() turns true; an Esc sent at once had no effect in one run.
-  await page.waitForTimeout(1_500);
+  // Each step waits for the window's own transition to finish (its `*-full-screen` event): macOS animates into and
+  // out of fullscreen after `isFullScreen()` has already changed, and input sent during the animation can be lost.
+  await expect.poll(events, { timeout: 10_000 }).toEqual(ENTER);
+  expect(await pageFullscreen()).toBe(true);
   await onWindow(app, gameId, { kind: "key", type: "keyDown" });
   await onWindow(app, gameId, { kind: "key", type: "keyUp" });
-  await expect.poll(pageFullscreen).toBe(false);
+  await expect.poll(events, { timeout: 10_000 }).toEqual([...ENTER, ...LEAVE]);
+  expect(await pageFullscreen()).toBe(false);
   await expectFullscreen(app, gameId, false);
   // Chromium consumes the Esc that ends a page's fullscreen, as browsers do: the page does not see it. The launcher
   // took nothing (it has no Esc hold for a page's fullscreen).
@@ -206,9 +238,8 @@ test("Esc ends a fullscreen the page requested, as Chromium handles it (plan ope
 
   // A game closed in its own fullscreen is saved as not fullscreen, so it does not come back as the launcher's.
   await trustedClick(page, "#fullscreen");
-  await expect.poll(pageFullscreen).toBe(true);
-  await expectFullscreen(app, gameId, true);
-  await page.waitForTimeout(1_500);
+  await expect.poll(events, { timeout: 10_000 }).toEqual([...ENTER, ...LEAVE, ...ENTER]);
+  expect(await pageFullscreen()).toBe(true);
   await closeGame(app, gameId);
   await expectState(app, gameId, "exited");
   expect(await windowStateOf(app, gameId)).toMatchObject({ fullscreen: false });
