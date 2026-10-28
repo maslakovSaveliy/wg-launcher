@@ -172,7 +172,7 @@ Implementation (Phase 1 Task 12, `packages/exporters`). `Assumed` unless tagged 
   they reference) in any order, then checks the target is empty, decodes every file and builds every value once
   before its first write. A failure in this pass fails the import with nothing written: `IMP_RECORD_INVALID`, with the
   entry path and, for a record, the database, store and record key. It covers a RegExp source that does not compile in
-  this engine (Ruling R7; the worker's validator already refused it in R1), a value whose view type this engine has no
+  this engine (the worker's validator already refused it in restore step R1), a value whose view type this engine has no
   constructor for, a schema IndexedDB would refuse to create (invalid key path, `autoIncrement` with an empty or array
   key path; the reader refuses these too, snapshot-format.md section 7.2), a blob whose bytes do not match its name, a
   blob entry no record references, a missing or duplicated entry, a record count that differs from the schema and, for
@@ -301,8 +301,8 @@ otherwise.
   waits for it and never discards it. If the killed worker's exit is not seen within 2 s (logged
   `snapshot.worker-kill-timeout`), the discard removes the revision's files anyway, and a process still alive could
   then rename its partial into `snapshots/<gameId>/<revisionId>.wgsnap`: an orphan file with no row, which nothing
-  removes until a later cleanup of unreferenced snapshot files exists (none does in Phase 1). `Assumed` Each step throwing once
-  leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
+  removes until a later cleanup of unreferenced snapshot files exists (none does in Phase 1). `Assumed`
+  Each step throwing once leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
   behind and releases the lease (QW-3, `job.test.ts`). QW-2 counts the `webContents` on the game's session before
   the first stub navigation.
 - **Stub URLs.** `<origin>/__wg_quiescent__?job=<nonce>&key=<k>` for a frame that resolves manifest key `k`, without

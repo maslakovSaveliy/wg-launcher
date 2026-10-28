@@ -46,7 +46,7 @@ export function toFrameError(
     return { code: error.code, message: error.message, detail };
   }
   if (error instanceof SnapError && direction === "import") {
-    // A data file the importer cannot read as recorded (Ruling R7: a RegExp that does not compile is one).
+    // A data file the importer cannot read as recorded (a RegExp that does not compile is one).
     return { code: "IMP_RECORD_INVALID", message: error.message, detail: context };
   }
   const name = errorName(error) ?? "Error";

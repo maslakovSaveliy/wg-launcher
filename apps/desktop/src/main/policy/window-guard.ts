@@ -57,7 +57,7 @@ function centered(displays: readonly DisplayArea[], width: number, height: numbe
  * pixels, else 1280 by 800 (clamped to a smaller work area) centered on the primary display.
  * Which display the window was on when saved does not matter: only the overlap does. A saved
  * size with no usable position (missing or not a finite number) keeps that size, clamped to the
- * primary work area and centered on it (Ruling R21: PRD F-7 remembers the size too). A size that
+ * primary work area and centered on it (PRD F-7 remembers the size too). A size that
  * is not a positive finite number makes the record unusable.
  */
 export function restoreBounds(saved: SavedWindow | null, displays: readonly DisplayArea[]): Bounds {

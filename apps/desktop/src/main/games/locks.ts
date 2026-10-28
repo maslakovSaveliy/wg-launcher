@@ -1,4 +1,4 @@
-// The per-game lock of architecture.md section 4 (AC-11) and the plan's ruling M5. Pure: no Electron import.
+// The per-game lock of architecture.md section 4 (AC-11) and the plan's decision M5. Pure: no Electron import.
 //
 // A game holds at most one lease: `session` (its window is anywhere between launching and closed), `task` (export,
 // import, delete local saves, clear cache: something the user asked for) or `background` (a storage check or

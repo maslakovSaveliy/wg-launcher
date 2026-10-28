@@ -143,7 +143,7 @@ describe("restoreBounds", () => {
     });
   });
 
-  describe("a saved size without a position (Ruling R21, PRD F-7)", () => {
+  describe("a saved size without a position (PRD F-7)", () => {
     // 800 x 600 centered on the primary work area { x: 0, y: 25, width: 1920, height: 1055 }.
     const savedSizeOnPrimary = { x: 560, y: 25 + 227, width: 800, height: 600 };
 

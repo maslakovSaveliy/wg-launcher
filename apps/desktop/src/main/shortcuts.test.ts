@@ -71,13 +71,13 @@ describe("shortcutFileName", () => {
     );
   });
 
-  it("drops format characters such as U+202E (right-to-left override), which could disguise the name (review fix 5)", () => {
+  it("drops format characters such as U+202E (right-to-left override), which could disguise the name", () => {
     expect(shortcutFileName("evil\u202Eknl.exe", ".lnk")).toBe("evilknl.exe.lnk");
     expect(shortcutFileName("a\u200Bb\u2066c\uFEFF", ".webloc")).toBe("abc.webloc");
     expect(shortcutFileName("\u202E\u200F", ".lnk")).toBe("WGLauncher game.lnk");
   });
 
-  it("never gives a Windows reserved device name, with or without an extension, in any case (review fix 5)", () => {
+  it("never gives a Windows reserved device name, with or without an extension, in any case", () => {
     for (const reserved of [
       "CON",
       "prn",
@@ -124,7 +124,7 @@ function deps(patch: Partial<ShortcutDeps> = {}): ShortcutDeps & {
   return Object.assign(base, patch) as never;
 }
 
-describe("shortcutsSupported (review fix 4)", () => {
+describe("shortcutsSupported", () => {
   it("is true on macOS and Windows only", () => {
     expect(shortcutsSupported("darwin")).toBe(true);
     expect(shortcutsSupported("win32")).toBe(true);

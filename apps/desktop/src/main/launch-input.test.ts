@@ -46,7 +46,7 @@ describe("createLaunchQueue (early second-instance and open-url, architecture.md
   });
 });
 
-describe("bounds (review fix 2)", () => {
+describe("bounds", () => {
   it("drops requests beyond MAX_QUEUED_LAUNCH_REQUESTS before start and reports them at start", async () => {
     expect(MAX_QUEUED_LAUNCH_REQUESTS).toBe(16);
     const queue = createLaunchQueue();
@@ -93,7 +93,7 @@ describe("bounds (review fix 2)", () => {
   });
 });
 
-describe("createNoticeChain (review fix 2)", () => {
+describe("createNoticeChain", () => {
   it("shows notices one at a time in order, and a failing one does not stop the next", async () => {
     const shown: string[] = [];
     const gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
@@ -152,7 +152,7 @@ const request = (source: LaunchRequest["source"], argv: string[]): LaunchRequest
 });
 
 describe("handleLaunchRequest (AC-19, S-11)", () => {
-  it("does not wait for the user to close a notice, so the next request is handled at once (review fix 2)", async () => {
+  it("does not wait for the user to close a notice, so the next request is handled at once", async () => {
     const { deps } = setUp({ known: false });
     deps.notify = vi.fn(() => new Promise<void>(() => undefined)); // never answered
     const handled = handleLaunchRequest(request("argv", [`--launch-game=${ID}`]), deps);

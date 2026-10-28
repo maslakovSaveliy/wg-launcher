@@ -539,7 +539,7 @@ async function invalidVectors(binaryTypesInput: Uint8Array): Promise<InvalidVect
     baseLimits: Partial<Limits> = limits,
   ) => vectors.push({ id, error, description, bytes, base, limits, baseLimits });
 
-  // M6 (owner ruling): the first floor(length / 2) bytes of valid-binary-types.
+  // M6 (Phase 1 plan): the first floor(length / 2) bytes of valid-binary-types.
   const half = Math.floor(binaryTypesInput.length / 2);
   add(
     "invalid-truncated",
@@ -550,7 +550,7 @@ async function invalidVectors(binaryTypesInput: Uint8Array): Promise<InvalidVect
     binaryTypesInput,
   );
 
-  // M6 (owner ruling): a complete checksummed frame whose tar ends 100 bytes into the data of the second entry.
+  // M6 (Phase 1 plan): a complete checksummed frame whose tar ends 100 bytes into the data of the second entry.
   const binaryTar = new Uint8Array(zstdDecompressSync(binaryTypesInput));
   const second = w.listTar(binaryTar)[1];
   if (second === undefined || second.size < 100) {

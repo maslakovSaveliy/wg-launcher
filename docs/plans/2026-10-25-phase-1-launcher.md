@@ -199,10 +199,10 @@ string; sizeBytes: number}>` (`limits` for tests only; refused input writes noth
   some suites passed at once and were mutation-checked after the fact; see the Task 3 report.)
 - [x] MEMORY.md: Node zstd truncation gotcha [V, 2026-10-25]; snapshot-format §2 and §8 state that truncation is detected
   by the frame walker (M6).
-- [x] 2026-10-28 CI fix 1: R12 ("a decompressor error is always `SNAP_ZSTD_INVALID`") rested on Node 24.13.0 never
-  failing a prefix; Node 24.22.1 fails a cut frame ("unexpected end of file"). Ruling R23 replaces it: the walker reads
+- [x] 2026-10-28 CI fix: the first rule ("a decompressor error is always `SNAP_ZSTD_INVALID`") rested on Node 24.13.0
+  never failing a prefix; Node 24.22.1 fails a cut frame ("unexpected end of file"). A new rule replaces it: the walker reads
   the rest of the input after a decompressor error and its verdict wins; the decompressor is flushed, not ended, on a
-  frame the walker stopped (snapshot-format §2, `src/container/inflate.test.ts`). Ruling R22 pins `.nvmrc` to 24.22.1.
+  frame the walker stopped (snapshot-format §2, `src/container/inflate.test.ts`). `.nvmrc` is pinned to 24.22.1.
 - [x] Commit `feat(snapshot): add the wgsnap container reader and writer`.
 
 ### Task 4: Golden vectors: generator, committed files, runner (M)
@@ -253,7 +253,7 @@ React; `prodDepsGuard` on all three; electron-builder `files` excludes packages 
   downloaded on first use; CI runs `install-electron`). `fixPartitioningSwitch` takes `app.commandLine`, since
   Playwright appends its switches there. The electron-builder `files` exclusion moves to Task 16, which adds
   electron-builder. Open check 6 is settled: React 19 runs under `trusted-types 'none'` (security.md section 6).
-  Fix round 1 (2026-10-28): the guard is `apply: "build"` (it broke the dev server); the test flavor never reads
+  Follow-up fix (2026-10-28): the guard is `apply: "build"` (it broke the dev server); the test flavor never reads
   Electron's default userData (reading it created an empty real `WGLauncher` directory), guarded by the e2e harness;
   the dev flavor was run once and verified (security.md section 6).
 
@@ -358,7 +358,7 @@ function per channel plus `onGameState(cb)` and `onTaskProgress(cb)`; `checkSend
 **Files:** `src/main/games/{window-state.ts,fullscreen.ts,playtime-recorder.ts}`, `src/main/app-menu.ts`, e2e
 `e2e/window.spec.ts`. (`src/main/library/badges-view.ts` was not needed: Task 9's `cardOf` in
 `src/main/ipc/handlers/library.ts` already maps the rows to `badgesFor`, playtime and last launch.)
-- [x] Window state saved on close and debounced 500 ms on move/resize; restored through `restoreBounds` (Ruling R21: a
+- [x] Window state saved on close and debounced 500 ms on move/resize; restored through `restoreBounds` (a
   saved size without a position keeps its size, centered); menu item role `togglefullscreen`, which is also the UI
   control (no launcher channel exists for it, architecture §9); launcher-set fullscreen exits with toggle, UI or Esc
   held 1.5 s (`before-input-event` observes, never `preventDefault`s Esc; short Esc reaches the page: e2e asserts the

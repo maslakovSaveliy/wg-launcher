@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { liveParent } from "./dialogs.js";
 
-describe("liveParent (review fix 3)", () => {
+describe("liveParent", () => {
   it("gives no parent for a destroyed window, so a notice still appears, unparented", () => {
     const window = {
       destroyed: false,

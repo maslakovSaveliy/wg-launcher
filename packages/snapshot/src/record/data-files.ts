@@ -279,7 +279,7 @@ export function decodeSchema(bytes: Uint8Array, options?: DecodeOptions): DbSche
 
 /**
  * One `[primaryKey, value]` record. A store file is a CBOR sequence, so records encoded one at a time in strictly
- * ascending key order and concatenated are byte-identical to `encodeStoreRecords` of the whole store (Ruling R6); the
+ * ascending key order and concatenated are byte-identical to `encodeStoreRecords` of the whole store; the
  * exporter uses this to keep memory bounded. A key that is not a key is ExportError.
  */
 export function encodeStoreRecord(key: IdbKey, value: CborItem): Uint8Array {

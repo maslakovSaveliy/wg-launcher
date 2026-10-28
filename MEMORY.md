@@ -39,7 +39,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   translation `docs/product/sources/concept-v1.0.md`; the language exception and its lint ignores are gone.
 - 2026-10-25 Owner: the Phase 1 plan [docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md)
   is approved; each task starts only on the owner's word; Phase 1 UI is functional only (design and UX later).
-  Final-review rulings M5 (a launch cancels a background storage check, user tasks still give `GAME_BUSY`), M6, M7
+  Review decisions M5 (a launch cancels a background storage check, user tasks still give `GAME_BUSY`), M6, M7
   (manifest top level not strict, IPC strict), M8, M11 and M13 are recorded there.
 - License model: `AGPL-3.0-or-later` by default, commercial use by separate agreement, CLA for outside contributors,
   future paid features only in one named source-available directory (none exists), trademark policy, core features
@@ -57,13 +57,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   in `pnpm check`, pre-commit on staged files, CI on all tracked text files); what it flags and the one allowed path
   `/home/web_user`: AGENTS.md "Commands" and the script header. The user-name needle is off on CI (`CI=true`), because a
   runner's generic user name would match ordinary words.
-- 2026-10-28 CI fix 1 (controller rulings, Assumed): R22 pins `.nvmrc` to `24.22.1`, the Node line of Electron 45
-  (24.22.0), so CI and local runs match what the snapshot worker runs on; R23 makes the reader's code independent of
+- 2026-10-28 CI fix (Assumed): `.nvmrc` is pinned to `24.22.1`, the Node line of Electron 45
+  (24.22.0), so CI and local runs match what the snapshot worker runs on; the reader's code is made independent of
   the zstd version (the frame walker's verdict wins over a decompressor error): snapshot-format.md section 2 and the
   "Node, zstd and the snapshot codec" gotcha below.
-- 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): rulings R10 (Node-only entry
-  `@wg-launcher/snapshot/container`), R11 (exact `compressedSize`, ratio bound), R12 (a decompressor error is always
-  `SNAP_ZSTD_INVALID`; replaced on 2026-10-28 by R23 above), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
+- 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): decisions: Node-only entry
+  `@wg-launcher/snapshot/container`, exact `compressedSize` with a ratio bound, a decompressor error is always
+  `SNAP_ZSTD_INVALID` (replaced on 2026-10-28 by the walker-wins rule above), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
   Task 3. The container entry is never re-exported from `src/index.ts` (`src/web-only.test.ts` walks its import graph); zod 4.6.7 (MIT)
   is a production dependency of `packages/snapshot`.
 - 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): layout, the 31 vectors plus `invalid-truncated-tar`
@@ -87,7 +87,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   files imported with Vite's `?raw`, the pre-migration copy is made with `VACUUM INTO` into `tmp/` as a `.partial` file and renamed into `backups/` (architecture.md
   section 7);
   `snapshots.revision_id` stays the primary key and `addIfAbsent` adds no row for a stored revision (M8); the 5 ms budget
-  is checked by query plans, not by time (R18); repositories take the injected clock, never `Date.now()`; `Db` is a
+  is checked by query plans, not by time; repositories take the injected clock, never `Date.now()`; `Db` is a
   union of `WritableDb` and `ReadOnlyDb`, and repositories accept only the writable one. Over 1 000 games, 5 sessions,
   2 storage targets and 3 snapshots each, one call took 1.05 ms for `games.list` (1 000 rows) and 0.002 to 0.015 ms for
   the indexed lookups [V, 2026-10-28, Node 24.13.0, mean of 200 calls, a throwaway script; not a product number].
@@ -100,7 +100,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   ("Close procedure details", "Runtime details", "Lock details", "Implementation (Phase 1 Task 8)") and security.md
   section 5 ("Wired in Phase 1 Task 8"). In short: a cancelled background lease not released within 2 s refuses the
   launch with `INTERNAL`; a launch while `closing` returns `{window: "closing"}`; a window not painted after 15 s is
-  shown anyway; after a Cancel of "Open in browser?" that window is not asked again for 10 s (fix round 1, R26); the
+  shown anyway; after a Cancel of "Open in browser?" that window is not asked again for 10 s (decided 2026-10-28); the
   unload step waits at most 2 s; a
   `will-prevent-unload` is answered by cancelling, asking, then reloading `about:blank` with the trap ignored. The test
   flavor records `shell.openExternal` calls (`externalOpened`) instead of opening; e2e pages are served by
@@ -115,8 +115,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   verified snapshot of the running exporter (`generic-web-storage` 1.0.0 since Task 13), which only Task 14's verify
   can produce; a corrupt `library.db` shows a native error dialog, then exit 1
   (the test flavor records it in `<userData>/test-error-dialogs.jsonl`).
-- 2026-10-28 Phase 1 Task 10 (window state, fullscreen, playtime, Assumed unless noted): Ruling R21 (a saved size
-  without a position keeps its size, clamped and centered on the primary display); the F-6 "UI control" is the View
+- 2026-10-28 Phase 1 Task 10 (window state, fullscreen, playtime, Assumed unless noted): a saved size
+  without a position keeps its size, clamped and centered on the primary display (PRD F-7); the F-6 "UI control" is the View
   menu item with role `togglefullscreen` (`app-menu.ts`), because section 6 has no fullscreen channel and a game window
   has no UI; saved flags are applied on the first `show`; step 1 of the close procedure feeds playtime `hide`; details
   in architecture.md sections 9 and 10 ("Implementation (Phase 1 Task 10)").
@@ -124,19 +124,19 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   registered right after the single-instance lock and queued until the runtime and the launcher page are up
   (`launch-input.ts`); malformed, unknown and refused launches are native notices (`Dialogs.notify`) over the
   library, no renderer event; `shortcut:create` is macOS and Windows only; `setAsDefaultProtocolClient` only in the
-  packaged prod build: architecture.md section 8 ("Implementation (Phase 1 Task 11)"). Fix round 1 (Ruling R30):
+  packaged prod build: architecture.md section 8 ("Implementation (Phase 1 Task 11)"). Follow-up fix (2026-10-28):
   notices no longer block the launch queue, both are bounded, a closed launcher is opened again to show the library,
   "Create shortcut" is hidden where unsupported, and a page's own fullscreen is saved as not fullscreen.
 - 2026-10-28 Phase 1 Task 12 (`packages/exporters`, Assumed unless noted): interfaces, frame protocol and error
   values in save-transfer.md section 3 ("Settled in Phase 1 Task 12"), importer rules in section 4 ("Implementation"),
   the flush observation in section 7, adapter location and limits in section 8. New result code `IMP_RECORD_INVALID`
-  (an entry the importer cannot turn into storage, Ruling R7 included); the importer decodes every file and builds every
+  (an entry the importer cannot turn into storage, a RegExp that does not compile included); the importer decodes every file and builds every
   value before its first write. `value.ts` of the snapshot record layer is split into `value-export.ts`,
   `value-check.ts` and `value-build.ts` (shared vocabulary stays in `value.ts`); `encodeStoreRecord` encodes one record,
-  byte-identical when concatenated (R6). The browser tests (`pnpm test:e2e:exporters`, also in CI's fixture job) bundle
+  byte-identical when concatenated. The browser tests (`pnpm test:e2e:exporters`, also in CI's fixture job) bundle
   the exporter per worker with Vite 8.3.5 (a devDependency already in the lockfile) and run it in a CDP isolated world
   of a `page.route` stub page at the game's origin, with `serviceWorkers: "block"`; Task 13 wires the real preload.
-  Fix round 1 (Ruling R33): no request error is prevented (one failed put aborts its chunk with a named code), the
+  Follow-up fix (2026-10-28): no request error is prevented (one failed put aborts its chunk with a named code), the
   reader refuses key paths IndexedDB refuses (snapshot-format.md section 7.2), unreferenced blobs and a missing view
   constructor are refused, a blocked delete is `IMP_WIPE_FAILED`, a vanished localStorage key is
   `EXP_QUIESCENCE_VIOLATION`, the flush timeout is strict; what the importer guarantees is in save-transfer.md section 4.
@@ -219,7 +219,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (value.test.ts); `Object.prototype.toString` of a class instance is `[object Object]`, so error details never name
   the class.
 - Record-layer decisions (Assumed): depth counting, keys and values at depth 1, `keyGenerator` 2^53 as `fa 5a000000`,
-  view plus buffer as `EXP_SHARED_REFERENCE`, and controller rulings R7 and R9 (RegExp source never canonicalized, flags
+  view plus buffer as `EXP_SHARED_REFERENCE`, and two record rules (RegExp source never canonicalized, flags
   checked, a non-compiling source is `SNAP_RECORD_INVALID`; File `lastModified` `-0` or above 2^53 − 1 is
   `EXP_UNSUPPORTED_VALUE`): snapshot-format.md sections 6.2, 6.3 and 7. API choices (`onBlob` once per value, caller
   deduplicates; `encodeLocalStorage` gives `null` for no items; `encode*` sort and throw `TypeError` on duplicates or a
@@ -227,7 +227,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - [V, 2026-10-28, bundled Chromium 156.0.8078.4, `packages/exporters/browser/round-trip.spec.ts`] The exporter in a
   CDP isolated world (`Page.createIsolatedWorld`) reads Date, Map, Set, typed arrays (Float16Array included),
   DataView, partial views, ArrayBuffer, Blob, File, RegExp, boxed primitives and BigInt from IndexedDB with that world's
-  own prototypes, so the exact-prototype classifiers hold (Task 2 carry); restored by the importer, the page's main
+  own prototypes, so the exact-prototype classifiers hold; restored by the importer, the page's main
   world reads them back with its own classes, and a re-export gives byte-identical entries. Float16Array round-trips
   there. [A] Electron's preload isolated world behaves the same (Task 13 runs it).
 - [V, 2026-10-28, same Chromium, `browser/key-generator.spec.ts`] Chromium reverts an `autoIncrement` key generator
@@ -253,7 +253,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - [V] Project rules are `.cursor/rules/*.mdc` with frontmatter `description`, `globs`, `alwaysApply`; Cursor reads
   `AGENTS.md` natively. <https://cursor.com/docs/context/rules>
 - [V] Dev machine: macOS 27.0.1 on arm64 (MacBook Air M3 `Mac15,12`, fanless, Metal 4, 60 Hz display); Node 24.13.0 via
-  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins (R22); Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
+  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
   lefthook 2.1.15. No Windows or Linux machine: those platforms are **unverified** until CI or a real run says otherwise.
 
 ## Gotchas
@@ -275,7 +275,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   bundling check must be `apply: "build"`. A reload of the launcher during its first `loadURL` rejects that call with
   `ERR_ABORTED`, which `start()` treats as a start-up failure (exit 1); in a CDP check, wait for the first load before
   reloading. CDP `Runtime.evaluate` defaults to `allowUnsafeEvalBlockedByCSP: true`, so an `eval` control needs it
-  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, reviewer's Vite 8.3.5 check
+  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, a reviewer's Vite 8.3.5 check
   and the dev-flavor run]
 - `electron@45.0.0` has no install script, so it needs no `allowBuilds` entry (the older note that its binary download
   needs one was wrong for 45): `pnpm add -D electron@45.0.0` ran no script, and the binary is downloaded on the first
@@ -304,7 +304,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   on `PATH`, so git runs Homebrew 2.1.15 here, not 2.2.2; `min_version` is `2.1.15` (tested with both). [V, 2026-10-24]
 - lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the Biome
   fix. [U] not tested here
-- nvm reads `.nvmrc` (`nvm use`). Since 2026-10-28 it pins `24.22.1` (Ruling R22), so a machine without that version
+- nvm reads `.nvmrc` (`nvm use`). Since 2026-10-28 it pins `24.22.1`, so a machine without that version
   needs `nvm install` once; neither command changes the nvm default alias. Before, `24` resolved to the newest
   installed Node 24, and CI's `actions/setup-node` read the same `24` as the newest 24.x (24.22.1 in run 40591493314)
   while the dev machine ran 24.13.0. [V, 2026-10-28, `nvm install 24.22.1`; `gh run view 40591493314 --log`: "node: v24.22.1"]
@@ -350,8 +350,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `const z=require("node:zlib");const f=z.zstdCompressSync(Buffer.alloc(300000).map((_,i)=>i*7919%251),{params:{[z.constants.ZSTD_c_checksumFlag]:1}});try{console.log("out",z.zstdDecompressSync(f.subarray(0,f.length-6)).length)}catch(e){console.log(e.code,e.errno,e.message)}`
   printed `out 262144` on 24.13.0 and `Z_BUF_ERROR -5 unexpected end of file` on 24.22.1]. The `.wgsnap` reader therefore detects truncation itself
   (plan M6, `ZstdFrameWalker` in `packages/snapshot/src/container/zstd-frame.ts`), never ends the decompressor on a
-  frame the walker stopped, and lets the walker's verdict win over a decompressor error (Ruling R23,
-  snapshot-format.md section 2). Ending instead of flushing lost buffered output on 24.22.1, so a tar defect before the
+  frame the walker stopped, and lets the walker's verdict win over a decompressor error
+  (snapshot-format.md section 2). Ending instead of flushing lost buffered output on 24.22.1, so a tar defect before the
   cut was missed [V, 2026-10-28: with `decompressor.end()` in place of the flush in `inflate.ts`, `nvm exec 24.22.1
   pnpm exec vitest run packages/snapshot` failed "reports a defect inside the frame before a later container defect,
   for chunks of 64 bytes" while 24.13.0 passed; the fake-decompressor test in `src/container/inflate.test.ts` fails
@@ -385,8 +385,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   2026-10-28, Node 24.13.0, `node -e`]
 - Electron IPC payloads are structured clones, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class
   instance reaches the handler intact; `JSON.stringify` gives `{}` for most of them and zod 4.6.7
-  `z.strictObject({})` accepts them (no own enumerable keys), so a JSON size check alone is bypassed (review finding,
-  Task 9 fix round 1). A sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s. `register.ts`
+  `z.strictObject({})` accepts them (no own enumerable keys), so a JSON size check alone is bypassed (Task 9). A sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s. `register.ts`
   therefore refuses arrays and non-plain objects before measuring, visiting at most 4 096 values (shared references
   survive structured clone: 7 levels of 10 keys sharing one next object took 568 ms to walk unbounded) inside a
   try/catch. [V, 2026-10-28, Vitest 5.0.5 on Node 24.13.0,
@@ -400,7 +399,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (`domain.unknown`, `sub.localhost`). `siteOf` handles the trailing dot itself. [V, 2026-10-28, same script]
 - tldts 7.4.19 gives domain `.com` for `example..com`, `.co.uk` for `a..co.uk`, `.github.io` for `x.a..github.io` and
   `example.com` for `.example.com`, while `new URL` keeps those hosts as they are; so `url-rules.ts` refuses hosts with
-  an empty label and `siteOf` uses the whole host for them (Task 7a fix round 1). [V, 2026-10-28, Node 24.13.0,
+  an empty label and `siteOf` uses the whole host for them (Task 7a). [V, 2026-10-28, Node 24.13.0,
   `node -e` with `parse(host, {allowPrivateDomains: true, extractHostname: false})`]
 - tldts 7.4.19 does not list `itch.io` as a private suffix: `a.itch.io` gives domain `itch.io`, suffix `io`,
   `isPrivate` false, so `a.itch.io` and `b.itch.io` are one site for our policy. [V, 2026-10-28, same `node -e`
@@ -483,8 +482,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   removed): 1 worker running and the renderer alive 5 s after the close (H16). So open check 1 needs no fallback. [V,
   2026-10-28, `e2e/game-lifecycle.spec.ts`, Electron 45.0.0, macOS arm64]
 - Chromium canonicalizes a renderer-initiated URL before `will-navigate`: spaces in the query and fragment arrive as
-  `%20`, a backslash there arrives raw (`?q=a\b%20c#x\y%20z`). [V, 2026-10-28, `e2e/game-isolation.spec.ts`] Ruling
-  R25 (2026-10-28): raw shapes in a main-frame target are refused in its scheme and authority only (security.md
+  `%20`, a backslash there arrives raw (`?q=a\b%20c#x\y%20z`). [V, 2026-10-28, `e2e/game-isolation.spec.ts`] Decided
+  2026-10-28: raw shapes in a main-frame target are refused in its scheme and authority only (security.md
   section 5); entry URLs and `isExternalUrlAllowed` stay strict.
 - With the game session's check handler denying `media`, a camera `getUserMedia` failed with `NotFoundError`, not
   `NotAllowedError` as in the spike ([A] the cause: Chromium offered no device because the check denies `media`); `permissions.query({name: "microphone"})` reaches the check

@@ -155,7 +155,7 @@ test("IMP_QUOTA_EXCEEDED: a full localStorage fails the import before any databa
   });
 });
 
-// A record the snapshot worker would have refused already (Ruling R7: it compiles every RegExp during R1); the importer
+// A record the snapshot worker would have refused already (it compiles every RegExp during restore step R1); the importer
 // refuses it as well, before writing anything.
 test("a RegExp that does not compile is IMP_RECORD_INVALID with its record path, and nothing is written", async ({
   page,
@@ -247,7 +247,7 @@ test("wipe-selected removes only the selected localStorage keys and databases", 
   });
 });
 
-// --- Fix round 1: failed requests, schemas IndexedDB refuses, unreferenced blobs, quota, a blocked wipe -----------
+// --- Failed requests, schemas IndexedDB refuses, unreferenced blobs, quota, a blocked wipe -----------
 
 const uint = (v: number): CborItem => ({ k: "uint", v });
 const txt = (v: string): CborItem => ({ k: "text", v });

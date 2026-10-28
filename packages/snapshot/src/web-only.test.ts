@@ -32,7 +32,7 @@ describe("record layer uses Web APIs only", () => {
   });
 });
 
-// Ruling R10: the Node-only container is a separate package entry. Everything reachable from src/index.ts, the entry the
+// The Node-only container is a separate package entry. Everything reachable from src/index.ts, the entry the
 // quiescent preload bundles, must stay free of `node:` imports and of the container.
 const IMPORT =
   /(?:import|export)\s+(?:[^"']*?\sfrom\s+)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
@@ -55,7 +55,7 @@ function importGraph(entry: URL): Map<string, string[]> {
   return graph;
 }
 
-describe("the main package entry stays web-only (Ruling R10)", () => {
+describe("the main package entry stays web-only", () => {
   const graph = importGraph(new URL("index.ts", srcDir));
   const files = [...graph.keys()].map((href) => href.slice(srcDir.href.length));
 

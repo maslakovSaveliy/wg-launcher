@@ -62,7 +62,7 @@ const recordInvalid = (message: string, path: string): never => {
   throw new SnapError("SNAP_RECORD_INVALID", message, path);
 };
 
-/** Ruling R7: every RegExp source must compile in this engine before anything is written. */
+/** Every RegExp source must compile in this engine before anything is written. */
 function compileRegExps(item: CborItem): void {
   if (item.k === "array") {
     item.v.forEach(compileRegExps);

@@ -350,7 +350,7 @@ test("navigation, new windows and downloads are refused or routed to the browser
     .toBe(1);
   expect(page.url()).toBe(entry);
 
-  // Task 7a carry, ruling R25: Chromium hands will-navigate a canonical URL that escapes spaces (%20) but keeps a
+  // Raw shapes in a main-frame target (security.md section 5): Chromium hands will-navigate a canonical URL that escapes spaces (%20) but keeps a
   // backslash raw in the query and fragment (`?q=a\b%20c#x\y%20z`, observed 2026-10-28). Raw shapes are now refused
   // in the scheme and authority only, so both same-site navigations load.
   await page.evaluate(

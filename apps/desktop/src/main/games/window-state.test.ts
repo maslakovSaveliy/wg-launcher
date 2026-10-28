@@ -118,7 +118,7 @@ describe("trackWindowState (architecture.md section 9)", () => {
     expect(displayIdOf).toHaveBeenCalledWith({ x: 2000, y: 30, width: 1000, height: 640 });
   });
 
-  it("saves a fullscreen the page requested as not fullscreen, so it never comes back as the launcher's (review fix 1)", () => {
+  it("saves a fullscreen the page requested as not fullscreen, so it never comes back as the launcher's", () => {
     let page = true;
     const { window, saved } = setUp({ isPageFullscreen: () => page });
     window.fullscreen = true;

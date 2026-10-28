@@ -159,7 +159,7 @@ A release check reads the fuses of the packaged app and fails on any difference 
     `https://@evil.com`, which the parser drops silently; percent-encoded host characters such as `exa%2Emple.com`,
     which the parser decodes into `exa.mple.com`). This applies to the whole text of entry URLs and of
     `isExternalUrlAllowed` (one is typed by the user, the other goes to another program), but only to the scheme and
-    authority of a main-frame target (ruling R25, Task 8): Chromium hands `will-navigate` a canonical URL that may
+    authority of a main-frame target (decided 2026-10-28, Phase 1 Task 8): Chromium hands `will-navigate` a canonical URL that may
     keep a raw backslash in its path, query or fragment, and repairing what comes after the authority cannot change
     the host, so `?q=a\b%20c#x\y%20z` on the entry's site is allowed while `https://evil.com\.example.com/` is still
     blocked. Not to subframes either (a `data:` frame URL may contain spaces).
@@ -197,9 +197,9 @@ A release check reads the fuses of the packaged app and fails on any difference 
   - an off-site link and a `window.open` to an https URL were prevented and offered through the queued dialog; only
     the confirmed one reached the `shell.openExternal` stub; `window.open("file:...")` asked nothing; a download was
     cancelled and logged; a same-site redirect at start loaded and a cross-site one was offered and ended the launch.
-  - Task 7a carry: Chromium escapes spaces in the query and fragment before `will-navigate` (`?q=a%20b#x%20y`) but
+  - Chromium escapes spaces in the query and fragment before `will-navigate` (`?q=a%20b#x%20y`) but
     hands over a backslash there raw (`?q=a\b%20c#x\y%20z`). The first Task 8 run showed the raw-shape rule
-    blocking such a same-site navigation; after ruling R25 (rule above) the e2e test loads both.
+    blocking such a same-site navigation; after the rule above the e2e test loads both.
 
 ## 6. Launcher renderer
 

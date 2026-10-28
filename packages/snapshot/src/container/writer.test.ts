@@ -217,7 +217,7 @@ describe("writeSnapshot", () => {
   });
 });
 
-describe("writeSnapshot refuses before writing whatever the reader would refuse (fix round 1)", () => {
+describe("writeSnapshot refuses before writing whatever the reader would refuse", () => {
   const schemaWith = (stores: number, indexes = 0) =>
     encodeSchema({
       name: "db",

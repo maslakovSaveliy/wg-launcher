@@ -421,7 +421,7 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     `showErrorBox` would block it): "The launch link is not valid", "The game is not in the library", "The game
     cannot be opened" or "The game is closing". The renderer gets no new event; nothing navigates. A second start
     without a launch argument only brings the launcher to the front, as before.
-  - *Fix round 1.* The launch queue does not wait for a notice: notices go through their own chain
+  - *Follow-up fix (2026-10-28).* The launch queue does not wait for a notice: notices go through their own chain
     (`createNoticeChain`), one at a time in order, so a valid shortcut clicked while a notice is open is handled at
     once. At most `MAX_QUEUED_LAUNCH_REQUESTS` (16) requests wait and at most `MAX_PENDING_NOTICES` (4) notices; more
     are dropped and logged (`launch.dropped` with the source, `launch.notice-dropped` with the title). "Show the
@@ -463,7 +463,7 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
 - The guard (`restoreBounds`, `apps/desktop/src/main/policy/window-guard.ts`) checks the overlap against each display's
   work area on its own, so the saved display id is only a hint and an overlap with another display is accepted. A
   saved record with a size but no x or y (or one that is not a finite number) keeps its saved size, clamped to the
-  primary display's work area, and is centered there (Ruling R21: F-7 remembers the size too, and
+  primary display's work area, and is centered there (F-7 remembers the size too, and
   `window_state.width` and `height` are `NOT NULL` while `x` and `y` are nullable); a size that is not a positive
   finite number makes the record unusable and gets the default; the default is clamped to a work area smaller than
   1280 by 800. The maximized and fullscreen flags are re-applied by the caller whether or not the saved bounds were
@@ -487,7 +487,7 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     `String(screen.getDisplayMatching(normalBounds).id)`. A fullscreen the page requested itself (from
     `enter-html-full-screen` until `leave-html-full-screen`) is saved as `fullscreen = 0`, because `isFullScreen()` is
     true then too: otherwise the next launch would put the window into a fullscreen the page did not ask for and
-    whose exit it cannot drive (fix round 1). A page fullscreen entered over a fullscreen the launcher set is saved as
+    whose exit it cannot drive. A page fullscreen entered over a fullscreen the launcher set is saved as
     not fullscreen as well (Assumed: rare, and the safe side). e2e: a game closed in its own fullscreen was saved
     with `fullscreen` false (Verified, 2026-10-28, `apps/desktop/e2e/window.spec.ts`). A game window is created at `restoreBounds` of its row, and
     the saved maximized and fullscreen flags are applied on its first `show` (it is created hidden).
@@ -500,7 +500,7 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     restore that needed more than one request logs `game.fullscreen-restore-retried`. The restore ends at
     `enter-full-screen`, `leave-full-screen`, the first `close` (the close procedure hides the window and destroys it
     only later) or `closed`; `hide` is no signal, because macOS emits it while a window moves into or out of a
-    fullscreen Space (seen in every instrumented run). A window already fullscreen when a retry is due is left
+    fullscreen Space (Verified, 2026-10-28, `apps/desktop/e2e/window.spec.ts` instrumented runs). A window already fullscreen when a retry is due is left
     alone. The delay and the limit are `Assumed`; every refused restore observed entered on the second request.
   - The UI control of F-6 is the menu item itself: `apps/desktop/src/main/app-menu.ts` sets an application menu of
     Electron's standard roles with a View menu holding `togglefullscreen` (clickable, and its accelerator is the

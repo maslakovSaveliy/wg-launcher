@@ -15,7 +15,7 @@
 // tldts would give it a domain such as ".com" that merges unrelated hosts.
 // For a main-frame navigation target (`decideTopNavigation`) these shapes are refused in the scheme and authority
 // only: Chromium hands `will-navigate` a canonical URL that may keep a raw backslash in its path, query or fragment,
-// and the parser cannot move the end of the authority by repairing what comes after it (ruling R25). Entry URLs and
+// and the parser cannot move the end of the authority by repairing what comes after it (security.md section 5). Entry URLs and
 // `isExternalUrlAllowed` stay strict everywhere: one is typed by the user, the other goes to another program.
 // Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen.
 

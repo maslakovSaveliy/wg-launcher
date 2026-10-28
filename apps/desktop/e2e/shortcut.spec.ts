@@ -145,7 +145,7 @@ test("a second instance with a malformed or unknown id shows the library with a 
   expect(log).not.toContain("evil.example");
 });
 
-test("a launch request after the launcher was closed while a game runs opens the launcher again with the notice (review fix 3)", async () => {
+test("a launch request after the launcher was closed while a game runs opens the launcher again with the notice", async () => {
   launched = await launchApp();
   const app = launched;
   const gameId = await addGame(app, `${app.progressLab.local}/`, "Running game");
@@ -189,7 +189,7 @@ test("Create shortcut writes a .webloc with the deep link and nothing else; no p
   const card = app.launcher.locator(`li.card[data-game-id="${gameId}"]`);
   await expect(card.getByRole("button", { name: "Play" })).toBeVisible();
   if (process.platform !== "darwin" && process.platform !== "win32") {
-    // Linux is not a target yet: no control is offered that could only fail (review fix 4).
+    // Linux is not a target yet: no control is offered that could only fail.
     await expect(card.getByRole("button", { name: "Create shortcut" })).toHaveCount(0);
     return;
   }

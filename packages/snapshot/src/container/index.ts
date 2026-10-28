@@ -1,6 +1,6 @@
 // `@wg-launcher/snapshot/container`: the Node-only `.wgsnap` container (node:zlib, node:crypto, node:stream), used only
 // by the snapshot worker. Never re-exported from src/index.ts, which stays Web-APIs-only for the quiescent preload
-// (Ruling R10).
+// (decided 2026-10-25).
 export { SnapError } from "../errors.js";
 export { computeContentHash } from "./content-hash.js";
 export { canonicalJson } from "./jcs.js";

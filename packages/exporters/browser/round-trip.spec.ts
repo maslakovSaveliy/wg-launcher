@@ -71,7 +71,7 @@ test("AC-7: progress-lab exported after 7 steps restores into a fresh context wi
     "data/0/local-storage.cbor",
   ]);
 
-  // Values read through the isolated world keep their classes (exact-prototype checks, Task 2 carry): Date (33104),
+  // Values read through the isolated world keep their classes (exact-prototype checks): Date (33104),
   // ArrayBuffer (bytes), Uint8Array (tag 64) and Blob (33111).
   const refs = new Map<string, number>();
   const [profile] = decodeStoreRecords(

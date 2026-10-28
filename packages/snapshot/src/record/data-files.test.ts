@@ -316,7 +316,7 @@ describe("store-<s>.cbor (section 7.3)", () => {
     ).toThrow(TypeError);
   });
 
-  it("encodes one record at a time, byte-identical to the whole store in key order (Ruling R6)", () => {
+  it("encodes one record at a time, byte-identical to the whole store in key order", () => {
     const records: [IdbKey, CborItem][] = [
       [-1.5, text("float key")],
       [3, uint(3)],

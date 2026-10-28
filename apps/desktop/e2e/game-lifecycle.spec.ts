@@ -69,7 +69,7 @@ test("Play twice, or a launch while the game is launching, opens exactly one win
   expect(launches).toHaveLength(1);
 });
 
-test("a game whose page never answers is shown after the launching timeout and can be closed (fix round 1)", async () => {
+test("a game whose page never answers is shown after the launching timeout and can be closed", async () => {
   test.setTimeout(60_000);
   launched = await launchApp();
   if (!pages) throw new Error("no pages");

@@ -255,7 +255,7 @@ describe("validateSnapshot: container codes (snapshot-format.md section 8)", () 
     const wrongChecksum = bytes.slice();
     wrongChecksum[wrongChecksum.length - 1] = (wrongChecksum.at(-1) as number) ^ 0x01;
     expect(await codeOf(wrongChecksum)).toBe("SNAP_ZSTD_INVALID");
-    // Ruling R23: a frame-walker verdict (here the byte after the frame) wins over a decompressor error.
+    // A frame-walker verdict (here the byte after the frame) wins over a decompressor error.
     expect(await codeOf(concat(wrongChecksum, Uint8Array.of(1)))).toBe("SNAP_TRAILING_DATA");
   });
 
@@ -528,7 +528,7 @@ describe("validateSnapshot: records, schemas and blobs (sections 6 and 7)", () =
     expect(await codeOf(indexed, { maxIndexesPerStore: 3 })).toBeUndefined();
   });
 
-  it("SNAP_RECORD_INVALID for a RegExp whose source does not compile here (Ruling R7)", async () => {
+  it("SNAP_RECORD_INVALID for a RegExp whose source does not compile here", async () => {
     const store = (source: string) =>
       records(2, (i) => (i === 0 ? blobItem() : tagged(33106, uint(1), regexpItem(source))));
     expect(await codeOf(variant({ "data/0/idb/0/store-0.cbor": store("a+") }))).toBeUndefined();
@@ -641,7 +641,7 @@ describe("readEntries: the restore's second pass (R6)", () => {
   });
 });
 
-// --- fix round 1: limits and codes independent of chunking ---------------------------------------------------------
+// --- limits and codes independent of chunking ---------------------------------------------------------
 
 const header3 = (n: number) => Uint8Array.of(n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff);
 /** Raw blocks of at most 128 KiB; `last` marks the final one. */
@@ -666,7 +666,7 @@ const handFrame = (blocks: Uint8Array[], checksum = Uint8Array.of(1, 2, 3, 4)) =
 describe("validateSnapshot: limits and codes do not depend on chunking", () => {
   const SIZES = [256, 4096, 65_536, Number.MAX_SAFE_INTEGER];
 
-  it("accepts the reviewer's probe (zeros, then random bytes, overall ratio far below maxRatio) at every chunk size", async () => {
+  it("accepts a probe (zeros, then random bytes, overall ratio far below maxRatio) at every chunk size", async () => {
     // The review's probe (66 MiB of zeros, then 2 MiB of random bytes) at half size, with ratioFloorBytes lowered to
     // 1 MiB: 32 MiB of zeros come out of a few hundred compressed bytes, far above 200 times any read-ahead, while the
     // whole file is far below a ratio of 200.
@@ -712,7 +712,7 @@ describe("validateSnapshot: limits and codes do not depend on chunking", () => {
   });
 
   it("reports a decompressor error as SNAP_ZSTD_INVALID only when the frame is neither cut nor followed by bytes", async () => {
-    // Ruling R23: once the decompressor fails, the walker still reads the rest, and its verdict wins.
+    // Once the decompressor fails, the walker still reads the rest, and its verdict wins.
     const corrupt = handFrame([...rawBlocks(snapshotTar(files()), false), garbageBlock()]);
     for (const size of [64, 4096, Number.MAX_SAFE_INTEGER]) {
       expect(await codeOfAsync(() => validate(corrupt, {}, size))).toBe("SNAP_ZSTD_INVALID");
@@ -725,8 +725,8 @@ describe("validateSnapshot: limits and codes do not depend on chunking", () => {
     }
   });
 
-  it("rejects a tar defect right before a corrupt block at every chunk size, whatever the code (Ruling R24)", async () => {
-    // The reviewer's probe: `../escape.txt` is the last tar entry, then a garbage block. The output zlib decoded in
+  it("rejects a tar defect right before a corrupt block at every chunk size, whatever the code", async () => {
+    // The probe: `../escape.txt` is the last tar entry, then a garbage block. The output zlib decoded in
     // the call that fails is discarded, so the code depends on chunking here (section 2, corrupt-block carve-out).
     const tarBytes = snapshotTar(files(), {
       layout: (m, rest) => [m, ...rest, { path: "../escape.txt" }],

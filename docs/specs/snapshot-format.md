@@ -60,8 +60,8 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   reader ends the decompressor only after a frame the walker completed; a frame the walker stopped is flushed instead,
   so no version-specific end-of-input error stops it and everything the library decodes from the bytes before the
   verdict is checked. The uncompressed limits (`SNAP_RATIO_EXCEEDED`, `SNAP_TOTAL_TOO_LARGE`) fail at the exact tar
-  byte that crosses them, after the bytes before it were checked. `Assumed` (Ruling R23, 2026-10-28)
-- Decompressor errors (Ruling R23, 2026-10-28, which replaces R12 "a decompressor error is always
+  byte that crosses them, after the bytes before it were checked. `Assumed` (decided 2026-10-28)
+- Decompressor errors (decided 2026-10-28; this replaces the earlier rule "a decompressor error is always
   `SNAP_ZSTD_INVALID`"): the code MUST be the same on every zstd library and version. On a decompressor error the reader
   stops decompressing but keeps feeding the remaining compressed bytes, up to `compressedSize`, to the frame walker
   alone. If the walker has a verdict anywhere in the input (truncated, no checksum, a dictionary id, the window, the
@@ -69,7 +69,7 @@ restored is in [save-transfer.md](save-transfer.md); threats are in [security.md
   that verdict is reported, under the deferral rule above: a defect the tar, manifest or record checks already found in
   the bytes decompressed before the error still comes first. Only when the walker saw a complete, structurally valid
   frame is the result `SNAP_ZSTD_INVALID` (corrupt block content or a checksum mismatch). `Assumed`
-- Corrupt-block carve-out (Ruling R24, 2026-10-28): for a file whose zstd block content is corrupt, the code may
+- Corrupt-block carve-out (decided 2026-10-28): for a file whose zstd block content is corrupt, the code may
   depend on the zstd library and on chunking. How much a corrupt block emits before the error is library-defined, and
   the output the library decoded in the same call that fails is discarded, so a defect in roughly the last input chunk
   decoded before the corrupt block may be reported as its own code or as the decompressor or walker verdict above. The
@@ -343,7 +343,7 @@ empty, and an index with an array key path is not `multiEntry` (IndexedDB refuse
 "valid key path": the empty string, or ECMAScript IdentifierNames joined by single dots, or a non-empty array of those;
 an `autoIncrement` store's key path is neither the empty string nor an array (`createObjectStore` refuses both), so
 a restore can always create the schema. `Assumed` (from the "valid key path" definition and `createObjectStore` steps
-of <https://www.w3.org/TR/IndexedDB/>, not re-read for this rule; Phase 1 Task 12 fix round 1). Store and index names are
+of <https://www.w3.org/TR/IndexedDB/>, not re-read for this rule; decided 2026-10-28 in Phase 1 Task 12). Store and index names are
 strictly ascending in code-unit order. `keyGenerator` is an integer from 1 to 2^53 encoded as a number, so 2^53 (not a
 safe integer) is the float `fa 5a000000`. `Assumed`
 
@@ -408,7 +408,7 @@ them; production uses these values, and a unit test pins them.
 | `maxDepth` (value nesting) | 256 |
 
 A reader is given the exact compressed size of the file (`compressedSize`; the worker validates a private copy in
-`tmp/` and takes it from `stat`). `Assumed` (owner ruling R11, 2026-10-25)
+`tmp/` and takes it from `stat`). `Assumed` (owner decision, 2026-10-25)
 
 - `SNAP_FILE_TOO_LARGE` is checked first, from `compressedSize` against `maxFileBytes`, before any byte is read.
 - The ratio rule: once the uncompressed bytes so far pass `ratioFloorBytes` and exceed `maxRatio` × `compressedSize`,
@@ -418,8 +418,7 @@ A reader is given the exact compressed size of the file (`compressedSize`; the w
   `SNAP_FILE_TOO_LARGE` at the first extra byte; one that ends below it is `SNAP_TRUNCATED`. Both are verdicts on the
   compressed bytes (section 2): the frame walker's verdict on the bytes within `compressedSize` and the checks of the
   data before the extra or missing byte come first.
-- A decompressor error is `SNAP_ZSTD_INVALID` only when the frame walker has no verdict on the whole input (section 2,
-  Ruling R23).
+- A decompressor error is `SNAP_ZSTD_INVALID` only when the frame walker has no verdict on the whole input (section 2).
 
 Container-level codes, checked continuously while streaming: `SNAP_FILE_TOO_LARGE`; `SNAP_ZSTD_INVALID` (not a zstd
 frame, a skippable frame first, corrupt data, a content checksum mismatch, a window above 2^27, a dictionary id);

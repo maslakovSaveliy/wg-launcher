@@ -191,7 +191,7 @@ describe("closeGameWindow: the close procedure of architecture.md section 4 (AC-
   });
 });
 
-describe("closeGameWindow: SW_STOP_FAILED whatever failed on the way (fix round 1)", () => {
+describe("closeGameWindow: SW_STOP_FAILED whatever failed on the way", () => {
   it("tries each stopWorker on its own: the first hangs, the second is still stopped, the rest is reported", async () => {
     const fake = fakeWindow({ workers: [3, 9], afterStopAll: [3, 9], stopWorkerHangs: ["3"] });
     const setup = deps();

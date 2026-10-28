@@ -1,5 +1,5 @@
 // The generic exporter, import side (save-transfer.md section 4, import steps 1 to 4). Every entry is decoded and every
-// value built once before the first write, so a record this engine cannot rebuild (Ruling R7) fails the import with
+// value built once before the first write, so a record this engine cannot rebuild (a RegExp that does not compile) fails the import with
 // nothing written. Then localStorage, then each database in bounded put transactions, then the key generators.
 
 import {
