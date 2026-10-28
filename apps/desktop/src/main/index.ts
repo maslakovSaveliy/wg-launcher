@@ -11,7 +11,7 @@ import {
   type TaskProgressEvent,
   uuidv7,
 } from "@wg-launcher/shared";
-import { app, type BrowserWindow, ipcMain, Menu, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, session, shell } from "electron";
 import { appMenuTemplate } from "./app-menu.js";
 import {
   DEV_LAUNCHER_ORIGIN,
@@ -21,7 +21,7 @@ import {
   registerAppScheme,
 } from "./app-protocol.js";
 import { createCovers } from "./covers.js";
-import { type Db, openDatabase } from "./db/database.js";
+import { type Db, openDatabase, type WritableDb } from "./db/database.js";
 import { type Dialogs, type ErrorSpec, liveParent, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
 import { installBaselineHandlers } from "./games/game-session.js";
@@ -40,8 +40,10 @@ import { redact } from "./log/redact.js";
 import { type AppPaths, appPaths, prepareAppPaths, resolveUserData } from "./paths.js";
 import { parseDeepLink, parseLaunchInput } from "./policy/deep-link.js";
 import { createShortcut, shortcutsSupported } from "./shortcuts.js";
+import { createStorageCheckScheduler } from "./snapshots/check-scheduler.js";
 import { exportSnapshot } from "./snapshots/export.js";
 import { createSnapshotDeps } from "./snapshots/jobs.js";
+import { runStorageCheck } from "./snapshots/storage-check.js";
 import { fixPartitioningSwitch } from "./start-up.js";
 
 /** What later parts of the main process (database, IPC, jobs) are built on. */
@@ -163,8 +165,11 @@ async function start(userData: string): Promise<AppContext> {
   app.on("will-quit", () => db.close());
 
   const openExternal = hooks?.openExternal ?? ((url: string) => shell.openExternal(url));
+  /** Set once the storage check scheduler exists: a game window exited. */
+  let onExited: ((gameId: string) => void) | null = null;
   // game:state goes to the launcher page only (architecture.md section 6).
   const sendState = (gameId: string, state: GameState) => {
+    if (state === "exited") onExited?.(gameId);
     if (!launcher || launcher.isDestroyed()) return;
     const event: GameStateEvent = { gameId, state, at: Date.now() };
     launcher.webContents.send(GAME_STATE_CHANNEL, event);
@@ -175,6 +180,7 @@ async function start(userData: string): Promise<AppContext> {
   const snapshotDeps = games
     ? createSnapshotDeps({
         repos: games.repos,
+        transaction: (fn) => (db as WritableDb).transaction(fn),
         paths,
         locks: games.locks,
         log,
@@ -185,6 +191,27 @@ async function start(userData: string): Promise<AppContext> {
       })
     : null;
   if (snapshotDeps) hooks?.watchSnapshots(snapshotDeps);
+  // The "Local data" check after a game exits, never while a game window is focused (architecture.md section 11).
+  const checks =
+    games && snapshotDeps
+      ? createStorageCheckScheduler({
+          run: (gameId) => runStorageCheck(gameId, undefined, snapshotDeps),
+          gameWindowFocused: () => {
+            const focused = BrowserWindow.getFocusedWindow();
+            return (
+              focused !== null &&
+              games.runtime.openGames().some((id) => games.runtime.windowOf(id) === focused)
+            );
+          },
+          log,
+        })
+      : null;
+  if (checks) {
+    onExited = (gameId) => checks.gameExited(gameId);
+    for (const event of ["browser-window-focus", "browser-window-blur"] as const) {
+      app.on(event as "browser-window-focus", () => checks.focusChanged());
+    }
+  }
   // task:progress goes to the launcher page only (architecture.md section 6).
   const sendProgress = (event: TaskProgressEvent) => {
     if (!launcher || launcher.isDestroyed()) return;
@@ -193,6 +220,7 @@ async function start(userData: string): Promise<AppContext> {
   // App quit runs the close procedure of every open game window in parallel, at most 3 s (architecture.md 4).
   let quitting = false;
   app.on("before-quit", (event) => {
+    checks?.stop();
     if (quitting || !games || games.runtime.openGames().length === 0) return;
     event.preventDefault();
     quitting = true;

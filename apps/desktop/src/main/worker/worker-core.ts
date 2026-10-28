@@ -69,9 +69,6 @@ export function createWorkerCore(options: WorkerCoreOptions) {
             reported: 0,
           });
           return;
-        case "discard":
-          jobs.delete(command.jobId);
-          return;
         case "frame": {
           const { requestId, jobId, op } = command;
           const port = ports[0];

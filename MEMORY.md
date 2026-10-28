@@ -147,7 +147,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `validateSnapshot` and only then renamed and recorded; `snapshot:export` answers `{taskId}` once the lock is held;
   IPC requests may hold arrays of at most 32 dense items (`register.ts`); bridge version 4 with `onTaskProgress`;
   `@wg-launcher/exporters/wire` is the DOM-free entry the main process and the worker use; the quiescent preload has
-  its own `tsconfig.preload.json` (DOM lib). The storage check runs on demand only (Open questions).
+  its own `tsconfig.preload.json` (DOM lib). Owner decision (2026-10-28): background work never blocks a user action,
+  so a user task cancels a storage check exactly as a launch does (2 s release wait, then `INTERNAL`), and the check
+  runs after a game window exits (2 s quiet time, not while a game window is focused, one at a time); at most two
+  snapshot jobs run at once (a third is `GAME_BUSY`). The export's row, base revision and remembered frame choice
+  are one transaction; a failed write removes both the partial and the final file; more than 32 keys is
+  `SNAP_MANIFEST_INVALID`. The canary pins its allowlist to the calibration (architecture.md section 4 "Lock
+  details", section 11; save-transfer.md section 5).
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -534,11 +540,24 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   that world as the harness in the test flavor only. Electron 45 names the preload's world "Electron Isolated
   Context" in a top-level frame but leaves it unnamed in a cross-site iframe's own CDP target. [V, 2026-10-28,
   `Runtime.executionContextCreated` logged in the desktop e2e]
+- When a service worker starts during a job, `ses.serviceWorkers.getInfoFromVersionID` and `getAllRunning()` did not
+  know its version yet at the `starting` status, and the job is stopped before `running`; the `ServiceWorker` CDP
+  domain (enabled in step 5) names it first: `workerVersionUpdated` maps the version to its registration and
+  `workerRegistrationUpdated` the registration to its scope (`quiescent/worker-scopes.ts`). [V, 2026-10-28, the
+  no-bypass iframe control in `apps/desktop/e2e/quiescent.spec.ts`]
 - `webContents.debugger`'s `message` event gives the page's own session as `sessionId` `""`, but `sendCommand`
   refuses `""` ("Empty session id is not allowed"): pass `undefined` for the page. [V, 2026-10-28, Electron 45.0.0]
 - Vitest 5 `toEqual` over two 2 MiB `Uint8Array`s took several seconds (a 5 s timeout); compare bytes in a loop. [V,
   2026-10-28, `packages/exporters/src/frame-server.test.ts`]
-- `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" is flaky on the dev machine: its last step (a window
+- `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" now waits for the window's own fullscreen events
+  (`enter-full-screen` and `leave-full-screen`, the end of macOS's transition, after `enter-html-full-screen` and
+  `leave-html-full-screen`) instead of fixed sleeps; the observed order was always enter-html, enter, leave-html,
+  leave [V, 2026-10-28, runs on the dev machine]. The AC-18 test of the same file then still failed in several runs,
+  at the fullscreen restored on the next launch (`applySavedFlags` calls `setFullScreen(true)` on the first `show`)
+  or a launcher-set fullscreen that ended after a short Esc, also on the code before Task 13 (commit 0b853e2, 2 of 3
+  runs in a git worktree) and with the automatic storage check switched off (3 of 3): not caused by Task 13; the
+  cause is unknown [U], possibly the restore racing macOS's exit from the previous window's fullscreen space.
+- (Earlier note) `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" was flaky on the dev machine: its last step (a window
   closed in the page's own fullscreen is saved as not fullscreen) failed in runs of the whole file and of the suite,
   on the code before Task 13 (commit 0b853e2, 3 of 3 runs of the file, a git worktree) as on Task 13's, and passed in
   every run of the test alone. The cause is taken to be timing (the macOS fullscreen animation, as the test's own
@@ -586,10 +605,3 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
   presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
-- When does the storage check run? architecture.md section 11 says after a game exits, after an import or a delete,
-  never while a game window is focused; Task 13 has `runStorageCheck` but starts it nowhere yet, because a user's
-  export right after closing the game would meet its `background` lease and get `GAME_BUSY` (a task never cancels a
-  background lease, architecture.md section 4 "Lock details"). Default proposal: a task waits for or cancels a running
-  check; owner decision.
-- The cap of two snapshot jobs at once (security.md section 8) is not enforced yet; each game has at most one through
-  its lock. Default: add it with the restore jobs (Task 14).

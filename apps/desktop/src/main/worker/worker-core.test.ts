@@ -154,11 +154,11 @@ describe("the snapshot worker's commands", () => {
     }
   });
 
-  it("refuses a message it does not know and forgets a discarded job", async () => {
+  it("refuses a message it does not know, and a write of a job it has not begun", async () => {
     const { core, events, write } = setUp();
     await expect(core.handle({ type: "eval", code: "1" }, [])).rejects.toThrow(TypeError);
-    await core.handle({ type: "begin", jobId: 1, limits: {} }, []);
-    await core.handle({ type: "discard", jobId: 1 }, []);
+    // The job is forgotten after its write, whatever the outcome; there is no other way to drop it.
+    await expect(core.handle({ type: "discard", jobId: 1 }, [])).rejects.toThrow(TypeError);
     await write();
     expect(events.at(-1)).toEqual({
       type: "failed",

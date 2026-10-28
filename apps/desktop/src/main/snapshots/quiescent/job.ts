@@ -33,8 +33,16 @@ import {
 } from "./handshake.js";
 import { type InterceptorSession, installInterceptor } from "./interceptor.js";
 import { type FrameSlot, type JobKey, layOutNavigations } from "./layout.js";
+import { type JobSlots, SNAPSHOT_JOB_SLOTS } from "./slots.js";
+import { type Failure, fail, JobStop } from "./stop.js";
+import { type JobDebugger, watchTargets } from "./targets.js";
+import { WorkerScopes, workerScopeOrigin } from "./worker-scopes.js";
 
 export type { JobKey } from "./layout.js";
+export { JobSlots, SNAPSHOT_JOB_SLOTS } from "./slots.js";
+export { failureOf } from "./stop.js";
+export type { JobDebugger } from "./targets.js";
+export { parseStorageKey } from "./targets.js";
 
 /**
  * Which service-worker bypass the job sends (save-transfer.md section 5, step 6); anything but `all` is a test
@@ -80,21 +88,22 @@ export interface JobPlan<T> {
 
 type Listener = (...args: never[]) => void;
 
-export interface JobDebugger {
-  attach(protocolVersion: string): void;
-  detach(): void;
-  sendCommand(method: string, params?: object, sessionId?: string): Promise<unknown>;
-  on(event: "message" | "detach", listener: Listener): unknown;
-  removeListener(event: "message" | "detach", listener: Listener): unknown;
-}
-
 export interface JobFrame {
   url: string;
   postMessage(channel: string, message: unknown, transfer: unknown[]): void;
 }
 
+/** The handshake's IPC as one window's `webContents.ipc` offers it, so a job hears its own window only. */
+export interface JobIpc {
+  on(
+    channel: string,
+    listener: (event: HelloEvent & { senderFrame: JobFrame | null }, message: unknown) => void,
+  ): unknown;
+  removeListener(channel: string, listener: Listener): unknown;
+}
+
 export interface JobWindow {
-  webContents: { loadURL(url: string): Promise<void>; debugger: JobDebugger };
+  webContents: { loadURL(url: string): Promise<void>; debugger: JobDebugger; ipc: JobIpc };
   destroy(): void;
   isDestroyed(): boolean;
 }
@@ -102,6 +111,8 @@ export interface JobWindow {
 export interface JobSession extends InterceptorSession {
   serviceWorkers: {
     getAllRunning(): Record<number, unknown>;
+    /** The scope of a worker version, for the canary's log (its origin only). */
+    getInfoFromVersionID(versionId: number): { scope: string } | null | undefined;
     on(event: "running-status-changed", listener: Listener): unknown;
     removeListener(event: "running-status-changed", listener: Listener): unknown;
   };
@@ -114,13 +125,6 @@ export interface JobDeps {
   createWindow(options: { session: JobSession; preload: string; subframes: boolean }): JobWindow;
   /** How many `webContents` use `session` now (QW-2). */
   contentsOn(session: JobSession): number;
-  ipc: {
-    on(
-      channel: string,
-      listener: (event: HelloEvent & { senderFrame: JobFrame | null }, message: unknown) => void,
-    ): unknown;
-    removeListener(channel: string, listener: Listener): unknown;
-  };
   /** `new MessageChannelMain()`. */
   newChannel(): { port1: unknown; port2: unknown };
   /** The quiescent preload's path (also its script URL in CDP, for the canary). */
@@ -128,9 +132,15 @@ export interface JobDeps {
   log: Logger;
   timing?: Partial<JobTiming>;
   /** Test flavor only: runs after each stub navigation (the canary controls inject a script or start a worker). */
-  afterNavigation?(window: JobWindow, session: JobSession): Promise<void>;
+  afterNavigation?(
+    window: JobWindow,
+    session: JobSession,
+    lock: "task" | "background",
+  ): Promise<void>;
   /** Test flavor only: the e2e harness's own isolated world (canary.ts). */
   harnessWorld?(name: string): boolean;
+  /** The cap on jobs running at once; the process-wide one unless a test passes its own. */
+  slots?: JobSlots;
 }
 
 export interface JobTiming {
@@ -153,58 +163,9 @@ export const JOB_TIMING: JobTiming = {
   deadlinePerMiBMs: 1_000,
 };
 
-type Failure = { ok: false; code: ErrorCode; message: string };
-const fail = (code: ErrorCode, message: string): Failure => ({ ok: false, code, message });
 const OK = { ok: true, data: undefined } as const;
 
-class JobStop extends Error {
-  constructor(readonly failure: Failure) {
-    super(failure.message);
-    this.name = "JobStop";
-  }
-}
-
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-/**
- * `<origin>/` or `<origin>/^0<site>`: the two forms of `Storage.getStorageKey` observed (save-transfer.md section
- * 2).
- */
-export function parseStorageKey(
-  text: string,
-): { origin: string; topLevelSite: string | null } | null {
-  const canonical = (value: string, port: boolean) => {
-    try {
-      const url = new URL(value);
-      return (
-        (url.protocol === "http:" || url.protocol === "https:") &&
-        url.origin === value &&
-        (port || url.port === "")
-      );
-    } catch {
-      return false;
-    }
-  };
-  const split = text.indexOf("/^0");
-  if (split === -1) {
-    const origin = text.endsWith("/") ? text.slice(0, -1) : "";
-    return !text.includes("^") && canonical(origin, true) ? { origin, topLevelSite: null } : null;
-  }
-  const origin = text.slice(0, split);
-  const site = text.slice(split + 3);
-  return !site.includes("^") && canonical(origin, true) && canonical(site, false)
-    ? { origin, topLevelSite: site }
-    : null;
-}
-
-/** Collects `{frameId, url}` of a `Page.getFrameTree` result. */
-function framesOf(tree: unknown, out: Array<{ id: string; url: string }> = []) {
-  const node = tree as { frame?: { id?: unknown; url?: unknown }; childFrames?: unknown[] } | null;
-  const { id, url } = node?.frame ?? {};
-  if (typeof id === "string" && typeof url === "string") out.push({ id, url });
-  for (const child of node?.childFrames ?? []) framesOf(child, out);
-  return out;
-}
 
 export async function runQuiescentJob<T>(
   gameId: string,
@@ -222,6 +183,15 @@ export async function runQuiescentJob<T>(
   if (!("release" in lease)) {
     log.info("snapshot.job.refused", { gameId, code: lease.code });
     return fail(lease.code, refusalMessage(lease.code));
+  }
+  const giveSlot = (deps.slots ?? SNAPSHOT_JOB_SLOTS).take();
+  if (giveSlot === null) {
+    lease.release();
+    log.info("snapshot.job.refused", { gameId, code: "GAME_BUSY", reason: "job-cap" });
+    return fail(
+      "GAME_BUSY",
+      "Two snapshot jobs are running already; try again when one has finished.",
+    );
   }
   const abort = new AbortController();
   let stopped: Failure | null = null;
@@ -263,7 +233,7 @@ export async function runQuiescentJob<T>(
       await plan
         .discard()
         .catch((error: unknown) => log.error("snapshot.job.discard-failed", { gameId, error }));
-      log.warn("snapshot.job.failed", { gameId, code: failure.code });
+      log.warn("snapshot.job.failed", { gameId, lock: plan.lock, code: failure.code });
       return failure;
     }
     let committed: Result<T, ErrorCode>;
@@ -275,13 +245,20 @@ export async function runQuiescentJob<T>(
     }
     // The commit honors the context's signal itself; once it has committed, its outcome stands.
     const outcome = committed;
-    if (outcome.ok) log.info("snapshot.job.done", { gameId });
-    else log.warn("snapshot.job.failed", { gameId, code: outcome.code, step: "commit" });
+    if (outcome.ok) log.info("snapshot.job.done", { gameId, lock: plan.lock });
+    else
+      log.warn("snapshot.job.failed", {
+        gameId,
+        lock: plan.lock,
+        code: outcome.code,
+        step: "commit",
+      });
     return outcome;
   } finally {
     clearInterval(watchdog);
     lease.signal.removeEventListener("abort", onCancel);
     signal?.removeEventListener("abort", onCancel);
+    giveSlot();
     lease.release();
   }
 }
@@ -324,7 +301,6 @@ async function quiescentWindow<T>(
   });
 
   const cleanups: Array<() => void> = [];
-  let tearingDown = false;
   /** Rejects as soon as the job is stopped, so no wait outlives it, and after `ms` unless that is null. */
   const guard = <V>(promise: Promise<V>, ms: number | null, what: string): Promise<V> =>
     new Promise<V>((resolve, reject) => {
@@ -371,50 +347,18 @@ async function quiescentWindow<T>(
     await guard(window.webContents.loadURL("about:blank"), timing.loadMs, "Opening the job window");
     const dbg = window.webContents.debugger;
     dbg.attach("1.3");
-    const children: Array<{ sessionId: string }> = [];
     const send = (method: string, params?: object, sessionId?: string) =>
       guard(dbg.sendCommand(method, params, sessionId), timing.commandMs, method);
-    const watch = async (sessionId: string | undefined, withBypass: boolean) => {
-      await send("Network.enable", {}, sessionId);
-      if (withBypass) await send("Network.setBypassServiceWorker", { bypass: true }, sessionId);
-      await send("Runtime.enable", {}, sessionId);
-      await send("Debugger.enable", {}, sessionId);
-      await send(
-        "Target.setAutoAttach",
-        { autoAttach: true, waitForDebuggerOnStart: true, flatten: true },
-        sessionId,
-      );
-    };
-    const onMessage = (_event: unknown, method: string, params: unknown, sessionId?: string) => {
-      canary.onDebuggerMessage(method, params, sessionId);
-      if (method !== "Target.attachedToTarget") return;
-      const { sessionId: child, targetInfo } = params as {
-        sessionId: string;
-        targetInfo: { type: string };
-      };
-      // A worker target stays paused: the canary has stopped the job already.
-      if (targetInfo.type !== "iframe") return;
-      children.push({ sessionId: child });
-      watch(child, bypass === "all")
-        .then(() => dbg.sendCommand("Runtime.runIfWaitingForDebugger", {}, child))
-        .catch(() => {
-          if (!tearingDown) stop(fail(quiet, "A frame of the job window could not be watched."));
-        });
-    };
-    const onDetach = () => {
-      if (!tearingDown) canary.onDebuggerDetached();
-    };
-    dbg.on("message", onMessage as Listener);
-    dbg.on("detach", onDetach);
-    cleanups.push(() => {
-      dbg.removeListener("message", onMessage as Listener);
-      dbg.removeListener("detach", onDetach);
-      try {
-        dbg.detach();
-      } catch {
-        // Destroying the window detached it already.
-      }
+    const workerScopes = new WorkerScopes();
+    const targets = watchTargets({
+      debugger: dbg,
+      canary,
+      send,
+      bypassChildren: bypass === "all",
+      onLost: () => stop(fail(quiet, "A frame of the job window could not be watched.")),
+      onEvent: (method, params) => workerScopes.onEvent(method, params),
     });
+    cleanups.push(() => targets.dispose());
 
     // Step 5.
     await send("ServiceWorker.enable");
@@ -427,14 +371,29 @@ async function quiescentWindow<T>(
       log.error("snapshot.quiescent.workers-running", { gameId, running: running() });
       return fail(quiet, "A service worker of the game kept running, so its data was not read.");
     }
-    const onStatus = (details: { runningStatus: string }) => canary.onWorkerStatus(details);
+    const onStatus = (details: { runningStatus: string; versionId: number }) => {
+      const active = details.runningStatus === "starting" || details.runningStatus === "running";
+      if (active) {
+        // Which worker it is, by the origin of its scope (logged; the canary stops the job either way).
+        const scopeOrigin =
+          workerScopes.originOf(details.versionId) ?? workerScopeOrigin(ses, details.versionId);
+        log.warn("snapshot.quiescent.worker-status", {
+          gameId,
+          status: details.runningStatus,
+          scopeOrigin,
+        });
+        canary.onWorkerStatus({ runningStatus: details.runningStatus, scopeOrigin });
+      } else {
+        canary.onWorkerStatus(details);
+      }
+    };
     ses.serviceWorkers.on("running-status-changed", onStatus as Listener);
     cleanups.push(() =>
       ses.serviceWorkers.removeListener("running-status-changed", onStatus as Listener),
     );
 
     // Step 6.
-    await watch(undefined, bypass !== "none");
+    await targets.watchPage(bypass !== "none");
     if (deps.contentsOn(ses) !== 1) {
       log.error("snapshot.quiescent.not-exclusive", { gameId, contents: deps.contentsOn(ses) });
       return fail(quiet, "Another window uses the game's storage, so its data was not read.");
@@ -450,8 +409,9 @@ async function quiescentWindow<T>(
       else if (!accepted.ok)
         log.warn("snapshot.quiescent.hello-refused", { gameId, reason: accepted.reason });
     };
-    deps.ipc.on(HELLO_CHANNEL, onHello);
-    cleanups.push(() => deps.ipc.removeListener(HELLO_CHANNEL, onHello as Listener));
+    const ipc = window.webContents.ipc;
+    ipc.on(HELLO_CHANNEL, onHello);
+    cleanups.push(() => ipc.removeListener(HELLO_CHANNEL, onHello as Listener));
 
     for (const [step, navigation] of layout.navigations.entries()) {
       greeted.clear();
@@ -467,16 +427,17 @@ async function quiescentWindow<T>(
       );
       log.info("snapshot.quiescent.navigated", {
         gameId,
+        lock: plan.lock,
         step,
         origin: new URL(navigation.topUrl).origin,
         frames: navigation.frames.length,
       });
       if (deps.afterNavigation) {
-        await guard(deps.afterNavigation(window, ses), null, "The test control");
+        await guard(deps.afterNavigation(window, ses, plan.lock), null, "The test control");
       }
 
       // Step 8.
-      const keyed = await resolveKeys(navigation.frames, send, children);
+      const keyed = await targets.resolveKeys(navigation.frames);
       if (!keyed.ok) {
         log.error("snapshot.quiescent.key-check-failed", { gameId, code: keyed.code });
         return keyed;
@@ -514,6 +475,7 @@ async function quiescentWindow<T>(
       return fail(quiet, "Game code started while the save data was read.");
     log.info("snapshot.quiescent.clean", {
       gameId,
+      lock: plan.lock,
       navigations: layout.navigations.length,
       scripts: canary.scripts(),
       refused: interceptor.refused().length,
@@ -525,7 +487,6 @@ async function quiescentWindow<T>(
     return fail("INTERNAL", "The job window failed.");
   } finally {
     // Step 12 (the lease is released by the caller, after commit or discard).
-    tearingDown = true;
     for (const cleanup of cleanups.reverse()) {
       try {
         cleanup();
@@ -534,49 +495,4 @@ async function quiescentWindow<T>(
       }
     }
   }
-}
-
-/** Step 8: each frame's Chromium storage key, parsed and compared with the key the job expects there. */
-async function resolveKeys(
-  slots: readonly FrameSlot[],
-  send: (method: string, params?: object, sessionId?: string) => Promise<unknown>,
-  children: ReadonlyArray<{ sessionId: string }>,
-): Promise<Result<void, ErrorCode>> {
-  const where = new Map<string, { frameId: string; sessionId?: string }>();
-  for (const frame of framesOf(
-    ((await send("Page.getFrameTree")) as { frameTree?: unknown }).frameTree,
-  )) {
-    where.set(frame.url, { frameId: frame.id });
-  }
-  // A cross-site iframe is a target of its own; its frame is asked through its session.
-  for (const { sessionId } of children) {
-    let tree: unknown;
-    try {
-      tree = ((await send("Page.getFrameTree", {}, sessionId)) as { frameTree?: unknown })
-        .frameTree;
-    } catch {
-      continue; // a frame of an earlier navigation, gone
-    }
-    for (const frame of framesOf(tree)) where.set(frame.url, { frameId: frame.id, sessionId });
-  }
-  for (const slot of slots) {
-    const location = where.get(slot.url);
-    if (location === undefined) return fail("EXP_TIMEOUT", "A frame of the job window is missing.");
-    const { storageKey } = (await send(
-      "Storage.getStorageKey",
-      { frameId: location.frameId },
-      location.sessionId,
-    )) as { storageKey?: unknown };
-    const parsed = typeof storageKey === "string" ? parseStorageKey(storageKey) : null;
-    if (parsed === null) {
-      return fail("EXP_UNSUPPORTED_STORAGE_KEY", "A frame has a storage key of an unknown form.");
-    }
-    if (parsed.origin !== slot.key.origin || parsed.topLevelSite !== slot.key.topLevelSite) {
-      return fail(
-        "EXP_STORAGE_KEY_MISMATCH",
-        "A frame's storage key differs from the expected one.",
-      );
-    }
-  }
-  return OK;
 }

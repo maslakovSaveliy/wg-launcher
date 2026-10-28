@@ -1,6 +1,7 @@
 // The `snapshot:*` channels of this task (architecture.md section 6): export, list and save as. An export answers
 // with its task id as soon as the game's lock is held (a refusal before that, such as GAME_RUNNING for an open
 // window, AC-11, is the call's own result); its steps, measured bytes and outcome follow as `task:progress` events,
+// none of them before that reply,
 // a failure with its code and a short message (Review Focus 5: the real error is shown). Rows never carry a file
 // path, and "save as" chooses the destination in a native dialog in main.
 import type { ErrorCode, Result, SnapshotRow, TaskProgressEvent } from "@wg-launcher/shared";
@@ -55,8 +56,15 @@ export function snapshotHandlers(
       if (!library.repos.games.get(gameId)) return NOT_FOUND;
       const taskId = context.newId();
       let step: ExportStep = "lock";
-      const send = (event: Partial<TaskProgressEvent> & Pick<TaskProgressEvent, "status">) =>
-        snapshots.sendProgress({ taskId, gameId, kind: "export", step, ...event });
+      // Events wait until the reply with the task id has gone out, so a page that keeps only the tasks it knows
+      // drops none of them.
+      let replied = false;
+      const held: TaskProgressEvent[] = [];
+      const send = (event: Partial<TaskProgressEvent> & Pick<TaskProgressEvent, "status">) => {
+        const full: TaskProgressEvent = { taskId, gameId, kind: "export", step, ...event };
+        if (replied) snapshots.sendProgress(full);
+        else held.push(full);
+      };
       const locked = Promise.withResolvers<null>();
       const done = snapshots.export(gameId, {
         ...(frameKeys ? { frameKeys } : {}),
@@ -71,6 +79,11 @@ export function snapshotHandlers(
       });
       const first: Result<unknown, ErrorCode> | null = await Promise.race([locked.promise, done]);
       if (first !== null && !first.ok) return first;
+      // The reply is sent when this handler's promise settles; the held events follow on the next turn.
+      setImmediate(() => {
+        replied = true;
+        for (const event of held.splice(0)) snapshots.sendProgress(event);
+      });
       void done.then(
         (result) =>
           result.ok

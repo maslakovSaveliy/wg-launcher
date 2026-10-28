@@ -1,12 +1,16 @@
+import type { ErrorCode, Result } from "@wg-launcher/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Lease, LockRefusal } from "../../games/locks.js";
 import { HELLO_CHANNEL, PORT_CHANNEL } from "./handshake.js";
 import {
   type ConnectedFrame,
+  failureOf,
+  type JobContext,
   type JobDeps,
   type JobKey,
   type JobPlan,
   type JobSession,
+  JobSlots,
   type JobWindow,
   parseStorageKey,
   runQuiescentJob,
@@ -54,6 +58,7 @@ interface Options {
   workersRunning?: boolean;
   refuse?: LockRefusal["code"];
   silentFrame?: boolean;
+  slots?: JobSlots;
 }
 
 const keyText = (key: JobKey) =>
@@ -84,6 +89,7 @@ function fakes(options: Options = {}) {
     },
   };
   const ipcListeners = new Set<(event: unknown, message: unknown) => void>();
+  const helloChannels: string[] = [];
   const debuggerListeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const emit = (method: string, params: unknown, sessionId?: string) => {
     for (const listener of debuggerListeners.get("message") ?? [])
@@ -109,6 +115,7 @@ function fakes(options: Options = {}) {
     },
     serviceWorkers: {
       getAllRunning: () => (options.workersRunning ? { 1: {} } : {}),
+      getInfoFromVersionID: () => ({ scope: "http://localhost:4317/" }),
       on: () => {
         registered.workerListeners += 1;
       },
@@ -124,6 +131,19 @@ function fakes(options: Options = {}) {
     registered.windows += 1;
     let destroyed = false;
     const contents = {
+      ipc: {
+        on: (_channel: string, listener: (event: unknown, message: unknown) => void) => {
+          helloChannels.push(_channel);
+          ipcListeners.add(listener);
+          registered.ipcListeners += 1;
+        },
+        removeListener: (
+          _channel: string,
+          listener: (event: unknown, message: unknown) => void,
+        ) => {
+          if (ipcListeners.delete(listener)) registered.ipcListeners -= 1;
+        },
+      },
       async loadURL(url: string) {
         if (url === "about:blank") {
           boom("load-blank");
@@ -213,17 +233,7 @@ function fakes(options: Options = {}) {
     session: () => session,
     createWindow,
     contentsOn: () => options.contents ?? 1,
-    ipc: {
-      on: (_channel, listener) => {
-        ipcListeners.add(listener as (event: unknown, message: unknown) => void);
-        registered.ipcListeners += 1;
-      },
-      removeListener: (_channel, listener) => {
-        if (ipcListeners.delete(listener as (event: unknown, message: unknown) => void)) {
-          registered.ipcListeners -= 1;
-        }
-      },
-    },
+    slots: options.slots ?? new JobSlots(2),
     newChannel: () => ({ port1: { end: 1 }, port2: { end: 2 } }),
     preloadPath: PRELOAD,
     log,
@@ -239,7 +249,7 @@ function fakes(options: Options = {}) {
       ran.push([...frames]);
       return { ok: true as const, data: undefined };
     }),
-    commit: vi.fn(async () => {
+    commit: vi.fn(async (_context: JobContext): Promise<Result<string, ErrorCode>> => {
       boom("commit");
       return { ok: true as const, data: "committed" };
     }),
@@ -255,7 +265,18 @@ function fakes(options: Options = {}) {
     windowDestroyed: window === null || window.isDestroyed(),
     released: registered.released,
   });
-  return { deps, plan, ran, posted, commands, log, leaseController, nothingLeft, emit };
+  return {
+    deps,
+    plan,
+    ran,
+    posted,
+    commands,
+    log,
+    leaseController,
+    nothingLeft,
+    emit,
+    helloChannels,
+  };
 }
 
 const CLEAN = {
@@ -394,11 +415,52 @@ describe("runQuiescentJob (save-transfer.md section 5)", () => {
     expect(setUp.nothingLeft()).toEqual(CLEAN);
   });
 
-  it("registers the hello listener on the handshake channel only", async () => {
-    const { deps, plan } = fakes();
-    const on = vi.spyOn(deps.ipc, "on");
+  it("listens for hellos on the job window's own IPC, on the handshake channel only", async () => {
+    const { deps, plan, helloChannels } = fakes();
     await runQuiescentJob(GAME, plan, deps);
-    expect(on.mock.calls.map(([channel]) => channel)).toEqual([HELLO_CHANNEL]);
+    expect(helloChannels).toEqual([HELLO_CHANNEL]);
+  });
+
+  it("runs at most two jobs at once: a third is refused with GAME_BUSY and its lease released (security.md 8)", async () => {
+    const slots = new JobSlots(2);
+    const gates: Array<() => void> = [];
+    const blocked = () => {
+      const setUp = fakes({ slots });
+      setUp.plan.runFrames.mockImplementation(
+        () => new Promise((resolve) => gates.push(() => resolve({ ok: true, data: undefined }))),
+      );
+      return setUp;
+    };
+    const first = blocked();
+    const second = blocked();
+    const running = [
+      runQuiescentJob(GAME, first.plan, first.deps),
+      runQuiescentJob(GAME, second.plan, second.deps),
+    ];
+    await vi.waitFor(() => expect(gates).toHaveLength(2));
+    expect(slots.running).toBe(2);
+    const third = fakes({ slots });
+    const refused = await runQuiescentJob(GAME, third.plan, third.deps);
+    expect(refused).toMatchObject({ ok: false, code: "GAME_BUSY" });
+    expect((refused as { message: string }).message).toMatch(/two snapshot jobs/i);
+    expect(third.nothingLeft()).toEqual(CLEAN);
+    expect(third.plan.runFrames).not.toHaveBeenCalled();
+    for (const open of gates) open();
+    await Promise.all(running);
+    expect(slots.running).toBe(0);
+    expect((await runQuiescentJob(GAME, third.plan, third.deps)).ok).toBe(true);
+  });
+
+  it("aborts the job's signal with the watchdog's EXP_TIMEOUT, which a commit can read", async () => {
+    const setUp = fakes();
+    setUp.deps.timing = { ...FAST, deadlineMs: 100 };
+    setUp.plan.commit.mockImplementationOnce(async (context) => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      return failureOf(context.signal);
+    });
+    expect(await runQuiescentJob(GAME, setUp.plan, setUp.deps)).toMatchObject({
+      code: "EXP_TIMEOUT",
+    });
   });
 });
 

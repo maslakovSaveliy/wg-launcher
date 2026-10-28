@@ -4,7 +4,6 @@
 import { join } from "node:path";
 import {
   BrowserWindow,
-  ipcMain,
   MessageChannelMain,
   type Session,
   utilityProcess,
@@ -22,6 +21,7 @@ export interface SnapshotDepsOptions {
   repos: Repos;
   paths: AppPaths;
   locks: JobDeps["locks"];
+  transaction: SnapshotDeps["transaction"];
   log: Logger;
   newId(): string;
   /** Test flavor only (canary controls and the e2e harness's world). */
@@ -29,14 +29,22 @@ export interface SnapshotDepsOptions {
   harnessWorld?: JobDeps["harnessWorld"];
 }
 
+const quiescentWindows = new WeakSet<BrowserWindow>();
+
+/** True for a hidden quiescent window (no user ever sees one; the e2e suite counts the other windows). */
+export const isQuiescentWindow = (window: BrowserWindow): boolean => quiescentWindows.has(window);
+
 /**
- * The quiescent window: hidden, on the game's partition, sandboxed and context-isolated, the quiescent preload, no
- * background throttling (it is never shown), and the preload in subframes only when a key is in an iframe (QW-6).
- * A renderer-initiated navigation of its main frame is refused (the job navigates with `loadURL` only).
+ * The quiescent window: hidden and not focusable, on the game's partition, sandboxed and context-isolated, the
+ * quiescent preload, no background throttling (it is never shown), and the preload in subframes only when a key is
+ * in an iframe (QW-6). A renderer-initiated navigation of its main frame is refused (the job navigates with
+ * `loadURL` only).
  */
 function quiescentWindow(options: { session: JobSession; preload: string; subframes: boolean }) {
   const window = new BrowserWindow({
     show: false,
+    // Never key or main: a hidden job window has no reason to take focus from the user's windows (Assumed).
+    focusable: false,
     webPreferences: {
       session: options.session as unknown as Session,
       sandbox: true,
@@ -55,6 +63,7 @@ function quiescentWindow(options: { session: JobSession; preload: string; subfra
     },
   });
   window.webContents.on("will-navigate", (event) => event.preventDefault());
+  quiescentWindows.add(window);
   return window as unknown as JobWindow;
 }
 
@@ -64,6 +73,7 @@ export function createSnapshotDeps(options: SnapshotDepsOptions): SnapshotDeps {
   const workerPath = join(import.meta.dirname, "snapshot-worker.js");
   return {
     repos: options.repos,
+    transaction: options.transaction,
     paths: options.paths,
     job: {
       locks: options.locks,
@@ -71,7 +81,6 @@ export function createSnapshotDeps(options: SnapshotDepsOptions): SnapshotDeps {
       createWindow: quiescentWindow,
       contentsOn: (ses) =>
         webContents.getAllWebContents().filter((c) => (c.session as unknown) === ses).length,
-      ipc: ipcMain as unknown as JobDeps["ipc"],
       newChannel: () => new MessageChannelMain(),
       preloadPath: join(import.meta.dirname, "../preload/quiescent.cjs"),
       log,

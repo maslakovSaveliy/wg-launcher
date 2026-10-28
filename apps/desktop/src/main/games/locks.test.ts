@@ -53,7 +53,6 @@ describe("LockManager: the refusal matrix (architecture.md section 4, AC-11)", (
     ["task", "session", "GAME_BUSY"],
     ["task", "task", "GAME_BUSY"],
     ["task", "background", "GAME_BUSY"],
-    ["background", "task", "GAME_BUSY"],
     ["background", "background", "GAME_BUSY"],
   ];
   it.each(cases)("held by %s, a %s request is refused with %s", async (held, kind, code) => {
@@ -77,7 +76,7 @@ describe("LockManager: the refusal matrix (architecture.md section 4, AC-11)", (
   );
 });
 
-describe("LockManager: a launch cancels a background lease (M5)", () => {
+describe("LockManager: a launch or a user task cancels a background lease (M5)", () => {
   it("aborts the background signal with CANCELLED and grants the session once it is released", async () => {
     const { locks, log } = manager();
     const background = await lease(locks, "background");
@@ -117,6 +116,7 @@ describe("LockManager: a launch cancels a background lease (M5)", () => {
         gameId: GAME,
         code: "INTERNAL",
         waitedMs: 2000,
+        for: "session",
       });
       expect(locks.holder(GAME)).toBe("background");
       background.release();
@@ -126,10 +126,43 @@ describe("LockManager: a launch cancels a background lease (M5)", () => {
     }
   });
 
-  it("a task never cancels a background lease", async () => {
+  it("a user task cancels a background lease the same way and is granted once it is released", async () => {
+    const { locks, log } = manager();
+    const background = await lease(locks, "background");
+    background.signal.addEventListener("abort", () => setTimeout(() => background.release(), 5));
+    const pending = locks.acquire(GAME, "task");
+    // While the task waits, the game counts as held by it: a launch or another task is refused.
+    expect(locks.holder(GAME)).toBe("task");
+    expect(await locks.acquire(GAME, "session")).toEqual({ code: "GAME_BUSY" });
+    expect(await locks.acquire(GAME, "task")).toEqual({ code: "GAME_BUSY" });
+    const task = await pending;
+    expect(background.signal.reason).toMatchObject({ code: "CANCELLED" });
+    expect(isLease(task) && task.kind).toBe("task");
+    expect(locks.holder(GAME)).toBe("task");
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  it("a task whose background lease is not released in time is refused with INTERNAL", async () => {
+    vi.useFakeTimers();
+    try {
+      const { locks, log } = manager(2000);
+      await lease(locks, "background");
+      const pending = locks.acquire(GAME, "task");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await pending).toEqual({ code: "INTERNAL" });
+      expect(log.error).toHaveBeenCalledWith(
+        "locks.background-not-released",
+        expect.objectContaining({ gameId: GAME, code: "INTERNAL" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a background request never cancels another background lease", async () => {
     const { locks } = manager();
     const background = await lease(locks, "background");
-    expect(await locks.acquire(GAME, "task")).toEqual({ code: "GAME_BUSY" });
+    expect(await locks.acquire(GAME, "background")).toEqual({ code: "GAME_BUSY" });
     expect(background.signal.aborted).toBe(false);
   });
 });

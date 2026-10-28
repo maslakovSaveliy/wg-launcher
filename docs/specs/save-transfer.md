@@ -222,8 +222,10 @@ the spike code. All steps run in the main process unless stated.
    target, the same two commands before `Runtime.runIfWaitingForDebugger`; `Debugger` and `Runtime` enabled everywhere
    for the canary. Only then navigate. Without the bypass the registered worker controlled the stub; with it, it did
    not. Verified (2026-10-24, RESULTS.md H14b). The page-level bypass also covers a cross-site iframe: with no bypass
-   at all, progress-lab's own partitioned worker in the `127.0.0.1` iframe under `localhost` started when the iframe
-   stub loaded and the canary stopped the job (`service-worker-started`); with the page-level bypass alone (none sent
+   at all, a worker of the session started when the iframe stub loaded and the canary stopped the job
+   (`service-worker-started`); the worker's scope origin, read from the `ServiceWorker` CDP domain, was the
+   `127.0.0.1` iframe's, so it was progress-lab's own partitioned worker under `localhost` (the host page registers
+   none); with the page-level bypass alone (none sent
    to the iframe's own target), and with the full bypass, the job was clean. Verified (2026-10-28, the no-bypass iframe
    control in `apps/desktop/e2e/quiescent.spec.ts`, Electron 45.0.0, macOS arm64; open check 3). The per-child bypass
    stays: it costs one command per target.
@@ -287,7 +289,11 @@ otherwise.
   the window's teardown, still under the lease, which is released last. A launch that cancels a `background` lease
   (plan M5), the caller's signal, the canary and the watchdog all stop every wait at once; the cancelled job returns
   `CANCELLED` and lets go of the lease. Verified (2026-10-28, `apps/desktop/e2e/quiescent.spec.ts`: a launch during a
-  held storage check opened the game in under 2.5 s and the check returned `CANCELLED`). Each step throwing once
+  held storage check opened the game in under 2.5 s and the check was cancelled; an export right after a close
+  cancelled the running check the same way). An aborted job's signal carries why it stopped, so a commit returns
+  that code (the watchdog's `EXP_TIMEOUT`, a cancellation's `CANCELLED`). At most two jobs run at once in the
+  process (security.md section 8). A job's worker is started once and killed when the job ends, also when the job
+  was stopped while the worker was still starting (`worker/slot.ts`). Each step throwing once
   leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
   behind and releases the lease (QW-3, `job.test.ts`). QW-2 counts the `webContents` on the game's session before
   the first stub navigation.
@@ -295,7 +301,8 @@ otherwise.
   `key` for a top page that only hosts iframes (the preload stays inert there, QW-6). The interceptor serves exactly
   the job's stub URLs for `GET` on both `http` and `https`, whatever the build (fail closed), and the `webRequest`
   layer cancels everything else; the job logs the refused origins. Navigations follow step 7 (`layout.ts`).
-- **Handshake.** The preload sends `{job}` on `wg:quiescent:hello`; main checks the sender, the frame URL and the
+- **Handshake.** The preload sends `{job}` on `wg:quiescent:hello`; the job listens on its own window's
+  `webContents.ipc`, so concurrent jobs never see each other's hellos; it checks the sender, the frame URL and the
   nonce (`timingSafeEqual`), once per frame, then sends one end of a `MessageChannelMain` on `wg:quiescent:port` with
   `WebFrameMain.postMessage`; the other end goes to the snapshot worker with the frame command. The worker sends the
   typed commands with a fresh nonce each (`randomBytes(16)`), validates every reply with `FrameReply` and closes the
@@ -305,9 +312,11 @@ otherwise.
   the preload file (its path is the script URL) and a 6-character `void 0` without a URL. Electron names that world
   "Electron Isolated Context" in a top-level frame and leaves it unnamed in a cross-site iframe's own target. Every
   other script, a script in the default world, any worker target or a session worker `starting` or `running` stops
-  the job. Verified (2026-10-28, `apps/desktop/e2e/quiescent.spec.ts` "calibration": 2 of each for a plain job, 3 for
-  the iframe job, nothing refused; an injected main-world script and a worker started during the job were each
-  flagged, S-13). Two findings shaped it: zod 4.6.7 builds object parsers with `new Function` and probes
+  the job. The allowlist is pinned to exactly that: the one Electron module, the preload's world as named in the
+  page's own session or unnamed only in a child target, and a context the canary saw announced
+  (`Runtime.executionContextCreated`; any other is a violation). Verified (2026-10-28,
+  `apps/desktop/e2e/quiescent.spec.ts` "calibration": 2 of each for a plain job, 3 for the iframe job, nothing
+  refused; an injected main-world script and a worker started during the job were each flagged, S-13). Two findings shaped it: zod 4.6.7 builds object parsers with `new Function` and probes
   `new Function("")` when a schema is created, which the canary saw as a 28-character script without a URL, so the
   preload sets `z.config({jitless: true})` before any schema exists (`zod-jitless.ts`); and Playwright's `_electron`
   attaches to every page, the quiescent window included, and evaluates an empty script in its own
@@ -321,11 +330,13 @@ otherwise.
 - **Worker.** One `utilityProcess` per job (`out/main/snapshot-worker.js`, a second main entry), killed when the job
   ends. Main and the worker exchange only `WorkerCommand`/`WorkerEvent` (zod, bounded strings and lists, no data
   bytes). The worker assembles each frame's chunks under the job's limits (`maxEntryBytes` on the declared size before
-  a byte is kept, `maxEntries`, and `maxTotalBytes` over the data as entries complete), refuses a file outside the
+  a byte is kept, `maxEntries`, and `maxTotalBytes` over the data from the declared size before an entry's buffer is
+  allocated and again as entries complete), refuses a file outside the
   frame's own `data/<k>/` or a blob not named by its SHA-256, and reports measured bytes (`received`). `write` runs
   the writer into `tmp/<revisionId>.wgsnap.partial` (`wx`, flushed with `fsync`), reads that file back through
-  `validateSnapshot` with its `stat` size and the same limits, and renames it to `snapshots/<gameId>/<revisionId>.wgsnap`
-  only when it validates and no file of that revision exists; any failure removes the partial file. So save data
+  `validateSnapshot` with its `stat` size and the same limits, renames it to `snapshots/<gameId>/<revisionId>.wgsnap`
+  only when it validates and no file of that revision exists, and flushes that directory (skipped on Windows,
+  Assumed); any failure removes the partial file. So save data
   above a limit fails with its `SNAP_*` code (`SNAP_TOTAL_TOO_LARGE` from the collector or writer,
   `SNAP_RATIO_EXCEEDED` and `SNAP_FILE_TOO_LARGE` from the read-back) and a disk error is `INTERNAL` with the error
   code in the message ("The snapshot file could not be written (EIO).", the test-flavor fault `fail-write`); in both
@@ -376,7 +387,11 @@ the new revision (below). Export never changes the game's storage apart from the
 In Phase 1 Task 13 (`apps/desktop/src/main/snapshots/export.ts`, `Assumed`): the game keys are every top-level origin
 (the entry URL's and those observed in `storage_targets`), the frame keys an adapter declares that were observed, and
 the frame keys the user chose in `snapshot:export {frameKeys}`; without a choice, the remembered one (`in_export`).
-A chosen key that is not a frame of the game is `INVALID_ARGUMENT`. A frame of the same site as its top-level page is
+A chosen key that is not a frame of the game is `INVALID_ARGUMENT`; more keys than a manifest holds
+(`maxStorageKeys`, 32) is `SNAP_MANIFEST_INVALID`, the code snapshot-format.md section 4 gives such a manifest. The
+choice is remembered (`in_export`) only when the export commits, in the same database transaction as the row and the
+game's base revision; any failed write removes the revision's partial and final file, so neither a row without its
+file nor a file without its row is left (`export.test.ts`). A frame of the same site as its top-level page is
 first-party storage, a cross-site frame is partitioned under its top-level site (`keys.ts`). The adapter is the one
 whose `match.origins` holds the entry URL's origin. The row's `path` is relative to userData, and the export commit
 sets `base_revision_id` to the new revision, so a second export's parent is the first. Verified (2026-10-28,

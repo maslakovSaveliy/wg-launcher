@@ -147,10 +147,14 @@ stateDiagram-v2
   `launching` (a refused cross-site redirect, a network error) destroys the window (`launching → exited`); `exited` and
   `crashed` are reported until the next launch, which treats both as `idle`. A launch also refuses a library entry
   whose stored URL this build does not allow (`URL_NOT_ALLOWED`) and an entry marked `needs_recovery` in the database.
-- **Lock details** (`apps/desktop/src/main/games/locks.ts`, `Assumed`): when a cancelled background lease is not
-  released within 2 s the launch is refused with `INTERNAL` (logged `locks.background-not-released`), because the job
-  may still be touching the game's storage; while the launch waits the game counts as held by the session; a task
-  request never cancels a background lease (`GAME_BUSY`).
+- **Lock details** (`apps/desktop/src/main/games/locks.ts`, `Assumed`): background work never blocks what the user
+  does. A launch (`session`) and a user task (`task`: export, import, verify, delete local saves, clear cache) both
+  cancel a `background` lease (a storage check) the same way: its signal is aborted with `CANCELLED` and the request
+  waits for its release; when it is not released within 2 s the request is refused with `INTERNAL` (logged
+  `locks.background-not-released`), because the job may still be touching the game's storage; while the request
+  waits the game counts as held by it. A background request never cancels another one (`GAME_BUSY`), and a user task
+  still refuses a launch with `GAME_BUSY` (plan M5). Verified (2026-10-28, `locks.test.ts`;
+  `apps/desktop/e2e/quiescent.spec.ts`: an export right after a close cancelled the running check and succeeded).
 - **Crash and hang.** `render-process-gone` ends the session as `crashed` and the library shows it; `unresponsive`
   offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. The e2e test crashes a game
   with `forcefullyCrashRenderer` and force-closes a really hung page; it emits the window's `unresponsive` event itself,
@@ -274,9 +278,12 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
 - **Implementation (Phase 1 Task 13).** `Assumed` unless noted.
   - `snapshot:export {gameId, frameKeys?}`, `snapshot:list {gameId}` and `snapshot:saveAs {gameId, revisionId}`
     exist (`apps/desktop/src/main/ipc/handlers/snapshots.ts`). An export answers `{taskId}` once the game's lock is
-    held; a refusal before that (`GAME_RUNNING` while the window is open, AC-11, `GAME_BUSY`, `NEEDS_RECOVERY`,
-    `NOT_FOUND`, `INVALID_ARGUMENT` for a frame that is not the game's) is the call's own result. Verified (2026-10-28,
+    held; a refusal before that (`GAME_RUNNING` while the window is open, AC-11, `GAME_BUSY` also when two snapshot
+    jobs run already, `NEEDS_RECOVERY`, `NOT_FOUND`, `INVALID_ARGUMENT` for a frame that is not the game's,
+    `SNAP_MANIFEST_INVALID` for a game with more than 32 storage keys) is the call's own result. Verified (2026-10-28,
     `apps/desktop/e2e/export.spec.ts` through `window.wg`).
+  - No `task:progress` event of an export reaches the page before the reply with its `{taskId}`: the handler holds
+    them until the turn after it answered (`handlers.test.ts`).
   - `task:progress` events carry `kind` `export`, `step` `lock`, `read` (with `bytesDone`, the entry bytes the
     snapshot worker received, measured) or `write`, and `status`; a failure adds its `code` and a short `message`
     (no path or value), so the UI can show the real error (Review Focus 5). `bytesTotal` is never sent for an export:
@@ -543,10 +550,14 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
 | Compatibility not verified | Always in the MVP: no verification records exist, and the UI never calls a game, runtime or OS verified unless a record in `docs/compat/` backs it (AC-21) |
 
 - A storage check is the quiescent inventory (counts and usage numbers only) over the game's known keys; it runs after
-  a game window exits, after an import or a delete, and never while any game window is focused. Phase 1 Task 13 has
-  `runStorageCheck(gameId, signal)` (`apps/desktop/src/main/snapshots/storage-check.ts`, a `background` lease that a
-  launch cancels, plan M5); it is not yet started after a game exits, because a user's export right after the close
-  would then meet the check's lease (`GAME_BUSY`); when it runs, and how a user task meets it, is open (Assumed). `has_data` means at
+  a game window exits, after an import or a delete, and never while any game window is focused. In Phase 1 Task 13
+  (`apps/desktop/src/main/snapshots/{storage-check,check-scheduler}.ts`) it starts 2 s after a game window exits
+  (`QUIET_MS`, Assumed: a user who opens the game again at once finds no check to cancel), waits while any game
+  window is focused (it runs when the focus changes), runs one check at a time and each game once, holds a
+  `background` lease that a launch or a user task cancels, and is dropped when it cannot start (the next exit
+  schedules it again); after an import or a delete it comes with Task 14. Verified (2026-10-28,
+  `check-scheduler.test.ts` and `apps/desktop/e2e/quiescent.spec.ts`: a check after an exit, none for 3.5 s while
+  another game window was focused, both games checked once it closed). `has_data` means at
   least one localStorage item or IndexedDB database, or `usageDetails.fileSystem` above zero (OPFS is data too, though
   not exported); this is how "storage usage above zero" is measured. Where `usageDetails` is unavailable, OPFS-only data
   is missed and the badge can be absent although data exists. `Assumed`

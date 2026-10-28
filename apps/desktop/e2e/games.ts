@@ -32,16 +32,38 @@ export async function expectState(launched: Launched, gameId: string, state: Gam
   await expect.poll(() => gameState(launched, gameId), { timeout: 15_000 }).toBe(state);
 }
 
-/** Launches the game and resolves with its window's page once that window shows the game. */
+/**
+ * Launches the game and resolves with its window's page once that window shows the game. Snapshot jobs open
+ * hidden windows too (a storage check runs after every exit), so the game's page is the new window that shows the
+ * game window's own URL, never the first window that appears.
+ */
 export async function openGame(launched: Launched, gameId: string): Promise<Page> {
-  const [page, result] = await Promise.all([
-    launched.app.waitForEvent("window"),
-    launchGame(launched, gameId),
-  ]);
-  expect(result).toEqual({ ok: true, data: { window: "opened" } });
-  await expectState(launched, gameId, "running");
-  await page.waitForLoadState("load");
-  return page;
+  const pages: Page[] = [];
+  const onWindow = (page: Page) => pages.push(page);
+  launched.app.on("window", onWindow);
+  try {
+    const result = await launchGame(launched, gameId);
+    expect(result).toEqual({ ok: true, data: { window: "opened" } });
+    await expectState(launched, gameId, "running");
+    const urlOfGame = () =>
+      launched.app.evaluate(({ webContents }, id) => {
+        const cid = globalThis.__wgTest?.gameWebContentsId(id) ?? null;
+        return cid === null ? null : (webContents.fromId(cid)?.getURL() ?? null);
+      }, gameId);
+    let found: Page | undefined;
+    await expect
+      .poll(async () => {
+        const url = await urlOfGame();
+        found = pages.find((page) => !page.isClosed() && url !== null && page.url() === url);
+        return found !== undefined;
+      })
+      .toBe(true);
+    const page = found as Page;
+    await page.waitForLoadState("load");
+    return page;
+  } finally {
+    launched.app.off("window", onWindow);
+  }
 }
 
 export async function closeGame(launched: Launched, gameId: string): Promise<boolean> {
@@ -51,8 +73,9 @@ export async function closeGame(launched: Launched, gameId: string): Promise<boo
   );
 }
 
+/** The windows of the app but the hidden quiescent ones (a storage check runs after every game exit). */
 export async function windowCount(launched: Launched): Promise<number> {
-  return launched.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
+  return launched.app.evaluate(() => globalThis.__wgTest?.windowCount() ?? -1);
 }
 
 export function queueConfirm(launched: Launched, value: boolean): Promise<void> {

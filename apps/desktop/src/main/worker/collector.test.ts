@@ -96,6 +96,14 @@ describe("EntryCollector", () => {
     ).toBe(null);
   });
 
+  it("refuses an entry whose declared size would pass maxTotalBytes before allocating it", () => {
+    const collector = new EntryCollector(resolveLimits({ maxTotalBytes: 8 }));
+    collector.forKey(0).add(whole("data/0/local-storage.cbor", [1, 2, 3, 4, 5]));
+    const next = { path: "data/0/idb/0/schema.cbor", offset: 0, size: 4, bytes: bytes(1) };
+    expect(codeOf(() => collector.forKey(0).add(next))).toBe("SNAP_TOTAL_TOO_LARGE");
+    expect(collector.received).toBe(5);
+  });
+
   it("applies maxTotalBytes and maxEntries as entries complete", () => {
     const total = new EntryCollector(resolveLimits({ maxTotalBytes: 5 }));
     total.forKey(0).add(whole("data/0/local-storage.cbor", [1, 2, 3]));

@@ -19,6 +19,7 @@ import type { GameRuntime, GameState, LaunchResult } from "./games/lifecycle.js"
 import type { AppPaths } from "./paths.js";
 import { checkEntryUrl } from "./policy/url-rules.js";
 import { type ExportTestControls, exportSnapshot, type SnapshotDeps } from "./snapshots/export.js";
+import { isQuiescentWindow } from "./snapshots/jobs.js";
 import type { StorageKeyRef } from "./snapshots/keys.js";
 import type { JobDeps } from "./snapshots/quiescent/job.js";
 import { runStorageCheck } from "./snapshots/storage-check.js";
@@ -27,11 +28,15 @@ import { runStorageCheck } from "./snapshots/storage-check.js";
  * What the next quiescent jobs do right after each stub navigation (the canary controls of save-transfer.md section
  * 10): nothing, run a script in the window's main world, start a service worker of the session, or wait.
  */
-export type QuiescentControl =
+export type QuiescentControl = (
   | { kind: "none" }
   | { kind: "main-world-script" }
   | { kind: "start-worker"; scope: string }
-  | { kind: "hold"; ms: number };
+  | { kind: "hold"; ms: number }
+) & {
+  /** Only jobs holding this lease kind (the automatic storage check is `background`); all jobs when absent. */
+  lock?: "task" | "background";
+};
 
 type DialogKind = keyof Dialogs;
 type DialogAnswer =
@@ -109,6 +114,12 @@ export interface TestHooks {
   startServiceWorker(gameId: string, scope: string): Promise<boolean>;
   /** How many service workers of the game's session run now. */
   runningServiceWorkers(gameId: string): number;
+  /** The app's windows a user can see or get: every window but the hidden quiescent ones of snapshot jobs. */
+  windowCount(): number;
+  /** Focuses the game's window (the storage check waits while a game window is focused). */
+  focusGameWindow(gameId: string): boolean;
+  /** Whether a game window has the focus now, as the storage check scheduler sees it. */
+  gameWindowFocused(): boolean;
 }
 
 /**
@@ -291,6 +302,18 @@ export function installTestHooks(init: {
         return false;
       }
     },
+    windowCount: () => BrowserWindow.getAllWindows().filter((w) => !isQuiescentWindow(w)).length,
+    focusGameWindow(gameId) {
+      const window = needGames().runtime.windowOf(gameId) as BrowserWindow | null;
+      if (!window || window.isDestroyed()) return false;
+      window.focus();
+      return true;
+    },
+    gameWindowFocused() {
+      const focused = BrowserWindow.getFocusedWindow();
+      const { runtime } = needGames();
+      return focused !== null && runtime.openGames().some((id) => runtime.windowOf(id) === focused);
+    },
     runningServiceWorkers: (gameId) =>
       Object.keys(session.fromPartition(`persist:game:${gameId}`).serviceWorkers.getAllRunning())
         .length,
@@ -329,8 +352,9 @@ export function installTestHooks(init: {
     // Playwright's `_electron` attaches to every page, the quiescent window included, and evaluates an empty script
     // in its own utility world there; that world is the harness, not the game (canary.ts).
     harnessWorld: (name) => name.startsWith("__playwright_utility_world_"),
-    async afterNavigation(window, ses) {
+    async afterNavigation(window, ses, lock) {
       const current = control;
+      if (current.lock !== undefined && current.lock !== lock) return;
       if (current.kind === "main-world-script") {
         await (window as unknown as BrowserWindow).webContents.executeJavaScript(
           "void 'injected';",

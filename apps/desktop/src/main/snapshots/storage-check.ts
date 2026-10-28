@@ -4,10 +4,10 @@
 // means at least one localStorage item or IndexedDB database, or `usageDetails.fileSystem` above zero.
 import type { ErrorCode, Result } from "@wg-launcher/shared";
 import type { StorageCheck } from "../db/repos/storage-checks.js";
-import type { SnapshotWorker } from "../worker/client.js";
+import { workerSlot } from "../worker/slot.js";
 import type { SnapshotDeps } from "./export.js";
 import { knownKeys } from "./keys.js";
-import { runQuiescentJob } from "./quiescent/job.js";
+import { failureOf, runQuiescentJob } from "./quiescent/job.js";
 
 export async function runStorageCheck(
   gameId: string,
@@ -17,7 +17,7 @@ export async function runStorageCheck(
   const game = deps.repos.games.get(gameId);
   if (!game) return { ok: false, code: "NOT_FOUND", message: "The game is not in the library." };
   const keys = knownKeys(game.url, deps.repos.storageTargets.listForGame(gameId));
-  let worker: SnapshotWorker | null = null;
+  const workers = workerSlot(deps.startWorker, {});
   let hasData = false;
   try {
     return await runQuiescentJob<StorageCheck>(
@@ -26,9 +26,9 @@ export async function runStorageCheck(
         direction: "export",
         lock: "background",
         keys,
-        async runFrames(frames) {
-          worker ??= await deps.startWorker();
-          worker.begin({});
+        async runFrames(frames, context) {
+          const worker = await workers.get(context.signal);
+          if (worker === null) return failureOf(context.signal);
           for (const frame of frames) {
             const inventory = await worker.inventory(frame.port);
             if (!inventory.ok) return inventory;
@@ -44,9 +44,7 @@ export async function runStorageCheck(
           return { ok: true, data: undefined };
         },
         async commit(context) {
-          if (context.signal.aborted) {
-            return { ok: false, code: "CANCELLED", message: "The check was cancelled." };
-          }
+          if (context.signal.aborted) return failureOf(context.signal);
           deps.repos.storageChecks.save(gameId, hasData);
           const saved = deps.repos.storageChecks.get(gameId);
           if (!saved)
@@ -60,6 +58,6 @@ export async function runStorageCheck(
       signal,
     );
   } finally {
-    (worker as SnapshotWorker | null)?.kill();
+    await workers.dispose();
   }
 }

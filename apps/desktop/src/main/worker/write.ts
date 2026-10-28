@@ -2,10 +2,12 @@
 // `.wgsnap` is written as a `.partial` file in `tmp/`, flushed, then read back through the full validator with its
 // size from `stat`, and only then renamed into `snapshots/<gameId>/`. The writer itself refuses what it can know
 // before writing (paths, counts, `maxEntryBytes`, `maxTotalBytes`, the manifest), but not the compression ratio or
-// `maxFileBytes`; the read-back makes those fail with their SNAP_* code too (Review Focus 4). Any failure removes the
-// partial file and leaves nothing under `snapshots/` (Review Focus 5).
+// `maxFileBytes`; the read-back makes those fail with their SNAP_* code too (Review Focus 4). After the rename the
+// directory is flushed too. Any failure removes the partial file and leaves nothing under `snapshots/` (Review Focus
+// 5); a failure after the rename (the directory flush) is reported, and the caller removes the final file.
 import { createReadStream } from "node:fs";
 import { access, type FileHandle, open, rename, rm, stat } from "node:fs/promises";
+import { dirname } from "node:path";
 import { Writable } from "node:stream";
 import {
   type Limits,
@@ -63,6 +65,20 @@ function fileSink(handle: FileHandle, fault: WriteRequest["fault"]): Writable {
   });
 }
 
+/**
+ * Flushes a directory, so the rename survives a crash. Windows cannot open a directory for this (Assumed: NTFS
+ * journals the rename itself); there the step is skipped.
+ */
+async function syncDirectory(dir: string): Promise<void> {
+  if (process.platform === "win32") return;
+  const handle = await open(dir, "r");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 const exists = (path: string) =>
   access(path).then(
     () => true,
@@ -100,6 +116,7 @@ export async function writeVerified(request: WriteRequest): Promise<Written> {
     // A revision id is never reused; an existing file is never replaced.
     if (await exists(finalPath)) throw new WriteFailure("A snapshot with this revision exists.");
     await rename(partialPath, finalPath);
+    await syncDirectory(dirname(finalPath));
     return {
       contentHash: written.contentHash,
       sizeBytes: compressedSize,

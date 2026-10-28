@@ -4,20 +4,20 @@
 // import, delete local saves, clear cache: something the user asked for) or `background` (a storage check or
 // another job the user did not ask for). `needs_recovery` refuses everything until recovery clears it.
 //
-// | Held by        | session request          | task request  | background request |
-// | -------------- | ------------------------ | ------------- | ------------------ |
-// | none           | granted                  | granted       | granted            |
-// | session        | GAME_RUNNING             | GAME_RUNNING  | GAME_RUNNING       |
-// | task           | GAME_BUSY                | GAME_BUSY     | GAME_BUSY          |
-// | background     | cancels it, then granted | GAME_BUSY     | GAME_BUSY          |
-// | needs_recovery | NEEDS_RECOVERY           | NEEDS_RECOVERY| NEEDS_RECOVERY     |
+// | Held by        | session request          | task request             | background request |
+// | -------------- | ------------------------ | ------------------------ | ------------------ |
+// | none           | granted                  | granted                  | granted            |
+// | session        | GAME_RUNNING             | GAME_RUNNING             | GAME_RUNNING       |
+// | task           | GAME_BUSY                | GAME_BUSY                | GAME_BUSY          |
+// | background     | cancels it, then granted | cancels it, then granted | GAME_BUSY          |
+// | needs_recovery | NEEDS_RECOVERY           | NEEDS_RECOVERY           | NEEDS_RECOVERY     |
 //
-// M5: a session request aborts the background lease's `AbortSignal` (reason code `CANCELLED`) and waits for the
-// job to release it, at most `releaseTimeoutMs` (2 s). If the job does not let go in time the launch is refused
-// with `INTERNAL` and logged, because opening the game while a job may still touch its storage would break the
-// quiescence the job relies on (Assumed: the plan says "INTERNAL logged" without naming the launch's outcome).
-// While a session request waits, the game counts as held by that session. A task request never cancels a
-// background lease (Assumed).
+// Background work never blocks what the user does: a session or task request aborts the background lease's
+// `AbortSignal` (reason code `CANCELLED`) and waits for the job to release it, at most `releaseTimeoutMs` (2 s). If
+// the job does not let go in time the request is refused with `INTERNAL` and logged, because a game launched or a
+// task run while a job may still touch its storage would break the quiescence the job relies on (Assumed). While a
+// request waits, the game counts as held by it. M5 also keeps the other direction: a user task refuses a launch
+// with GAME_BUSY.
 
 import type { Logger } from "../log/logger.js";
 
@@ -31,18 +31,22 @@ export interface LockRefusal {
 export interface Lease {
   readonly gameId: string;
   readonly kind: LockKind;
-  /** Aborted (reason code `CANCELLED`) when a launch wants the game back; only background leases are aborted. */
+  /** Aborted (reason code `CANCELLED`) when a launch or a user task wants the game; only background leases are. */
   readonly signal: AbortSignal;
   /** Gives the game back. Idempotent; releasing a lease that is no longer the holder changes nothing. */
   release(): void;
 }
 
-/** The reason a background lease's signal is aborted with. */
-export class CancelledByLaunch extends Error {
+/** The reason a background lease's signal is aborted with: a launch or a user task wants the game. */
+export class CancelledForUser extends Error {
   readonly code = "CANCELLED";
-  constructor() {
-    super("Cancelled because the game is being launched.");
-    this.name = "CancelledByLaunch";
+  constructor(kind: "session" | "task") {
+    super(
+      kind === "session"
+        ? "Cancelled because the game is being launched."
+        : "Cancelled for a task the user asked for.",
+    );
+    this.name = "CancelledForUser";
   }
 }
 
@@ -60,8 +64,8 @@ export interface LockManagerOptions {
 
 export class LockManager {
   readonly #held = new Map<string, Held>();
-  /** Games whose session request waits for a background lease to go. */
-  readonly #pendingSessions = new Set<string>();
+  /** Games whose session or task request waits for a background lease to go, with that request's kind. */
+  readonly #pending = new Map<string, "session" | "task">();
   readonly #recovery = new Set<string>();
   readonly #log: Pick<Logger, "error">;
   readonly #releaseTimeoutMs: number;
@@ -73,7 +77,8 @@ export class LockManager {
 
   holder(gameId: string): LockHolder {
     if (this.#recovery.has(gameId)) return "needs_recovery";
-    if (this.#pendingSessions.has(gameId)) return "session";
+    const pending = this.#pending.get(gameId);
+    if (pending !== undefined) return pending;
     return this.#held.get(gameId)?.lease.kind ?? "none";
   }
 
@@ -90,14 +95,14 @@ export class LockManager {
     if (holder === "needs_recovery") return { code: "NEEDS_RECOVERY" };
     if (holder === "none") return this.#grant(gameId, kind);
     if (holder === "session") return { code: "GAME_RUNNING" };
-    if (holder === "task" || kind !== "session") return { code: "GAME_BUSY" };
+    if (holder === "task" || kind === "background") return { code: "GAME_BUSY" };
 
-    // A session request against a background lease (M5).
+    // A session or task request against a background lease (M5).
     const held = this.#held.get(gameId);
     if (!held) return this.#grant(gameId, kind);
-    this.#pendingSessions.add(gameId);
+    this.#pending.set(gameId, kind);
     try {
-      held.controller.abort(new CancelledByLaunch());
+      held.controller.abort(new CancelledForUser(kind));
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timedOut = new Promise<"timeout">((resolve) => {
         timer = setTimeout(() => resolve("timeout"), this.#releaseTimeoutMs);
@@ -109,11 +114,12 @@ export class LockManager {
           gameId,
           code: "INTERNAL",
           waitedMs: this.#releaseTimeoutMs,
+          for: kind,
         });
         return { code: "INTERNAL" };
       }
     } finally {
-      this.#pendingSessions.delete(gameId);
+      this.#pending.delete(gameId);
     }
     if (this.#recovery.has(gameId)) return { code: "NEEDS_RECOVERY" };
     return this.#grant(gameId, kind);

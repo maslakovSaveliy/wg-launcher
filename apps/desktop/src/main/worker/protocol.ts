@@ -97,8 +97,6 @@ export const WorkerCommand = z.discriminatedUnion("type", [
     finalPath: path,
     fault: z.literal("fail-write").optional(),
   }),
-  /** Forgets the job's entries. */
-  z.strictObject({ type: z.literal("discard"), jobId: id }),
 ]);
 export type WorkerCommand = z.infer<typeof WorkerCommand>;
 

@@ -1,7 +1,8 @@
 // The snapshot worker's store of one export job: the entry chunks every frame sends (frame protocol), assembled into
 // whole files under the job's limits before the writer sees them. A chunk is refused, and the job fails with the
 // reader's code, as soon as the limit it breaks is known: `maxEntryBytes` from the declared size before a byte is
-// kept, `maxEntries` and `maxTotalBytes` (the data alone, a lower bound of the tar stream) as entries arrive. A frame
+// kept, `maxTotalBytes` (the data alone, a lower bound of the tar stream) from the declared size before the entry's
+// buffer is allocated and again as entries complete, and `maxEntries`. A frame
 // may write only its own key's `data/<k>/` files and blobs; a blob must be named by the SHA-256 of its bytes, and
 // the same blob from two frames is kept once.
 import { createHash } from "node:crypto";
@@ -87,6 +88,14 @@ export class EntryCollector {
           if (chunk.offset !== 0) throw new ChunkOrderError("an entry that does not start at 0");
           if (chunk.size > this.#limits.maxEntryBytes) {
             throw new SnapError("SNAP_ENTRY_TOO_LARGE", "entry above maxEntryBytes", chunk.path);
+          }
+          // Before allocating: the declared size must fit what is left of maxTotalBytes.
+          if (this.#bytes + chunk.size > this.#limits.maxTotalBytes) {
+            throw new SnapError(
+              "SNAP_TOTAL_TOO_LARGE",
+              "the uncompressed archive is too large",
+              chunk.path,
+            );
           }
           current = { path: chunk.path, bytes: new Uint8Array(chunk.size), at: 0 };
         }

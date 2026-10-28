@@ -536,6 +536,8 @@ describe("snapshot:export, snapshot:list and snapshot:saveAs (architecture.md se
       await handlers["snapshot:export"]({ gameId: game.gameId, frameKeys }),
     );
     expect(snapshots.export.mock.calls[0]?.[1]).toMatchObject({ frameKeys });
+    // Nothing reaches the page before the reply that tells it the task id.
+    expect(snapshots.sendProgress).not.toHaveBeenCalled();
     finished.resolve();
     await vi.waitFor(() => expect(snapshots.sendProgress).toHaveBeenCalledTimes(4));
     const base = { taskId, gameId: game.gameId, kind: "export" };
