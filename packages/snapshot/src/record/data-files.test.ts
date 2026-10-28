@@ -9,8 +9,10 @@ import {
   decodeStoreRecords,
   encodeLocalStorage,
   encodeSchema,
+  encodeStoreRecord,
   encodeStoreRecords,
 } from "./data-files.js";
+import type { IdbKey } from "./idb-key.js";
 import type { BlobRefs } from "./value-check.js";
 
 const uint = (v: number): CborItem => ({ k: "uint", v });
@@ -246,6 +248,23 @@ describe("store-<s>.cbor (section 7.3)", () => {
         [1, uint(2)],
       ]),
     ).toThrow(TypeError);
+  });
+
+  it("encodes one record at a time, byte-identical to the whole store in key order (Ruling R6)", () => {
+    const records: [IdbKey, CborItem][] = [
+      [-1.5, text("float key")],
+      [3, uint(3)],
+      [new Date(0), { k: "array", v: [uint(1), text("x")] }],
+      ["", simple(null)],
+      ["b", simple(true)],
+      [new Uint8Array([0, 255]).buffer, uint(7)],
+      [[1, "a"], text("array key")],
+    ];
+    const one = records.map(([key, value]) => encodeStoreRecord(key, value));
+    expect(one.map(bytesToHex).join("")).toBe(
+      bytesToHex(encodeStoreRecords([...records].reverse())),
+    );
+    expect(bytesToHex(encodeStoreRecord("a", uint(1)))).toBe("82616101");
   });
 
   it("records blob references of the values", () => {

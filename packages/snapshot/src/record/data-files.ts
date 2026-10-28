@@ -264,6 +264,15 @@ export function decodeSchema(bytes: Uint8Array, options?: DecodeOptions): DbSche
 
 // --- store-<s>.cbor ----------------------------------------------------------------------------------------------
 
+/**
+ * One `[primaryKey, value]` record. A store file is a CBOR sequence, so records encoded one at a time in strictly
+ * ascending key order and concatenated are byte-identical to `encodeStoreRecords` of the whole store (Ruling R6); the
+ * exporter uses this to keep memory bounded. A key that is not a key is ExportError.
+ */
+export function encodeStoreRecord(key: IdbKey, value: CborItem): Uint8Array {
+  return encodeItem({ k: "array", v: [keyToItem(key), value] });
+}
+
 /** Records sorted by IndexedDB key order. A key that is not a key is ExportError; a duplicate key is TypeError. */
 export function encodeStoreRecords(records: Iterable<readonly [IdbKey, CborItem]>): Uint8Array {
   const sorted = [...records].sort(([a], [b]) => compareIdbKeys(a, b));
@@ -272,7 +281,7 @@ export function encodeStoreRecords(records: Iterable<readonly [IdbKey, CborItem]
       if (i > 0 && compareIdbKeys((sorted[i - 1] as [IdbKey, CborItem])[0], key) === 0) {
         throw new TypeError("duplicate record key");
       }
-      return encodeItem({ k: "array", v: [keyToItem(key), value] });
+      return encodeStoreRecord(key, value);
     }),
   );
 }
