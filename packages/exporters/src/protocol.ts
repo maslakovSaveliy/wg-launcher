@@ -1,7 +1,10 @@
 // The typed commands between the snapshot worker and a quiescent stub frame (save-transfer.md section 5, steps 9 and
 // 10). Both ends validate every message with these schemas and abort on anything unexpected. Every message carries
 // the request nonce of its command: 128 random bits as 32 lowercase hex digits, never a counter (QW-4). Entry bytes
-// travel as transferred ArrayBuffers, never as JSON strings (QW-7).
+// travel as ArrayBuffers, never as JSON strings (QW-7), in chunks of at most MAX_ENTRY_CHUNK_BYTES, so no message
+// between a frame and the snapshot worker is larger than that plus a few names. They are cloned, never put in the
+// transfer list: a message whose ArrayBuffer was transferred reached the MessagePortMain of a utilityProcess as `null`
+// (Verified 2026-10-28, a throwaway probe app on Electron 45.0.0, macOS arm64; the same message cloned arrived whole).
 import { EXP_CODES, IMP_CODES } from "@wg-launcher/shared";
 import { z } from "zod";
 import { isHttpOrigin } from "./origins.js";
@@ -28,15 +31,35 @@ const storageKey = z.strictObject({
     .refine((s) => isHttpOrigin(s, false), "not an http(s) site")
     .nullable(),
 });
-/** One whole entry: a path of snapshot-format.md section 3.2 (at most 255 bytes) and its bytes. */
-const entry = { nonce, path: z.string().max(255), bytes: z.instanceof(ArrayBuffer) };
+/** The most entry bytes one message carries (Assumed: small next to `maxEntryBytes`, 512 MiB, and cheap to clone). */
+export const MAX_ENTRY_CHUNK_BYTES = 1024 * 1024;
+
+/**
+ * One chunk of an entry: a path of snapshot-format.md section 3.2 (at most 255 bytes), the entry's whole `size`,
+ * where this chunk starts and its bytes. The chunks of an entry come in order, back to back, each but the last
+ * exactly MAX_ENTRY_CHUNK_BYTES long; an empty entry is one empty chunk. The receiver checks the order and the size
+ * against its limits (`maxEntryBytes`) before it keeps anything.
+ */
+const entry = z
+  .strictObject({
+    type: z.literal("entry"),
+    nonce,
+    path: z.string().max(255),
+    offset: z.int().min(0),
+    size: z.int().min(0),
+    bytes: z
+      .instanceof(ArrayBuffer)
+      .refine((b) => b.byteLength <= MAX_ENTRY_CHUNK_BYTES, "chunk above MAX_ENTRY_CHUNK_BYTES"),
+  })
+  .refine((e) => e.offset + e.bytes.byteLength <= e.size, "chunk past the entry's size")
+  .refine((e) => e.bytes.byteLength > 0 || e.size === 0, "empty chunk of a non-empty entry");
 
 export const FrameCommand = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("inventory"), nonce }),
   z.strictObject({ type: z.literal("export"), nonce, keyIndex, storageKey, scope }),
   // An import is followed by its `entry` messages and one `end`, all with its nonce.
   z.strictObject({ type: z.literal("import"), nonce, keyIndex, storageKey, scope }),
-  z.strictObject({ type: z.literal("entry"), ...entry }),
+  entry,
   z.strictObject({ type: z.literal("end"), nonce }),
   z.strictObject({ type: z.literal("wipe-selected"), nonce, scope }),
 ]);
@@ -70,7 +93,7 @@ const detail = z.strictObject({
 
 export const FrameReply = z.discriminatedUnion("type", [
   // An export answers with its `entry` messages, then one `summary` or `error`.
-  z.strictObject({ type: z.literal("entry"), ...entry }),
+  entry,
   z.strictObject({ type: z.literal("inventory"), nonce, inventory }),
   z.strictObject({ type: z.literal("summary"), nonce, summary }),
   z.strictObject({

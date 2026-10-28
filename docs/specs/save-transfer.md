@@ -104,12 +104,23 @@ interface FrameInventory {
   details); `wipeSelected(scope)` serves R5 of a selective restore. Each returns `{ok: true, data}` or `{ok: false,
   error: {code, message, detail?}}` and never throws; `code` is an `EXP_*` or `IMP_*` code or `INTERNAL` for an
   unexpected failure, and `detail` names the storage key, database, store, record key, property path and entry path
-  where they apply, never a value. A sink receives each entry whole, once (`write(path, bytes)`); a source yields the
-  frame's entries in any order. A `Selection` is `"all"` or `{include, exclude}`, per storage kind.
+  where they apply, never a value. A sink receives each entry whole, once (`write(path, bytes)`), and the frame
+  server sends it in chunks; a source yields the frame's entries, assembled, in any order. A `Selection` is `"all"` or `{include, exclude}`, per storage kind.
 - The frame protocol (zod, strict objects, both directions): commands `inventory`, `export`, `import` (followed by
   `entry` messages and one `end`) and `wipe-selected`; replies `entry` (the export's entries), `inventory`, `summary`,
   `wiped` and `error`. Every message carries its command's request nonce, 32 lowercase hex digits (128 bits, QW-4), and
-  an entry's bytes are one `ArrayBuffer` (transferred over the port, QW-7), never a string. `Assumed`
+  entry bytes are `ArrayBuffer`s, never a string (QW-7). `Assumed`
+- **Chunks (Phase 1 Task 13, `packages/exporters/src/protocol.ts`, `frame-server.ts`).** An `entry` message carries one
+  chunk of an entry: its `path`, the entry's whole `size`, the chunk's `offset` and at most `MAX_ENTRY_CHUNK_BYTES`
+  (1 MiB) of bytes. The chunks of an entry come back to back in order, an empty entry is one empty chunk, and a
+  chunk past the entry's size is refused by the schema, so no message between a frame and the snapshot worker is
+  larger than 1 MiB plus a few names; the receiver checks the declared `size` against `maxEntryBytes` before it keeps
+  a byte. `Assumed` for the size. The buffers are cloned, never put in the transfer list: a message whose
+  `ArrayBuffer` was transferred from a sandboxed preload's port reached a `utilityProcess`'s `MessagePortMain` as
+  `null`, while the same message cloned arrived whole. Verified (2026-10-28, a throwaway probe app on Electron 45.0.0,
+  macOS arm64). `serveFrame` is the frame's end: one command at a time; an invalid message, a command while another
+  runs, import chunks out of order or with another nonce close the port, which the worker treats as a failed command.
+  Verified (2026-10-28, `packages/exporters/src/frame-server.test.ts`, Vitest on Node 24.22.1).
 
 ## 4. Generic exporter
 
