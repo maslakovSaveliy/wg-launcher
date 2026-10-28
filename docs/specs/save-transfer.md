@@ -155,18 +155,33 @@ Import, inside one stub frame, after the wipe (section 6):
 
 Implementation (Phase 1 Task 12, `packages/exporters`). `Assumed` unless tagged otherwise:
 
-- The importer receives the frame's entries (its `data/<k>/…` files and the blobs they reference) in any order and
-  decodes every file and builds every value once before its first write, so an entry it cannot turn into storage fails
-  the import with nothing written: `IMP_RECORD_INVALID`, with the entry path and, for a record, the database, store and
-  record key. That covers a RegExp source that does not compile in this engine (Ruling R7; the worker's validator
-  already refused it in R1, so this is defense in depth), a blob whose bytes do not match its name, a missing or
-  duplicated entry, a record count that differs from the schema and, for a selective restore, a localStorage key or
-  database outside the selection. Verified for the RegExp and the selection cases (2026-10-28,
-  `packages/exporters/browser/import-errors.spec.ts`, bundled Chromium 156).
-- A database that already exists in the target (an `upgradeneeded` with `oldVersion` above 0, no `upgradeneeded`, or
-  a `VersionError`) is `IMP_TARGET_NOT_EMPTY`; a `put` whose value yields no key at the key path (`DataError`) is
-  `IMP_KEY_MISMATCH` like a key that compares unequal. Reads and writes go in transactions of 256 records.
-- Any other failure inside a frame is `INTERNAL` with the error's type name only, never a value.
+- **Check pass, nothing written.** The importer receives the frame's entries (its `data/<k>/…` files and the blobs
+  they reference) in any order, then checks the target is empty, decodes every file and builds every value once
+  before its first write. A failure in this pass fails the import with nothing written: `IMP_RECORD_INVALID`, with the
+  entry path and, for a record, the database, store and record key. It covers a RegExp source that does not compile in
+  this engine (Ruling R7; the worker's validator already refused it in R1), a value whose view type this engine has no
+  constructor for, a schema IndexedDB would refuse to create (invalid key path, `autoIncrement` with an empty or array
+  key path; the reader refuses these too, snapshot-format.md section 7.2), a blob whose bytes do not match its name, a
+  blob entry no record references, a missing or duplicated entry, a record count that differs from the schema and, for
+  a selective restore, a localStorage key or database outside the selection. Verified for the RegExp, schema,
+  unreferenced-blob and selection cases (2026-10-28, `packages/exporters/browser/import-errors.spec.ts`, bundled
+  Chromium 156.0.8078.4).
+- **Write pass, failures named, partial writes left to the rollback.** localStorage first, then each database. A
+  database that already exists (an `upgradeneeded` with `oldVersion` above 0, no `upgradeneeded`, or a `VersionError`)
+  is `IMP_TARGET_NOT_EMPTY`. Puts go in transactions of 256 records; no request error is ever prevented, so one failed
+  request aborts its whole transaction, and the import fails with a named code: a `ConstraintError` (a unique index) is
+  `IMP_RECORD_INVALID` with the record key, a `QuotaExceededError` is `IMP_QUOTA_EXCEEDED` (localStorage or IndexedDB),
+  a key that compares unequal or a value without a key at the key path (`DataError`) is `IMP_KEY_MISMATCH`, anything
+  else `INTERNAL` with the error's type name. The summary counts the records IndexedDB acknowledged. A failure in this
+  pass can leave earlier localStorage items, databases and committed chunks behind: the importer does not undo them;
+  the R5 to R7 rollback of the restore protocol (section 6, Task 14) does. Verified for the unique-index, raise and
+  quota cases (2026-10-28, same spec and Chromium).
+- **Wipe.** `wipe-selected` deletes the selected databases; a delete blocked by another open connection is
+  `IMP_WIPE_FAILED` (Verified, same spec). The blocked request stays queued in IndexedDB and completes when that
+  connection closes, so the job treats the failure as fatal; QW-2 keeps the partition exclusive.
+- **Export.** A localStorage key listed but gone when read is `EXP_QUIESCENCE_VIOLATION`, never exported as an empty
+  value (Verified, 2026-10-28, `browser/export-errors.spec.ts`). Any other failure inside a frame is `INTERNAL` with the
+  error's type name only, never a value; a snapshot format error is an `IMP_` code on the import path only.
 
 ## 5. Quiescent window
 
@@ -311,8 +326,9 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
 - Settled in Phase 1 Task 12 (`packages/exporters/src/flush.ts`, `Assumed`): the observation carries the declared
   hook, the hook's `timeoutMs`, whether the flush flow requested the export, the hook run (`not-run`, `returned` with its
   value, `threw`, `timed-out`, with start and finish times), the times of user input and the time the launcher closed
-  the window (`null` if it did not). Input at the hook's start or at the close counts; the close must come at or after
-  the hook's finish; a time that is not a finite number gives `unconfirmed`.
+  the window (`null` if it did not). "Before its timeout" means strictly less than `timeoutMs` after the start; input
+  at the hook's start or at the close counts; the close must come at or after the hook's finish; a time that is not a
+  finite number gives `unconfirmed`.
 - The generic exporter has no hook, so every MVP snapshot without such an adapter is `unconfirmed`. `Assumed`
 - The decision is one pure function, `decideFlushState(observation)`. Its unit test (AC-12) uses a fake hook: none,
   success, error, timeout, a value other than `true`, input after the hook started, and a late close; only the success

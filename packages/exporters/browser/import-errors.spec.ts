@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   type CborItem,
+  type DbSchema,
+  encodeItem,
   encodeLocalStorage,
   encodeSchema,
   encodeStoreRecord,
@@ -241,5 +244,235 @@ test("wipe-selected removes only the selected localStorage keys and databases", 
   expect(await page.evaluate(storageState)).toEqual({
     localStorage: ["other"],
     databases: ["other-db"],
+  });
+});
+
+// --- Fix round 1: failed requests, schemas IndexedDB refuses, unreferenced blobs, quota, a blocked wipe -----------
+
+const uint = (v: number): CborItem => ({ k: "uint", v });
+const txt = (v: string): CborItem => ({ k: "text", v });
+const object = (members: [string, CborItem][]): CborItem => ({
+  k: "tag",
+  tag: 33101,
+  v: { k: "array", v: members.flatMap(([key, value]) => [txt(key), value]) },
+});
+const lsEntry = wire("data/0/local-storage.cbor", encodeLocalStorage([["k", "v"]]) as Uint8Array);
+
+/** Runs in the page's main world: the primary keys of every store of a database, or null when it does not exist. */
+async function storedKeys(name: string): Promise<Record<string, IDBValidKey[]> | null> {
+  if (!(await indexedDB.databases()).some((d) => d.name === name)) return null;
+  const db = await new Promise<IDBDatabase>((resolve) => {
+    const open = indexedDB.open(name);
+    open.onsuccess = () => resolve(open.result);
+  });
+  const out: Record<string, IDBValidKey[]> = {};
+  for (const store of [...db.objectStoreNames]) {
+    out[store] = await new Promise((resolve) => {
+      const request = db.transaction(store).objectStore(store).getAllKeys();
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+  db.close();
+  return out;
+}
+
+test("a put that fails asynchronously (a unique-index ConstraintError) fails the import, never reports success", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  const store = {
+    name: "s",
+    keyPath: null,
+    autoIncrement: false,
+    keyGenerator: null,
+    indexes: [{ name: "by-u", keyPath: "u", unique: true, multiEntry: false }],
+    records: 3,
+  };
+  const records: [number, number][] = [
+    [1, 1],
+    [2, 1],
+    [3, 2],
+  ];
+  const entries = [
+    wire("data/0/idb/0/schema.cbor", encodeSchema({ name: "u", version: 1, stores: [store] })),
+    wire(
+      "data/0/idb/0/store-0.cbor",
+      Buffer.concat(records.map(([key, u]) => encodeStoreRecord(key, object([["u", uint(u)]])))),
+    ),
+  ];
+  const world = await openStub(page);
+  expect(await world.call("importFrame", entries, plan(lab))).toMatchObject({
+    ok: false,
+    error: {
+      code: "IMP_RECORD_INVALID",
+      detail: { database: "u", store: "s", recordKey: 2, reason: "ConstraintError" },
+    },
+  });
+  // The chunk's transaction aborted as a whole: no record of it was committed.
+  expect(await page.evaluate(storedKeys, "u")).toEqual({ s: [] });
+});
+
+test("a failing request while the key generator is raised fails the import", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  const store = {
+    name: "s",
+    keyPath: null,
+    autoIncrement: true,
+    keyGenerator: 6,
+    indexes: [],
+    records: 1,
+  };
+  const entries = [
+    wire("data/0/idb/0/schema.cbor", encodeSchema({ name: "g", version: 1, stores: [store] })),
+    wire("data/0/idb/0/store-0.cbor", encodeStoreRecord(1, txt("a"))),
+  ];
+  const world = await openStub(page);
+  await world.call("breakStoreDelete");
+  const imported = await world.call<FrameResult<FrameSummary>>("importFrame", entries, plan(lab));
+  expect(imported).toMatchObject({
+    ok: false,
+    error: { code: "INTERNAL", detail: { database: "g", store: "s" } },
+  });
+  // The raise's transaction aborted: the placeholder at keyGenerator - 1 was not committed.
+  expect(await page.evaluate(storedKeys, "g")).toEqual({ s: [1] });
+});
+
+/** A schema.cbor written by hand, so that it can hold what encodeSchema refuses. */
+function rawSchema(schema: DbSchema): Uint8Array {
+  const keyPath = (p: string | string[] | null): CborItem =>
+    p === null
+      ? { k: "simple", v: null }
+      : typeof p === "string"
+        ? txt(p)
+        : { k: "array", v: p.map(txt) };
+  const stores = schema.stores.map(
+    (st): CborItem => ({
+      k: "map",
+      v: [
+        ["name", txt(st.name)],
+        ["keyPath", keyPath(st.keyPath)],
+        ["autoIncrement", { k: "simple", v: st.autoIncrement }],
+        [
+          "keyGenerator",
+          st.keyGenerator === null ? { k: "simple", v: null } : uint(st.keyGenerator),
+        ],
+        ["indexes", { k: "array", v: [] }],
+        ["records", uint(st.records)],
+      ],
+    }),
+  );
+  return encodeItem({
+    k: "map",
+    v: [
+      ["name", txt(schema.name)],
+      ["version", uint(schema.version)],
+      ["stores", { k: "array", v: stores }],
+    ],
+  });
+}
+
+test("a schema IndexedDB would refuse (autoIncrement with an array key path) is IMP_RECORD_INVALID, nothing written", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  const store = {
+    name: "s",
+    keyPath: ["a", "b"],
+    autoIncrement: true,
+    keyGenerator: 1,
+    indexes: [],
+    records: 0,
+  };
+  const entries = [
+    lsEntry,
+    wire("data/0/idb/0/schema.cbor", rawSchema({ name: "x", version: 1, stores: [store] })),
+    wire("data/0/idb/0/store-0.cbor", new Uint8Array()),
+  ];
+  const world = await openStub(page);
+  expect(await world.call("importFrame", entries, plan(lab))).toMatchObject({
+    ok: false,
+    error: { code: "IMP_RECORD_INVALID", detail: { entry: "data/0/idb/0/schema.cbor" } },
+  });
+  expect(await page.evaluate(storageState)).toEqual({ localStorage: [], databases: [] });
+});
+
+test("a blob entry that no record references is refused before anything is written", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  const { entries } = await exportedLab(page, lab, openStub);
+  const stray = new TextEncoder().encode("not referenced");
+  const sha = createHash("sha256").update(stray).digest("hex");
+  await inFreshContext(page, async (target) => {
+    const world = await openStub(target);
+    expect(
+      await world.call("importFrame", [...entries, wire(`blobs/${sha}`, stray)], plan(lab)),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "IMP_RECORD_INVALID", detail: { entry: `blobs/${sha}` } },
+    });
+    expect(await target.evaluate(storageState)).toEqual({ localStorage: [], databases: [] });
+  });
+});
+
+test("IndexedDB's QuotaExceededError is IMP_QUOTA_EXCEEDED, never ignored", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  const store = {
+    name: "s",
+    keyPath: null,
+    autoIncrement: false,
+    keyGenerator: null,
+    indexes: [],
+    records: 1,
+  };
+  const big: CborItem = {
+    k: "bytes",
+    v: new Uint8Array(8 * 1024 * 1024).map((_, i) => (i * 7919) % 251),
+  };
+  const entries = [
+    wire("data/0/idb/0/schema.cbor", encodeSchema({ name: "big", version: 1, stores: [store] })),
+    wire("data/0/idb/0/store-0.cbor", encodeStoreRecord(1, big)),
+  ];
+  const world = await openStub(page);
+  await world.cdp.send("Storage.overrideQuotaForOrigin", {
+    origin: lab.origin,
+    quotaSize: 1024 * 1024,
+  });
+  expect(await world.call("importFrame", entries, plan(lab))).toMatchObject({
+    ok: false,
+    error: { code: "IMP_QUOTA_EXCEEDED", detail: { database: "big", store: "s" } },
+  });
+});
+
+test("wipe-selected fails with IMP_WIPE_FAILED when another connection blocks a delete", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  await play(page, lab, 1);
+  const world = await openStub(page);
+  // The page's main world keeps a connection open and ignores versionchange.
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const open = indexedDB.open("progress-lab");
+        open.onsuccess = () => {
+          (globalThis as Record<string, unknown>).held = open.result;
+          resolve(null);
+        };
+      }),
+  );
+  expect(await world.call("wipeSelected", PROGRESS_LAB)).toMatchObject({
+    ok: false,
+    error: { code: "IMP_WIPE_FAILED", detail: { database: "progress-lab" } },
   });
 });

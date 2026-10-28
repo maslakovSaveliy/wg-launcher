@@ -1,6 +1,6 @@
 // Key generators of `autoIncrement` stores (snapshot-format.md section 7.5, save-transfer.md section 4): the export
 // probe and the import raise.
-import { FrameFailure } from "./errors.js";
+import { errorName, FrameFailure, isQuotaError } from "./errors.js";
 import { done } from "./idb.js";
 
 /** The largest current number a generator can have (snapshot-format.md section 7.2). */
@@ -92,5 +92,15 @@ export async function raiseKeyGenerator(
     store.put(placeholder(store.keyPath, key));
   }
   store.delete(key);
-  await done(tx);
+  try {
+    await done(tx);
+  } catch (error) {
+    if (isQuotaError(error)) {
+      throw new FrameFailure("IMP_QUOTA_EXCEEDED", "IndexedDB is full");
+    }
+    const reason = errorName(error);
+    throw new FrameFailure("INTERNAL", "raising the key generator failed", {
+      ...(reason === undefined ? {} : { reason }),
+    });
+  }
 }

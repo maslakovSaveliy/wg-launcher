@@ -39,7 +39,12 @@ describe("decideFlushState (AC-12)", () => {
   it("treats a true that arrived after the timeout as a timeout", () => {
     const late = { kind: "returned", value: true, startedAt: 1000, finishedAt: 6001 } as const;
     expect(decideFlushState({ ...withRun(late), closedByLauncherAt: 6500 })).toBe("unconfirmed");
-    const onTime = { ...late, finishedAt: 6000 };
+    // "Before its timeout": a true that arrives exactly at the timeout is too late.
+    const atTimeout = { ...late, finishedAt: 6000 };
+    expect(decideFlushState({ ...withRun(atTimeout), closedByLauncherAt: 6500 })).toBe(
+      "unconfirmed",
+    );
+    const onTime = { ...late, finishedAt: 5999 };
     expect(decideFlushState({ ...withRun(onTime), closedByLauncherAt: 6500 })).toBe("confirmed");
   });
 

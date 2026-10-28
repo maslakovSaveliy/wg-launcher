@@ -24,8 +24,18 @@ export function errorName(error: unknown): string | undefined {
 
 export const isQuotaError = (error: unknown) => errorName(error) === "QuotaExceededError";
 
+/**
+ * Which command a failure belongs to. A snapshot format error (SnapError) is an import's `IMP_RECORD_INVALID`; on the
+ * export path, which never decodes snapshot data, it is unexpected and `INTERNAL`.
+ */
+export type Direction = "export" | "import";
+
 /** An error value for any throw; unexpected ones are INTERNAL and name only the error type, never values. */
-export function toFrameError(error: unknown, context: FrameErrorDetail = {}): FrameError {
+export function toFrameError(
+  error: unknown,
+  context: FrameErrorDetail = {},
+  direction: Direction = "export",
+): FrameError {
   if (error instanceof FrameFailure) {
     const detail = { ...context, ...error.detail };
     return { code: error.code, message: error.message, ...(isEmpty(detail) ? {} : { detail }) };
@@ -35,7 +45,7 @@ export function toFrameError(error: unknown, context: FrameErrorDetail = {}): Fr
     const detail = { ...context, path, type, ...(reason === undefined ? {} : { reason }) };
     return { code: error.code, message: error.message, detail };
   }
-  if (error instanceof SnapError) {
+  if (error instanceof SnapError && direction === "import") {
     // A data file the importer cannot read as recorded (Ruling R7: a RegExp that does not compile is one).
     return { code: "IMP_RECORD_INVALID", message: error.message, detail: context };
   }
@@ -46,30 +56,37 @@ export function toFrameError(error: unknown, context: FrameErrorDetail = {}): Fr
 const isEmpty = (detail: FrameErrorDetail) => Object.keys(detail).length === 0;
 
 /** Runs one command and returns its outcome as a value. */
-export async function settle<T>(run: () => Promise<T>): Promise<FrameResult<T>> {
+export async function settle<T>(
+  run: () => Promise<T>,
+  direction: Direction = "export",
+): Promise<FrameResult<T>> {
   try {
     return { ok: true, data: await run() };
   } catch (error) {
-    return { ok: false, error: toFrameError(error) };
+    return { ok: false, error: toFrameError(error, {}, direction) };
   }
 }
 
 /** Adds where a failure happened (database, store, record) and rethrows it as a FrameFailure. */
-export async function within<T>(context: FrameErrorDetail, run: () => Promise<T>): Promise<T> {
+export async function within<T>(
+  context: FrameErrorDetail,
+  run: () => Promise<T>,
+  direction: Direction = "export",
+): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    const value = toFrameError(error, context);
+    const value = toFrameError(error, context, direction);
     throw new FrameFailure(value.code, value.message, value.detail);
   }
 }
 
 /** The synchronous form of `within`. */
-export function at<T>(context: FrameErrorDetail, run: () => T): T {
+export function at<T>(context: FrameErrorDetail, run: () => T, direction: Direction = "export"): T {
   try {
     return run();
   } catch (error) {
-    const value = toFrameError(error, context);
+    const value = toFrameError(error, context, direction);
     throw new FrameFailure(value.code, value.message, value.detail);
   }
 }

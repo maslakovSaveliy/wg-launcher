@@ -157,7 +157,17 @@ export async function exportFrame(
   return within({ storageKey }, async () => {
     const blobs = new BlobWriter(out);
     const keys = localStorageKeys(env, scope.localStorage);
-    const items = keys.map((key): [string, string] => [key, env.localStorage.getItem(key) ?? ""]);
+    const items = keys.map((key): [string, string] => {
+      const value = env.localStorage.getItem(key);
+      if (value === null) {
+        // Listed but gone when read: something wrote to the frame during the export. Never export a changed value.
+        throw new FrameFailure(
+          "EXP_QUIESCENCE_VIOLATION",
+          "a localStorage item vanished while it was read",
+        );
+      }
+      return [key, value];
+    });
     const localStorageBytes = encodeLocalStorage(items);
     if (localStorageBytes !== null) {
       await out.write(localStoragePath(keyIndex), localStorageBytes);
@@ -194,7 +204,7 @@ export function createFrameExporter(env: FrameEnv): FrameExporter {
     info: GENERIC_EXPORTER,
     inventory: () => settle(() => readInventory(env)),
     exportFrame: (req, out) => settle(() => exportFrame(env, req, out)),
-    importFrame: (source, plan) => settle(() => importFrame(env, source, plan)),
-    wipeSelected: (scope) => settle(() => wipeSelected(env, scope)),
+    importFrame: (source, plan) => settle(() => importFrame(env, source, plan), "import"),
+    wipeSelected: (scope) => settle(() => wipeSelected(env, scope), "import"),
   };
 }

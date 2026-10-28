@@ -135,6 +135,10 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   byte-identical when concatenated (R6). The browser tests (`pnpm test:e2e:exporters`, also in CI's fixture job) bundle
   the exporter per worker with Vite 8.3.5 (a devDependency already in the lockfile) and run it in a CDP isolated world
   of a `page.route` stub page at the game's origin, with `serviceWorkers: "block"`; Task 13 wires the real preload.
+  Fix round 1 (Ruling R33): no request error is prevented (one failed put aborts its chunk with a named code), the
+  reader refuses key paths IndexedDB refuses (snapshot-format.md section 7.2), unreferenced blobs and a missing view
+  constructor are refused, a blocked delete is `IMP_WIPE_FAILED`, a vanished localStorage key is
+  `EXP_QUIESCENCE_VIOLATION`, the flush timeout is strict; what the importer guarantees is in save-transfer.md section 4.
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -492,6 +496,12 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   stays out of the main world. Biome's `noEmptyPattern` flags Playwright's `async ({}, use)` worker fixtures, which
   need the empty pattern: `biome-ignore` with the reason. [V, 2026-10-28, Playwright 1.64.1, Biome 2.6.2,
   `packages/exporters/browser/harness.ts`]
+- IndexedDB: `event.preventDefault()` on a request's error (directly or in a bubbling `transaction.onerror`) cancels the
+  transaction's abort, so the rest commits without the failed record; the exporters never prevent a request error.
+  With the old `done()` that prevented it, a unique-index `ConstraintError` import returned success with records
+  missing. [V, 2026-10-28, bundled Chromium 156.0.8078.4, mutation run of `browser/import-errors.spec.ts`] CDP
+  `Storage.overrideQuotaForOrigin` makes an 8 MiB put fail with `QuotaExceededError`, and `deleteDatabase` fires
+  `blocked` while another world of the page holds a connection that ignores `versionchange`. [V, same spec]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]

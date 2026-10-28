@@ -26,7 +26,7 @@ export const PROMPT_CLOSE_MS = 2000;
 
 /**
  * `confirmed` if and only if an adapter declares a hook, the export came through the flush flow, the hook returned
- * exactly `true` before its timeout, no input reached the game from the hook's start to the close, and the launcher
+ * exactly `true` before its timeout (strictly less than `timeoutMs` after its start), no input reached the game from the hook's start to the close, and the launcher
  * closed the window itself within 2 s after the hook finished. Anything else, unknown times included, is
  * `unconfirmed`.
  */
@@ -39,7 +39,7 @@ export function decideFlushState(o: FlushObservation): "confirmed" | "unconfirme
   if (closedAt === null || !times.every((t) => typeof t === "number" && Number.isFinite(t))) {
     return "unconfirmed";
   }
-  const inTime = run.finishedAt >= run.startedAt && run.finishedAt - run.startedAt <= o.timeoutMs;
+  const inTime = run.finishedAt >= run.startedAt && run.finishedAt - run.startedAt < o.timeoutMs;
   const promptClose = closedAt >= run.finishedAt && closedAt - run.finishedAt <= PROMPT_CLOSE_MS;
   const quiet = o.inputAt.every((t) => t < run.startedAt || t > closedAt);
   return inTime && promptClose && quiet ? "confirmed" : "unconfirmed";

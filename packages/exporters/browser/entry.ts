@@ -51,6 +51,29 @@ export function useQuotaLocalStorage(room: number): void {
   };
 }
 
+/** A localStorage that lists a key whose item is gone when read, as a write during the export would leave it. */
+export function useVanishingLocalStorage(): void {
+  fakeLocalStorage = {
+    length: 1,
+    key: (i: number) => (i === 0 ? "vanished" : null),
+    getItem: () => null,
+    setItem: () => undefined,
+    removeItem: () => undefined,
+    clear: () => undefined,
+  };
+}
+
+/**
+ * Makes every IDBObjectStore.delete of this world fail asynchronously (it becomes an `add` of an existing key, a
+ * ConstraintError), so the importer's key-generator raise, the only caller, meets a failing request.
+ */
+export function breakStoreDelete(): void {
+  const add = IDBObjectStore.prototype.add;
+  IDBObjectStore.prototype.delete = function (this: IDBObjectStore, key: IDBValidKey) {
+    return add.call(this, null, key) as unknown as IDBRequest<undefined>;
+  };
+}
+
 let ghostDatabase: string | undefined;
 
 /** Makes `indexedDB.databases()` list a database that does not exist, as one deleted after the listing would be. */

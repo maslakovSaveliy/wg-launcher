@@ -8,12 +8,15 @@ export function request<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-/** Resolves when the transaction commits; rejects with its error when it aborts. */
+/**
+ * Resolves when the transaction commits; rejects with its error when it aborts. A failed request is never prevented
+ * (`preventDefault` on a request error cancels the abort and lets the rest commit), so any failed request aborts the
+ * whole transaction and this rejects.
+ */
 export function done(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
     tx.onabort = () => reject(tx.error ?? new FrameFailure("INTERNAL", "transaction aborted"));
-    tx.onerror = (event) => event.preventDefault(); // the abort that follows reports it once
   });
 }
 

@@ -2,6 +2,7 @@
 // value built once before the first write, so a record this engine cannot rebuild (Ruling R7) fails the import with
 // nothing written. Then localStorage, then each database in bounded put transactions, then the key generators.
 import {
+  type BlobRefs,
   type DbSchema,
   decodeLocalStorage,
   decodeSchema,
@@ -10,7 +11,13 @@ import {
   type StoreRecord,
   type StoreSchema,
 } from "@wg-launcher/snapshot";
-import { at, errorName, FrameFailure, isQuotaError, within } from "./errors.js";
+import {
+  at as atAny,
+  errorName,
+  FrameFailure,
+  isQuotaError,
+  within as withinAny,
+} from "./errors.js";
 import { done } from "./idb.js";
 import { isEmpty } from "./inventory.js";
 import { generatorAfter, raiseKeyGenerator } from "./key-generator.js";
@@ -47,6 +54,11 @@ interface PlannedDatabase {
 }
 
 type Blobs = (sha256: string) => Blob;
+
+// Every failure on this path is an import failure: a snapshot format error becomes IMP_RECORD_INVALID.
+const at = <T>(context: FrameErrorDetail, run: () => T) => atAny(context, run, "import");
+const within = <T>(context: FrameErrorDetail, run: () => Promise<T>) =>
+  withinAny(context, run, "import");
 
 function invalid(message: string, detail: FrameErrorDetail = {}): never {
   throw new FrameFailure("IMP_RECORD_INVALID", message, detail);
@@ -112,6 +124,7 @@ function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
     invalid("a localStorage key outside the selection", lsEntry);
   }
   const databases: PlannedDatabase[] = [];
+  const refs: BlobRefs = new Map();
   const numbers = [...received.databases.keys()].sort((a, b) => a - b);
   for (const [i, d] of numbers.entries()) {
     const files = received.databases.get(d) as DatabaseFiles;
@@ -134,7 +147,7 @@ function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
     const stores = schema.stores.map((store, s) => {
       const storeWhere = { database: schema.name, store: store.name, entry: storePath(k, d, s) };
       const bytes = files.stores.get(s) ?? invalid("a store file is missing", storeWhere);
-      const records = at(storeWhere, () => decodeStoreRecords(bytes, new Map()));
+      const records = at(storeWhere, () => decodeStoreRecords(bytes, refs));
       if (records.length !== store.records) {
         invalid("the record count differs from the schema", storeWhere);
       }
@@ -144,6 +157,12 @@ function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
       return bytes;
     });
     databases.push({ d, schema, stores });
+  }
+  // Every blob entry must be referenced (snapshot-format.md section 7.4).
+  for (const sha256 of received.blobs.keys()) {
+    if (!refs.has(sha256)) {
+      invalid("a blob entry that no record references", { entry: blobPath(sha256) });
+    }
   }
   return { items, databases };
 }
@@ -167,6 +186,7 @@ function createDatabase(env: FrameEnv, schema: DbSchema): Promise<IDBDatabase> {
     const open = env.indexedDB.open(schema.name, schema.version);
     let created = false;
     let existed = false;
+    let refused: string | undefined;
     open.onupgradeneeded = (event) => {
       const db = open.result;
       if (event.oldVersion !== 0) {
@@ -174,19 +194,25 @@ function createDatabase(env: FrameEnv, schema: DbSchema): Promise<IDBDatabase> {
         open.transaction?.abort();
         return;
       }
-      for (const store of schema.stores) {
-        const objectStore = db.createObjectStore(store.name, {
-          keyPath: store.keyPath,
-          autoIncrement: store.autoIncrement,
-        });
-        for (const index of store.indexes) {
-          objectStore.createIndex(index.name, index.keyPath, {
-            unique: index.unique,
-            multiEntry: index.multiEntry,
+      try {
+        for (const store of schema.stores) {
+          const objectStore = db.createObjectStore(store.name, {
+            keyPath: store.keyPath,
+            autoIncrement: store.autoIncrement,
           });
+          for (const index of store.indexes) {
+            objectStore.createIndex(index.name, index.keyPath, {
+              unique: index.unique,
+              multiEntry: index.multiEntry,
+            });
+          }
         }
+        created = true;
+      } catch (error) {
+        // The reader refuses what IndexedDB refuses to create; this is defense in depth.
+        refused = errorName(error) ?? "Error";
+        open.transaction?.abort();
       }
-      created = true;
     };
     const notEmpty = () =>
       new FrameFailure("IMP_TARGET_NOT_EMPTY", "the database already exists in the target");
@@ -200,7 +226,13 @@ function createDatabase(env: FrameEnv, schema: DbSchema): Promise<IDBDatabase> {
     };
     open.onerror = (event) => {
       event.preventDefault();
-      if (existed || errorName(open.error) === "VersionError") {
+      if (refused !== undefined) {
+        reject(
+          new FrameFailure("IMP_RECORD_INVALID", "IndexedDB refused the recorded schema", {
+            reason: refused,
+          }),
+        );
+      } else if (existed || errorName(open.error) === "VersionError") {
         reject(notEmpty());
       } else if (isQuotaError(open.error)) {
         reject(new FrameFailure("IMP_QUOTA_EXCEEDED", "IndexedDB is full"));
@@ -211,7 +243,38 @@ function createDatabase(env: FrameEnv, schema: DbSchema): Promise<IDBDatabase> {
   });
 }
 
-/** Puts one chunk in one transaction and checks each key IndexedDB stored against the recorded one. */
+/** How a failed put is reported, by the DOMException name of its request error. */
+function putFailure(
+  name: string | undefined,
+  record: StoreRecord,
+  where: FrameErrorDetail,
+): FrameFailure {
+  const detail = {
+    ...where,
+    recordKey: record.key,
+    ...(name === undefined ? {} : { reason: name }),
+  };
+  switch (name) {
+    case "ConstraintError": // a unique index refuses the record
+      return new FrameFailure("IMP_RECORD_INVALID", "IndexedDB refused a record", detail);
+    case "QuotaExceededError":
+      return new FrameFailure("IMP_QUOTA_EXCEEDED", "IndexedDB is full", detail);
+    case "DataError": // the value yields no key at the key path
+      return new FrameFailure(
+        "IMP_KEY_MISMATCH",
+        "the value yields no key at the key path",
+        detail,
+      );
+    default:
+      return new FrameFailure("INTERNAL", "a put failed", detail);
+  }
+}
+
+/**
+ * Puts one chunk in one transaction and checks each key IndexedDB stored against the recorded one. Any failed request
+ * aborts the whole transaction (no request error is prevented) and fails the import with a named code; resolves with
+ * the number of records stored, which is the chunk's length.
+ */
 async function putChunk(
   env: FrameEnv,
   db: IDBDatabase,
@@ -219,15 +282,12 @@ async function putChunk(
   chunk: StoreRecord[],
   values: unknown[],
   where: FrameErrorDetail,
-): Promise<void> {
+): Promise<number> {
   const tx = db.transaction(store.name, "readwrite");
   const objectStore = tx.objectStore(store.name);
   let mismatch: StoreRecord | undefined;
-  const mismatchError = (record: StoreRecord) =>
-    new FrameFailure("IMP_KEY_MISMATCH", "the stored key differs from the recorded key", {
-      ...where,
-      recordKey: record.key,
-    });
+  let failed: { record: StoreRecord; name: string | undefined } | undefined;
+  let stored = 0;
   for (const [i, record] of chunk.entries()) {
     let put: IDBRequest<IDBValidKey>;
     try {
@@ -237,27 +297,45 @@ async function putChunk(
           : objectStore.put(values[i]);
     } catch (error) {
       tx.abort();
-      // DataError: the value yields no key at the key path.
-      throw errorName(error) === "DataError" ? mismatchError(record) : error;
+      throw putFailure(errorName(error), record, where);
     }
     put.onsuccess = () => {
       if (mismatch === undefined && env.indexedDB.cmp(put.result, record.key) !== 0) {
         mismatch = record;
         tx.abort();
+      } else {
+        stored += 1;
       }
+    };
+    put.onerror = () => {
+      failed ??= { record, name: errorName(put.error) };
     };
   }
   try {
     await done(tx);
   } catch (error) {
     if (mismatch !== undefined) {
-      throw mismatchError(mismatch);
+      throw new FrameFailure("IMP_KEY_MISMATCH", "the stored key differs from the recorded key", {
+        ...where,
+        recordKey: mismatch.key,
+      });
+    }
+    if (failed !== undefined) {
+      throw putFailure(failed.name, failed.record, where);
     }
     if (isQuotaError(error)) {
       throw new FrameFailure("IMP_QUOTA_EXCEEDED", "IndexedDB is full", where);
     }
-    throw error;
+    const reason = errorName(error);
+    throw new FrameFailure("INTERNAL", "a write transaction aborted", {
+      ...where,
+      ...(reason === undefined ? {} : { reason }),
+    });
   }
+  if (stored !== chunk.length) {
+    throw new FrameFailure("INTERNAL", "a write transaction committed without every record", where);
+  }
+  return stored;
 }
 
 async function writeStore(
@@ -267,17 +345,19 @@ async function writeStore(
   bytes: Uint8Array,
   blobs: Blobs,
   where: FrameErrorDetail,
-): Promise<void> {
+): Promise<number> {
   const records = decodeStoreRecords(bytes, new Map());
+  let stored = 0;
   for (let i = 0; i < records.length; i += WRITE_CHUNK) {
     const chunk = records.slice(i, i + WRITE_CHUNK);
     const values = chunk.map((record) => buildValue(record, blobs, where));
-    await putChunk(env, db, store, chunk, values, where);
+    stored += await putChunk(env, db, store, chunk, values, where);
   }
   if (store.autoIncrement && store.keyGenerator !== null) {
     const current = generatorAfter(records.map((record) => record.key));
     await raiseKeyGenerator(db, store.name, store.keyGenerator, current);
   }
+  return stored;
 }
 
 async function writeDatabase(
@@ -288,22 +368,19 @@ async function writeDatabase(
 ): Promise<DatabaseSummary> {
   const { schema } = planned;
   const db = await createDatabase(env, schema);
+  let records = 0;
   try {
     for (const [s, store] of schema.stores.entries()) {
       const where = { store: store.name, entry: storePath(k, planned.d, s) };
-      await within(where, () =>
+      records += await within(where, () =>
         writeStore(env, db, store, planned.stores[s] as Uint8Array, blobs, where),
       );
     }
   } finally {
     db.close();
   }
-  return {
-    name: schema.name,
-    version: schema.version,
-    stores: schema.stores.length,
-    records: schema.stores.reduce((n, store) => n + store.records, 0),
-  };
+  // The records IndexedDB stored and acknowledged, not the schema's count.
+  return { name: schema.name, version: schema.version, stores: schema.stores.length, records };
 }
 
 export async function importFrame(

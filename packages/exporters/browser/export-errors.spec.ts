@@ -120,3 +120,22 @@ test("a database listed but gone when opened is skipped and not created", async 
     await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name).sort()),
   ).toEqual(["/home/web_user", "progress-lab"]);
 });
+
+test("a localStorage key that vanishes while it is read fails the export instead of exporting an empty value", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  const world = await openStub(page);
+  await world.call("useVanishingLocalStorage");
+  const exported = await world.call<Exported>("exportFrame", {
+    keyIndex: 0,
+    storageKey: topKey(lab),
+    scope: ALL,
+  });
+  expect(exported.result).toMatchObject({
+    ok: false,
+    error: { code: "EXP_QUIESCENCE_VIOLATION", detail: { storageKey: topKey(lab) } },
+  });
+  expect(exported.entries).toEqual([]);
+});

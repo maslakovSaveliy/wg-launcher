@@ -4,7 +4,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, type CDPSession, expect, type Page } from "@playwright/test";
 import { computeContentHash } from "@wg-launcher/snapshot/container";
 import { build, type Rolldown } from "vite";
 import type { WireEntry } from "./entry.js";
@@ -28,6 +28,8 @@ export interface World {
   call<T>(name: string, ...args: unknown[]): Promise<T>;
   /** Evaluates an expression in the isolated world (test set-up only). */
   evaluate<T>(expression: string): Promise<T>;
+  /** The page's CDP session (test set-up only, e.g. a lowered quota). */
+  cdp: CDPSession;
 }
 
 async function freePort(): Promise<number> {
@@ -131,6 +133,7 @@ export const test = base.extend<
       expect(await page.evaluate(() => "wgExporters" in globalThis)).toBe(false);
       expect(await evaluate<boolean>('typeof wgExporters.exportFrame === "function"')).toBe(true);
       return {
+        cdp,
         evaluate,
         call: <T>(name: string, ...args: unknown[]) =>
           evaluate<T>(`wgExporters.${name}(${args.map((a) => JSON.stringify(a)).join(", ")})`),
