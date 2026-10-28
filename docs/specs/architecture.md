@@ -500,7 +500,7 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     restore that needed more than one request logs `game.fullscreen-restore-retried`. The restore ends at
     `enter-full-screen`, `leave-full-screen`, the first `close` (the close procedure hides the window and destroys it
     only later) or `closed`; `hide` is no signal, because macOS emits it while a window moves into or out of a
-    fullscreen Space (Verified, 2026-10-28, `apps/desktop/e2e/window.spec.ts` instrumented runs). A window already fullscreen when a retry is due is left
+    fullscreen Space (`Assumed`: seen in instrumented copies of the AC-18 test in `window.spec.ts`, run locally and not committed). A window already fullscreen when a retry is due is left
     alone. The delay and the limit are `Assumed`; every refused restore observed entered on the second request.
   - The UI control of F-6 is the menu item itself: `apps/desktop/src/main/app-menu.ts` sets an application menu of
     Electron's standard roles with a View menu holding `togglefullscreen` (clickable, and its accelerator is the

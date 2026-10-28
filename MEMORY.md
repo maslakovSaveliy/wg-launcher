@@ -275,7 +275,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   bundling check must be `apply: "build"`. A reload of the launcher during its first `loadURL` rejects that call with
   `ERR_ABORTED`, which `start()` treats as a start-up failure (exit 1); in a CDP check, wait for the first load before
   reloading. CDP `Runtime.evaluate` defaults to `allowUnsafeEvalBlockedByCSP: true`, so an `eval` control needs it
-  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, a reviewer's Vite 8.3.5 check
+  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, a Vite 8.3.5 check
   and the dev-flavor run]
 - `electron@45.0.0` has no install script, so it needs no `allowBuilds` entry (the older note that its binary download
   needs one was wrong for 45): `pnpm add -D electron@45.0.0` ran no script, and the binary is downloaded on the first

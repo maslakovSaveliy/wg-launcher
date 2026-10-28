@@ -667,7 +667,7 @@ describe("validateSnapshot: limits and codes do not depend on chunking", () => {
   const SIZES = [256, 4096, 65_536, Number.MAX_SAFE_INTEGER];
 
   it("accepts a probe (zeros, then random bytes, overall ratio far below maxRatio) at every chunk size", async () => {
-    // The review's probe (66 MiB of zeros, then 2 MiB of random bytes) at half size, with ratioFloorBytes lowered to
+    // The probe (66 MiB of zeros, then 2 MiB of random bytes) at half size, with ratioFloorBytes lowered to
     // 1 MiB: 32 MiB of zeros come out of a few hundred compressed bytes, far above 200 times any read-ahead, while the
     // whole file is far below a ratio of 200.
     const zeros = new Uint8Array(32 * 2 ** 20);
