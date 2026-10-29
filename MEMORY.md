@@ -61,6 +61,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (24.22.0), so CI and local runs match what the snapshot worker runs on; the reader's code is made independent of
   the zstd version (the frame walker's verdict wins over a decompressor error): snapshot-format.md section 2 and the
   "Node, zstd and the snapshot codec" gotcha below.
+- 2026-10-29 CI fix 2 (Assumed unless noted): no window manager is added to the Linux CI job (the failures there were
+  an event order and Force close, neither needs one); Force close escalates (architecture.md section 4); the AC-18
+  test takes bounds from the work area (section 9); verify's windows are sized from the snapshot's data, the
+  rollback's backup validation has its own size-based bound (save-transfer.md section 6), and "Retry recovery" gives
+  its hold back whatever `onLocked` throws.
 - 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): decisions: Node-only entry
   `@wg-launcher/snapshot/container`, exact `compressedSize` with a ratio bound, a decompressor error is always
   `SNAP_ZSTD_INVALID` (replaced on 2026-10-28 by the walker-wins rule above), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
@@ -565,10 +570,26 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   refuses `""` ("Empty session id is not allowed"): pass `undefined` for the page. [V, 2026-10-28, Electron 45.0.0]
 - Vitest 5 `toEqual` over two 2 MiB `Uint8Array`s took several seconds (a 5 s timeout); compare bytes in a loop. [V,
   2026-10-28, `packages/exporters/src/frame-server.test.ts`]
-- `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" now waits for the window's own fullscreen events
-  (`enter-full-screen` and `leave-full-screen`, the end of macOS's transition, after `enter-html-full-screen` and
-  `leave-html-full-screen`) instead of fixed sleeps; the observed order was always enter-html, enter, leave-html,
-  leave [V, 2026-10-28, runs on the dev machine].
+- `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" waits for the window's own fullscreen events
+  (`enter-full-screen` and `leave-full-screen`, the end of macOS's transition) instead of fixed sleeps. The order
+  inside a pair differs by platform: enter-html, enter, leave-html, leave on the dev Mac [V, 2026-10-28, runs on the
+  dev machine], `enter-full-screen` before `enter-html-full-screen` on ubuntu-latest under bare Xvfb [V, 2026-10-28,
+  CI run 40762490413], so the test compares each pair as a set. The app reads the page flag only when it saves
+  (debounced 500 ms, or at close), so the order does not change what it saves [A, from `window-state.ts`]. A second
+  page request at once after `leave-full-screen` was refused by macOS (the window never entered) in 3 of 6 runs on
+  the dev Mac, the same Space animation as below; the test waits 1 s first [V, 2026-10-29, `--repeat-each` runs].
+- macOS moves a window shown partly below the work area up until it fits: saved bounds 32 px below came back 32 px
+  higher at the next launch, while `setBounds` on the shown window had left them there [V, 2026-10-29, Electron
+  45.0.0, macOS arm64, a throwaway e2e probe]. The macOS CI runner restored y 140 as 108 for a 900 x 600 window that
+  fits the dev Mac [V, 2026-10-28, CI run 40762490413], so its work area ends at about 708 px [A]; the AC-18 test
+  now picks bounds inside the primary work area.
+- On Linux Electron 45's `forcefullyCrashRenderer` asks the renderer to crash on its IO thread
+  (`CrashHungProcess`) instead of ending the process as on macOS and Windows [V, 2026-10-29,
+  `shell/browser/api/electron_api_web_contents.cc` at `v45.0.0` via `gh api`]; on ubuntu-latest a call on a game that
+  was not hung left the session `running` for 15 s, no `render-process-gone` [V, 2026-10-28, CI run 40762490413]; why
+  is [U]. Force close therefore escalates after 3 s to SIGKILL of `getOSProcessId()`, then to destroying the window
+  (architecture.md section 4), and the crash e2e kills the renderer by pid; the S-7 test prints which step ended the
+  hung renderer ("S-7 force close record" in the CI log).
 - macOS refuses a fullscreen request made while the Space of a fullscreen window closed a moment ago is still
   animating away, and Electron 45 reports no event for it: `isFullScreen()` turns true with a `resize`, false again
   about 10 to 20 ms later with another `resize`, and neither `enter-full-screen` nor `leave-full-screen` comes. That was

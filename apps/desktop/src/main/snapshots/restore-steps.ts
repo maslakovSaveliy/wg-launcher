@@ -16,6 +16,7 @@ import {
   GENERIC_EXPORTER,
 } from "@wg-launcher/exporters/wire";
 import type { ErrorCode, Result } from "@wg-launcher/shared";
+import { DEFAULT_LIMITS, type Limits } from "@wg-launcher/snapshot/container";
 import type { Repos } from "../db/repos/index.js";
 import type { Snapshot } from "../db/repos/snapshots.js";
 import type { ConfirmSpec } from "../dialogs.js";
@@ -25,7 +26,14 @@ import { workerSlot } from "../worker/slot.js";
 import type { SnapshotDeps } from "./export.js";
 import { type FaultHook, type FaultPoint, InjectedFault } from "./faults.js";
 import type { Journal } from "./journal.js";
-import { failureOf, type JobKey, type JobSession, type QuiescentHold } from "./quiescent/job.js";
+import {
+  failureOf,
+  JOB_TIMING,
+  type JobKey,
+  type JobSession,
+  type JobTiming,
+  type QuiescentHold,
+} from "./quiescent/job.js";
 
 export const ALL: FrameScope = { localStorage: "all", indexedDB: "all" };
 
@@ -398,6 +406,44 @@ export const ownKeys = (
   storageKeys: readonly { origin: string; topLevelSite: string | null; role: "top" | "frame" }[],
 ): PlannedKey[] => storageKeys.map((key, index) => ({ index, from: index, ...key }));
 
+const MiB = 2 ** 20;
+
+/**
+ * The longest the validation of a stored file of `sizeBytes` may take outside any quiescent window (the rollback's
+ * check of its backup): the job deadline plus its per-MiB share over the most data the reader accepts from such a
+ * file, max(`ratioFloorBytes`, `maxRatio` × the file's size) and at most `maxTotalBytes` (snapshot-format.md section 8).
+ */
+export function validateBoundMs(
+  sizeBytes: number,
+  timing: Pick<JobTiming, "deadlineMs" | "deadlinePerMiBMs">,
+  limits: Pick<Limits, "maxTotalBytes" | "ratioFloorBytes" | "maxRatio"> = DEFAULT_LIMITS,
+): number {
+  const readable = Math.min(
+    limits.maxTotalBytes,
+    Math.max(limits.ratioFloorBytes, limits.maxRatio * sizeBytes),
+  );
+  return timing.deadlineMs + (timing.deadlinePerMiBMs * readable) / MiB;
+}
+
+/** `run`, or `failure` once `ms` have passed without an answer. */
+async function within<T>(
+  ms: number,
+  failure: Failure,
+  run: () => Promise<Result<T, ErrorCode>>,
+): Promise<Result<T, ErrorCode>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      run(),
+      new Promise<Failure>((resolve) => {
+        timer = setTimeout(() => resolve(failure), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * The rollback (any failure in R5 to R8): wipe the backup's keys again, import the backup, re-export and compare
  * with the backup's `contentHash`. Its steps are journaled as `rollback-*` with the state `rolling-back`. The backup is
@@ -429,10 +475,24 @@ export async function rollBack(
   try {
     deps.log.warn("snapshot.rollback.start", { gameId, backupRevisionId: backup.revisionId });
     const wiped = await runStep("rollback-wipe", context, async () => {
-      const worker = await workers.get(never);
-      if (worker === null) return fail("INTERNAL", "The snapshot worker did not start.");
-      const validated = await worker.validate(deps.fileOf(backup.path));
-      if (!validated.ok) return validated;
+      // The backup is checked before any window, so no watchdog covers it: it gets its own bound, and running past
+      // it is a failed rollback (the worker is killed in `finally`), never a wait without end.
+      const timing = { ...JOB_TIMING, ...deps.job.timing };
+      const validated = await within(
+        validateBoundMs(backup.sizeBytes, timing),
+        fail("IMP_RECOVERY_FAILED", "The backup could not be read in time."),
+        async () => {
+          const worker = await workers.get(never);
+          if (worker === null) return fail("INTERNAL", "The snapshot worker did not start.");
+          const checked = await worker.validate(deps.fileOf(backup.path));
+          return checked.ok ? { ok: true, data: { worker, ...checked.data } } : checked;
+        },
+      );
+      if (!validated.ok) {
+        deps.log.warn("snapshot.rollback.validate-failed", { gameId, code: validated.code });
+        return validated;
+      }
+      const { worker } = validated.data;
       if (validated.data.manifest.contentHash !== backup.contentHash) {
         return fail("IMP_RECOVERY_FAILED", "The backup file differs from its record.");
       }

@@ -59,10 +59,11 @@ async function recoverEntry(
     deps.log.warn("snapshot.recovery.not-started", { gameId, code: held.code });
     return held;
   }
-  // Answered only now, with the lease held: a refusal is the call's own result.
-  hooks.onLocked?.();
-  const journal = resumeJournal(deps.repos.restoreJournal, entry);
   try {
+    // Answered only now, with the lease held: a refusal is the call's own result. Inside the `try`, so the hold is
+    // given back whatever these throw.
+    hooks.onLocked?.();
+    const journal = resumeJournal(deps.repos.restoreJournal, entry);
     // The rollback never throws: any error in it is a failed rollback.
     const rolled = await rollBack(held.data, journal, backup, deps, hooks.onStep);
     if (!rolled.ok) return markNeedsRecovery(gameId, backup, rolled, deps);

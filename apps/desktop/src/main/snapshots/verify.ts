@@ -49,8 +49,9 @@ export async function verifySnapshot(
     const scope = adapterScopeOf(validated.data.manifest.adapter);
     if (!scope.ok) return scope;
     const keys = ownKeys(validated.data.manifest.storageKeys);
-    const session = { session: fresh.session };
-    const imported = await importKeys(held.data, keys, scope.data ?? ALL, worker, session);
+    // The windows' deadlines grow with the data the file holds, as a restore's do (save-transfer.md section 6).
+    const windows = { session: fresh.session, budgetBytes: validated.data.dataBytes };
+    const imported = await importKeys(held.data, keys, scope.data ?? ALL, worker, windows);
     if (!imported.ok) return imported;
     const verified = await verifyKeys(
       held.data,
@@ -58,7 +59,7 @@ export async function verifySnapshot(
       scope.data ?? ALL,
       worker,
       row.contentHash,
-      session,
+      windows,
     );
     if (!verified.ok) return verified;
     repos.snapshots.markVerified(revisionId, GENERIC_EXPORTER.version);

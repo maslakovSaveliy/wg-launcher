@@ -468,8 +468,14 @@ commands (`worker/source.ts`). `Assumed` unless tagged otherwise.
 - **Deadlines.** The watchdog of each window allows 60 s plus 1 s per MiB of the data it handles (section 5), so every
   window is sized before it starts or as it reads: the backup by the bytes the worker measured, the wipe by the
   backup's data size, the import and the verify by the snapshot's (the sum of its entry sizes, reported by the
-  worker's `validate`), and each rollback window by the backup's data size (from its own validation, so recovery
-  after a restart is sized the same way). A frame sends a `working` heartbeat every 5 s while it runs a command
+  worker's `validate`; verify's two windows too, since 2026-10-29: before, they had the flat 60 s, so a large snapshot
+  failed to verify with `INTERNAL`; Verified, 2026-10-29, `verify.test.ts`), and each rollback window by the backup's
+  data size (from its own validation, so recovery after a restart is sized the same way). That validation runs before
+  any window, so no watchdog covers it: it has its own bound, the job deadline plus 1 s per MiB of the most data the
+  reader accepts from a file of the backup's size (max(`ratioFloorBytes`, `maxRatio` × size), at most
+  `maxTotalBytes`, snapshot-format.md section 8; `validateBoundMs`), and running past it is a failed rollback
+  (`IMP_RECOVERY_FAILED`, the game `needs_recovery`), never a wait without end (Verified, 2026-10-29,
+  `restore-steps.test.ts`; the bound itself is Assumed). A frame sends a `working` heartbeat every 5 s while it runs a command
   (`HEARTBEAT_MS`, Assumed), and the importer yields a turn after each store file it decodes, so the worker's 30 s
   silence bound only ends a frame that stopped working. Before this, every window but an export's had a flat 60 s
   whatever its size: a slow import failed, and a rollback import of the same size failed the same way, leaving the
