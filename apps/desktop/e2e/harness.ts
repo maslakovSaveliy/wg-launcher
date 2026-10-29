@@ -108,11 +108,17 @@ export function appArgs(userData: string): string[] {
 }
 
 export async function launchApp(
-  options: { userData?: string; extraArgs?: string[] } = {},
+  options: {
+    userData?: string;
+    extraArgs?: string[];
+    /** A server the caller started and stops (a relaunch keeps the game's URLs and storage keys). */
+    progressLab?: ProgressLab;
+  } = {},
 ): Promise<Launched> {
   const userData = options.userData ?? (await mkdtemp(join(tmpdir(), "wg-e2e-")));
   const profiles = await guardRealProfiles();
-  const progressLab = await startProgressLab();
+  const progressLab = options.progressLab ?? (await startProgressLab());
+  const stopServer = () => (options.progressLab ? Promise.resolve() : progressLab.stop());
   let app: ElectronApplication;
   try {
     app = await _electron.launch({
@@ -127,7 +133,7 @@ export async function launchApp(
       timeout: 30_000,
     });
   } catch (error) {
-    await progressLab.stop();
+    await stopServer();
     // A failed launch (a crash while the app starts) is exactly when the real profile is most at risk.
     await profiles.verify().catch((violation: Error) => {
       throw new Error(`${violation.message} (the launch had failed: ${String(error)})`);
@@ -136,7 +142,7 @@ export async function launchApp(
   }
   const close = async () => {
     await app.close().catch(() => undefined);
-    await progressLab.stop();
+    await stopServer();
     if (options.userData === undefined) await rm(userData, { recursive: true, force: true });
     // Also covers second instances started during the test, which use the same environment.
     await profiles.verify();

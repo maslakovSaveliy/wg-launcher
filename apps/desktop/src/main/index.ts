@@ -225,6 +225,7 @@ async function start(userData: string): Promise<AppContext> {
             mark: (gameId) => games.locks.markNeedsRecovery(gameId),
             clear: (gameId) => games.locks.clearNeedsRecovery(gameId),
           },
+          isRunning: (gameId) => games.runtime.openGames().includes(gameId),
           // "Local data" is checked again after an import or a delete (architecture.md section 11).
           afterChange: (gameId) => checks?.gameExited(gameId),
           verifySession: () => verifySession(log),

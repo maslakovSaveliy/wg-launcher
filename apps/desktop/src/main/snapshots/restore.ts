@@ -223,6 +223,8 @@ export async function runRestore(
   const { repos, log } = deps;
   const game = repos.games.get(gameId);
   if (!game) return fail("NOT_FOUND", "The game is not in the library.");
+  // AC-11 before any question; R3 checks again under the lock.
+  if (deps.isRunning?.(gameId)) return fail("GAME_RUNNING", "Close the game first.");
   const stored = "revisionId" in source ? repos.snapshots.findByRevision(source.revisionId) : null;
   if ("revisionId" in source && stored === null) {
     return fail("NOT_FOUND", "The snapshot is not stored.");

@@ -48,6 +48,8 @@ export interface TaskDeps extends Omit<SnapshotDeps, "repos" | "paths"> {
   confirm(spec: ConfirmSpec): Promise<boolean>;
   /** The lock manager's recovery mark: launches and tasks are refused while it is set. */
   recovery: { mark(gameId: string): void; clear(gameId: string): void };
+  /** Whether the game's window is open now; a restore refuses early (AC-11), R3 decides under the lock. */
+  isRunning?(gameId: string): boolean;
   /** Data changed: "Local data" is checked again (architecture.md section 11). */
   afterChange?(gameId: string): void;
   /** A fresh in-memory partition `wg-verify-<nonce>` with the game policy, and its clean-up. */

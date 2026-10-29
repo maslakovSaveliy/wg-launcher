@@ -155,8 +155,14 @@ export interface TestHooks {
    * quiescent window and hashed in the worker; nothing is written. Two equal digests mean equal storage.
    */
   storageDigest(gameId: string): Promise<Result<string, ErrorCode>>;
-  /** The quiescent inventory of each known key: `origin topLevelSite` to its counts and usage numbers. */
-  storageInventory(gameId: string): Promise<Result<Record<string, FrameInventory>, ErrorCode>>;
+  /**
+   * The quiescent inventory of each known key: `origin topLevelSite` to its counts and usage numbers. `entryUrl` is
+   * for a game whose entry and orphan row are both gone (its data deleted).
+   */
+  storageInventory(
+    gameId: string,
+    entryUrl?: string,
+  ): Promise<Result<Record<string, FrameInventory>, ErrorCode>>;
   /** Focuses the game's window (the storage check waits while a game window is focused). */
   focusGameWindow(gameId: string): boolean;
   /** Whether a game window has the focus now, as the storage check scheduler sees it. */
@@ -247,11 +253,13 @@ export function installTestHooks(init: {
       worker: Awaited<ReturnType<SnapshotDeps["startWorker"]>>,
       keys: ReturnType<typeof knownKeys>,
     ) => Promise<Result<T, ErrorCode>>,
+    entryUrl?: string,
   ): Promise<Result<T, ErrorCode>> => {
     const deps = needTasks();
-    const game = deps.repos.games.get(gameId) ?? deps.repos.orphans.get(gameId);
-    if (!game) return { ok: false, code: "NOT_FOUND", message: "No such game." };
-    const keys = knownKeys(game.url, deps.repos.storageTargets.listForGame(gameId));
+    const url =
+      deps.repos.games.get(gameId)?.url ?? deps.repos.orphans.get(gameId)?.url ?? entryUrl;
+    if (url === undefined) return { ok: false, code: "NOT_FOUND", message: "No such game." };
+    const keys = knownKeys(url, deps.repos.storageTargets.listForGame(gameId));
     const held = await holdQuiescentJob(gameId, "task", deps.job);
     if (!held.ok) return held;
     const workers = workerSlot(deps.startWorker, {});
@@ -473,7 +481,7 @@ export function installTestHooks(init: {
             keys.map(({ origin, topLevelSite, role }) => ({ origin, topLevelSite, role })),
           ),
       ),
-    storageInventory(gameId) {
+    storageInventory(gameId, entryUrl) {
       const found: Record<string, FrameInventory> = {};
       return readKnown(
         gameId,
@@ -484,6 +492,7 @@ export function installTestHooks(init: {
           return { ok: true, data: undefined };
         },
         async () => ({ ok: true, data: found }),
+        entryUrl,
       );
     },
     closeGame(gameId) {

@@ -62,7 +62,12 @@ data-safety invariant 3).
   an unmatched frame key deliberately. Every record then lands under the mapped
   key, which the restore check proves (expected hash per [snapshot-format.md](snapshot-format.md#5-content-hash)). No
   case ends in a silent no-op or a silent partial restore. `Owner` for the rule (PRD section 10), `Assumed` for the
-  details.
+  details. Verified (2026-10-29, `apps/desktop/e2e/keys.spec.ts`, Electron 45.0.0, macOS arm64): progress-lab exported
+  on `localhost` with its `127.0.0.1` iframe and restored into an entry running the other way round was refused naming
+  both origins, with no question, no backup and the storage unchanged; with the two origins mapped onto each other the
+  unchecked iframe key was listed in the confirmation, Cancel wrote nothing, and after consent the game in the
+  `localhost` iframe under `127.0.0.1` showed the exported progress hash; an iframe moved to another port was refused
+  naming both origins and restored once mapped to the new one. The table is unit-tested in `key-check.test.ts`.
 
 ## 3. Exporter interface and versioning
 
@@ -387,6 +392,80 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
   game's partition. A non-`persist:` partition lives in memory. Verified (2026-10-24,
   <https://www.electronjs.org/docs/latest/api/session>). Passing it sets "Export verified" for that exporter version
   ([architecture.md](architecture.md#11-badges)).
+
+**Implementation (Phase 1 Task 14).** `apps/desktop/src/main/snapshots/` (`restore.ts`, `restore-steps.ts`, `journal.ts`,
+`key-check.ts`, `recovery.ts`, `delete-saves.ts`, `clear-cache.ts`, `verify.ts`, `faults.ts`) and the worker's restore
+commands (`worker/source.ts`). `Assumed` unless tagged otherwise.
+
+- **One lock from R3 to R8.** `holdQuiescentJob` takes the game's `task` lease and one job slot and runs several
+  quiescent windows under them (R4 backup, R5 wipe, R6 import, R7 verify, and the rollback's three), so no other job
+  takes the slot between two windows; each window is one command per frame. A frame's whole key is cleared through
+  `JobContext.clearStorage`, CDP `Storage.clearDataForStorageKey` with the Chromium key that step 8 read for that
+  frame, used at run time only and never stored or logged.
+- **R1.** A stored row's file is validated in place (snapshot files are immutable); an external file, chosen in the
+  native dialog main opens, is first copied to `tmp/<journalId>.wgsnap.import` (a regular file only, opened with
+  `O_NOFOLLOW`, never more than `maxFileBytes`: `SNAP_FILE_TOO_LARGE`). The worker validates it fully, then reads the
+  store files once more to learn which blobs each key's records reference, because the importer refuses a blob no
+  record of its frame references. A revision already stored with another `contentHash`, or a stored row whose file
+  says otherwise, is `IMP_REVISION_CONFLICT`. Verified (2026-10-29, `apps/desktop/e2e/restore.spec.ts`: a file with
+  the stored revision id and no data was refused with nothing written; the same data under a new revision was restored
+  and adopted as the game's `imported` row in `snapshots/<gameId>/`).
+- **R2.** `checkStorageKeys` (section 2) applies the mapping and checks every key; a mapping of an origin the
+  snapshot lacks, a repeated `from`, or a non-origin is `INVALID_ARGUMENT`, and two keys mapped onto one storage key
+  are `IMP_STORAGE_KEY_MISMATCH`. A first-party `frame` key needs a top-level origin of its own site in the target, as a
+  partitioned key needs one of its `topLevelSite`. The wipe set is the mapped keys plus every known key, numbered as a
+  manifest; **the backup covers the whole wipe set**, not only the known keys, so a mapped key the target never
+  observed is backed up before it is wiped too (more than 32 keys: `IMP_BACKUP_FAILED`, nothing changed). The
+  expected hash comes from the worker (`worker/source.ts`, snapshot-format.md section 5). A snapshot made with an
+  adapter this build does not have is refused (`INVALID_ARGUMENT`), because its selection is unknown. One native
+  confirmation ("Restore snapshot?") states what is replaced, that a backup is made first, a selective restore, the
+  mapping and the unchecked keys; Cancel is `CANCELLED` with nothing written. A game whose window is open is refused
+  with `GAME_RUNNING` before any question (AC-11); R3 checks again under the lock.
+- **R3 to R8.** R3 runs R2 again under the lock and compares the checked keys, their order, the unchecked list and the
+  wipe set (`IMP_PLAN_CHANGED`). R4 is `writeBackup`: the generic exporter with no filter over the wipe set, the
+  worker's `.partial`, read-back and rename into `backups/<gameId>/<backupRevisionId>.wgsnap`, a row of kind `backup`
+  whose parent is the game's base revision; any failure is `IMP_BACKUP_FAILED` with nothing wiped and both files
+  removed. R5 wipes with `local_storage,indexeddb` and then requires an inventory with no item and no database (or runs
+  `wipe-selected` for a selective restore); any other failure there is `IMP_WIPE_FAILED`. R6 streams the file a second
+  time per frame (`readEntries`, every entry re-checked), renumbered `data/<from>/` to `data/<to>/`. R7 re-exports into
+  the same worker and hashes the entries without writing a file (`digest`). R8 is one database transaction: the
+  `imported` row of an external file (renamed into `snapshots/<gameId>/` just before), the game's base revision and the
+  journal's `done`; a failure there rolls back as well.
+- **Journal.** An entry is begun at `validate` (`lock` for a delete) and each step is written before it starts; the
+  rollback writes `rollback-wipe`, `rollback-import` and `rollback-verify` with the state `rolling-back`. It ends `done`,
+  or `failed` once nothing changed (R1 to R4) or a rollback verified; it stays `rolling-back` while a rollback has not
+  verified.
+- **Rollback and recovery.** The rollback validates the backup again (its `contentHash` must equal its row's), wipes its
+  keys whole, imports it and compares a re-export with its `contentHash`. A failed rollback marks the game
+  `needs_recovery` in the lock manager and in `games.needs_recovery`: a launch is refused with a message naming the
+  backup (its date and revision), every task gets `NEEDS_RECOVERY`, and `snapshot:recover` ("Retry recovery") runs the
+  rollback again under a recovery lease (`LockManager.acquireForRecovery`, the only lease granted under the mark), which
+  clears the mark once it verified. At start-up `recoverAtStartup` runs before the IPC handlers, the launch queue and
+  the launcher page: entries that never reached R5 are closed `failed` (`tmp/` is emptied at start-up), the games of
+  the others are marked at once and their rollbacks then run one at a time. Verified (2026-10-29,
+  `apps/desktop/e2e/restore.spec.ts` on Electron 45.0.0, macOS arm64): a fault at the start of each of validate, plan,
+  lock, backup, wipe, import and verify left the stored data's digest and the progress hash as before, and from wipe on
+  the backup validated with the pre-import `contentHash` (AC-8); a fault in the import and again in the rollback's
+  import gave `IMP_RECOVERY_FAILED`, a launch refused naming the backup, and "Retry recovery" restored the pre-import
+  data; `crash-after:wipe` killed the app (SIGKILL) and the next start rolled back before any launch, with the
+  pre-import hash and a valid backup (Review Focus 2). Mutation runs: without `recoverAtStartup` the crash test failed,
+  without the rollback the fault test failed.
+- **Faults (test flavor).** `fail:<step>` fails a step when it starts, after its journal write; `crash-after:<step>`
+  kills the process once the step finished; steps are R1 to R8 and the three rollback steps (`faults.ts`). Production
+  passes no hook.
+- **Delete local saves** takes the lock first and asks while holding it (as "Remove from library" does), so an open
+  window refuses before any question; it works for a removed game's data too (`library:deleteOrphanData`), whose orphan
+  row is deleted at R8. **Clear cache** holds a `task` lease and asks first. **Verify** holds the game's `task` lease,
+  validates the stored file (its `contentHash` must equal the row's) and runs R6 and R7 in a fresh
+  `wg-verify-<128-bit hex>` partition with the game policy installed, then clears that partition's data. Verified
+  (2026-10-29, `apps/desktop/e2e/restore.spec.ts` and `delete.spec.ts`).
+- **Known limits.** A frame command that stays silent for 30 s fails it (the import of a very large frame decodes and
+  writes everything before it answers), which rolls the restore back: safe, but large saves may need a longer bound.
+  The worker posts an import's chunks without backpressure, so a frame holds that frame's entries in memory, as the
+  export side does. An iframe at an IPv6 literal host (`http://[::1]:<port>`) could not be read by the quiescent
+  window (`EXP_TIMEOUT`, "A frame of the job window is missing"); the cause is Assumed to be the stub's CSP
+  `frame-src`, whose host-source grammar has no IPv6 literals (seen 2026-10-29 in a first draft of
+  `apps/desktop/e2e/keys.spec.ts`, which now moves the iframe to another port instead).
 
 **Export** (`snapshot:export`): lock; stop service workers; quiescent export of the game keys with the adapter's scope;
 the worker writes `tmp/<revisionId>.wgsnap.partial`, reads it back through the full validator, fsyncs and renames it to

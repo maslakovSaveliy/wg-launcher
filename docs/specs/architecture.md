@@ -159,7 +159,9 @@ stateDiagram-v2
   are taken and one holds a background job (a storage check of any game), a user task cancels that job and takes
   its slot once it is given back, waiting at most 2 s (then `INTERNAL`, logged `snapshot.job.slot-not-released`); a
   user task meets `GAME_BUSY` from the cap only while two user tasks run, and a background job never takes another
-  job's slot. Verified (2026-10-28, `job.test.ts`).
+  job's slot. Verified (2026-10-28, `job.test.ts`). A restore or a delete holds one lease and one slot from R3 to R8
+  over all its windows (`holdQuiescentJob`). `needs_recovery` refuses everything but `acquireForRecovery`, the lease
+  of the rollback that clears it (Phase 1 Task 14; Verified 2026-10-29, `locks.test.ts`, `job.test.ts`).
 - **Crash and hang.** `render-process-gone` ends the session as `crashed` and the library shows it; `unresponsive`
   offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. The e2e test crashes a game
   with `forcefullyCrashRenderer` and force-closes a really hung page; it emits the window's `unresponsive` event itself,
@@ -225,6 +227,7 @@ no longer have `Buffer`, `events`, `timers` or `url`, so the bridge uses none of
 | `snapshot:import` | `{gameId, source: {revisionId} \| "file", mapping?: [{from, to}]}` | `{taskId}`; `"file"` opens the file dialog in main |
 | `snapshot:list` | `{gameId}` | Snapshot rows (section 7) |
 | `snapshot:verify` | `{gameId, revisionId}` | `{taskId}` |
+| `snapshot:recover` | `{gameId}` | `{taskId}`; "Retry recovery" of a game in `needs_recovery` |
 | `snapshot:saveAs` | `{gameId, revisionId}` | `{saved}`; save dialog in main |
 | `shortcut:create` | `{gameId}` | `{created}`; save dialog in main |
 | `settings:get`, `settings:set` | `{}`, a partial object of allowlisted keys | Settings |
@@ -297,6 +300,18 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
   - `snapshot:list` returns the rows of the game and of its base revision (plan M8) without their file paths;
     `snapshot:saveAs` copies the stored file to the place chosen in the native save dialog (`saved: false` on Cancel).
   - A result's `code` may be any code of the specs (`IpcResult` uses `ErrorCode`), as the error list above says.
+- **Implementation (Phase 1 Task 14).** `Assumed` unless noted.
+  - `snapshot:import`, `snapshot:verify`, `snapshot:recover`, `game:deleteSaves`, `library:deleteOrphanData` and
+    `game:clearCache` exist (`ipc/handlers/snapshots.ts`); `snapshot:recover` is added to the table above, because
+    the UI's "Retry recovery" needs a channel. Every task answers `{taskId}` once the game's lock is held, as an export
+    does; a refusal before that is the call's result: `GAME_RUNNING`, a `SNAP_*` code or `IMP_REVISION_CONFLICT` of
+    R1, `IMP_STORAGE_KEY_MISMATCH` of R2, `CANCELLED` when the confirmation was declined or the file dialog
+    cancelled. `"file"` opens the file dialog in main. Verified (2026-10-29, `handlers.test.ts`; e2e through
+    `window.wg` in `restore.spec.ts` and `delete.spec.ts`).
+  - `task:progress` `kind` is `export`, `import`, `verify`, `delete-saves` or `recover`; a restore's `step` is each
+    step of save-transfer.md section 6 as it starts (`validate` to `commit`, and `rollback-wipe`, `rollback-import`,
+    `rollback-verify`). The bridge is version 5 (`importSnapshot`, `verifySnapshot`, `retryRecovery`, `deleteSaves`,
+    `deleteOrphanData`, `clearCache`).
 - Game windows have no IPC at all; quiescent windows use only the handshake of
   [save-transfer.md](save-transfer.md#5-quiescent-window). Bulk data never travels as JSON IPC (AGENTS.md data-safety
   invariant 9).
@@ -574,7 +589,8 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
   slot), and is dropped when it cannot start (the next exit schedules it again). A running check is cancelled when
   any game window takes focus (that game is checked again once no game window is focused) and when the app starts
   quitting (`before-quit`), logged `snapshot.storage-check.cancelled`; it only reads, so cancelling it is safe
-  (Verified, 2026-10-28, `check-scheduler.test.ts`). After an import or a delete it comes with Task 14. Verified (2026-10-28,
+  (Verified, 2026-10-28, `check-scheduler.test.ts`). After an import, a delete or a recovery it is scheduled the same
+  way, once the task let go of the game (Phase 1 Task 14, `Assumed`). Verified (2026-10-28,
   `check-scheduler.test.ts` and `apps/desktop/e2e/quiescent.spec.ts`: a check after an exit, none for 3.5 s while
   another game window was focused, both games checked once it closed). `has_data` means at
   least one localStorage item or IndexedDB database, or `usageDetails.fileSystem` above zero (OPFS is data too, though
@@ -631,8 +647,13 @@ Badges come from recorded state only ([PRD section 7](../product/prd.md#7-honest
     it there with "Delete local saves" (backup first). Re-adding the URL creates a new entry; it never adopts orphaned
     data silently. `Assumed`
   - *Clear cache:* only while the game window is closed; `ses.clearCache()`, `ses.clearCodeCaches({})` and
-    `ses.clearStorageData({storages: ["shadercache", "cachestorage", "serviceworkers"]})` on the game's session. That
-    the call without `origin` reaches partitioned keys is Assumed; AC-16 checks it.
+    `ses.clearStorageData({storages: ["shadercache", "cachestorage", "serviceworkers"]})` on the game's session. The
+    call without `origin` reaches partitioned keys (open check 4): with progress-lab in a `127.0.0.1` iframe under
+    `localhost`, the iframe's partitioned key had `usageDetails.caches` and `serviceWorkerRegistrations` above zero
+    before and neither after, while its localStorage, databases and the stored data's digest were unchanged and the
+    game showed the same progress hash. Verified (2026-10-29, `apps/desktop/e2e/delete.spec.ts`, Electron 45.0.0,
+    macOS arm64), so the CDP fallback is not needed. A native confirmation says what goes and what stays, and an open
+    window refuses it with `GAME_RUNNING`.
   - *Delete local saves:* the backup, wipe and verify procedure of
     [save-transfer.md](save-transfer.md#6-restore-protocol).
   - Backups are never deleted automatically or as a side effect of another action. `Assumed` (PRD section 9, from

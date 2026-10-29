@@ -88,3 +88,53 @@ export async function leftovers(launched: Launched, gameId: string) {
     snapshots: await list(join(launched.userData, "snapshots", gameId)),
   };
 }
+
+type Hooks = NonNullable<typeof globalThis.__wgTest>;
+
+/** Calls one async test hook in the app with JSON arguments. */
+function call<K extends keyof Hooks>(
+  launched: Launched,
+  name: K,
+  ...args: unknown[]
+): Promise<Awaited<ReturnType<Extract<Hooks[K], (...a: never[]) => unknown>>>> {
+  return launched.app.evaluate(
+    (_electron, [hook, values]) =>
+      (globalThis.__wgTest as unknown as Record<string, (...a: unknown[]) => unknown>)[
+        hook as string
+      ]?.(...(values as unknown[])),
+    [name, args] as const,
+  ) as never;
+}
+
+export const restoreSnapshot = (
+  launched: Launched,
+  gameId: string,
+  options: Parameters<Hooks["restoreSnapshot"]>[1],
+) => call(launched, "restoreSnapshot", gameId, options);
+export const setFaults = (launched: Launched, specs: string[]) =>
+  call(launched, "setFaults", specs);
+export const deleteLocalSaves = (launched: Launched, gameId: string) =>
+  call(launched, "deleteLocalSaves", gameId);
+export const clearCache = (launched: Launched, gameId: string) =>
+  call(launched, "clearCache", gameId);
+export const verifySnapshot = (launched: Launched, gameId: string, revisionId: string) =>
+  call(launched, "verifySnapshot", gameId, revisionId);
+export const retryRecovery = (launched: Launched, gameId: string) =>
+  call(launched, "retryRecovery", gameId);
+export const journalOf = (launched: Launched, gameId: string) =>
+  call(launched, "journalOf", gameId);
+export const gameRow = (launched: Launched, gameId: string) => call(launched, "gameRow", gameId);
+export const storageDigest = (launched: Launched, gameId: string) =>
+  call(launched, "storageDigest", gameId);
+export const storageInventory = (launched: Launched, gameId: string, entryUrl?: string) =>
+  call(launched, "storageInventory", gameId, entryUrl);
+export const recoveryDone = (launched: Launched) =>
+  launched.app.evaluate(() => globalThis.__wgTest?.recoveryDone ?? false);
+
+/** Unwraps a result or fails the test with its code and message. */
+export const ok = <T>(
+  result: { ok: true; data: T } | { ok: false; code: string; message: string },
+): T => {
+  if (!result.ok) throw new Error(`${result.code}: ${result.message}`);
+  return result.data;
+};

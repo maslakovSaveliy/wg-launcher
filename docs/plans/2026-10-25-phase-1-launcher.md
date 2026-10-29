@@ -438,9 +438,9 @@ each step, `deps.faults?: (step: RestoreStep) => void` (test flavor; also `crash
 `checkStorageKeys(manifestKeys, target: TargetKeys, mapping?: KeyMapping[]): Result<CheckedKeys, "IMP_STORAGE_KEY_MISMATCH">
 & {unchecked: StorageKey[]}`; `recoverAtStartup(deps)` before any launch; `deleteLocalSaves`, `clearCache`,
 `verifySnapshot(gameId, revisionId)` (into `wg-verify-<nonce>`, sets `verified_at` and `verified_exporter_version`).
-- [ ] Unit: key-check table of save-transfer §2 (top, partitioned, frame, unchecked, mapping incl. self-mapping); expected
+- [x] Unit: key-check table of save-transfer §2 (top, partitioned, frame, unchecked, mapping incl. self-mapping); expected
   hash after a mapping (snapshot-format §5) renumbers `data/<k>/`.
-- [ ] Integration: AC-8 (fault at validate, lock, backup, wipe, import, verify → progress hash and inventory equal the
+- [x] Integration: AC-8 (fault at validate, lock, backup, wipe, import, verify → progress hash and inventory equal the
   pre-import state, backup validates); failed rollback → `needs_recovery`, launch refused naming the backup, "Retry
   recovery" works; Review Focus 2 (crash after wipe → recovered at next start); AC-24/S-16 (progress-lab on `localhost`
   with a `127.0.0.1` iframe restored under changed keys → refused naming both, nothing written; with a confirmed mapping
@@ -448,8 +448,11 @@ each step, `deps.faults?: (step: RestoreStep) => void` (test flavor; also `crash
   without consent); `IMP_REVISION_CONFLICT`; M8 (restore revision of entry A into entry B adds no row, B's base moves);
   AC-16 (delete local saves makes and verifies a backup, then wipes; clear cache leaves data, and open check 4 —
   `clearStorageData` without origin reaches partitioned cache keys — is asserted here); verify sets "Export verified".
-- [ ] Run failing, implement, run passing.
-- [ ] Commit `feat(desktop): restore snapshots with backup and rollback`.
+- [x] Run failing, implement, run passing.
+- [x] Commit `feat(desktop): restore snapshots with backup and rollback`. (Preceded by
+  `refactor(exporters): move the import write pass into its own module` and the building blocks; the shared window
+  steps live in `snapshots/restore-steps.ts`, the worker's restore source in `worker/source.ts`. The moved-iframe case
+  uses another port: an iframe at an IPv6 literal host cannot be read by the quiescent window, see the task report.)
 
 ### Task 15: Snapshot UI and the vertical scenario (M)
 **Files:** `src/renderer/snapshots/*.tsx`, `src/renderer/library/GameMenu.tsx` (three delete actions, export, import,
@@ -515,7 +518,7 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 | 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window. **Settled in Task 8: it works** (worker and renderer gone about 110 ms after the close; architecture.md section 4) |
 | 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference. **Settled in Task 12: it reverts** in bundled Chromium 156 (two exports equal, the game's next key unchanged; save-transfer.md section 4); **and in Electron 45 (Task 13):** two exports in a row have the same `contentHash` and the game's next step gets key 8 (`apps/desktop/e2e/export.spec.ts`) |
 | 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION`. **Settled in Task 13: it does** (without any bypass the iframe's partitioned worker started and the canary stopped the job; with the page-level bypass alone, and with the full bypass, the job was clean; `apps/desktop/e2e/quiescent.spec.ts`, save-transfer.md section 5) |
-| 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types |
+| 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types. **Settled in Task 14: it does** (a `127.0.0.1` iframe's partitioned Cache Storage and worker registration under `localhost` were gone after "Clear cache", its data kept; `apps/desktop/e2e/delete.spec.ts`, architecture.md section 12) |
 | 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides) |
 | 6 | React 19 runs under `trusted-types 'none'` (Task 5): settled 2026-10-28, it does (security.md section 6) | Allow one named policy, keep `require-trusted-types-for 'script'` |
 | 7 | `node:sqlite` runs without a warning in Electron 45 main (Task 6) | better-sqlite3 13.0.3 per ADR-0004 revisit trigger |

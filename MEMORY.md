@@ -157,6 +157,18 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   are one transaction; a failed write removes both the partial and the final file; more than 32 keys is
   `SNAP_MANIFEST_INVALID`. The canary pins its allowlist to the calibration (architecture.md section 4 "Lock
   details", section 11; save-transfer.md section 5).
+- 2026-10-29 Phase 1 Task 14 (restore, rollback, recovery, delete, clear cache, verify; Assumed unless noted): the
+  settled details are in save-transfer.md section 2 and section 6 ("Implementation (Phase 1 Task 14)") and
+  architecture.md sections 4, 6, 11 and 12. In short: one lease and one job slot from R3 to R8 (`holdQuiescentJob`);
+  the backup covers the whole wipe set (the mapped keys plus every known key); a mapped partitioned key's site follows
+  the mapped top-level origin, only a self-mapping keeps an unmatched frame key; an unknown adapter is refused;
+  `IMP_WIPE_FAILED` is never retried, the job rolls back; a failed rollback leaves the journal `rolling-back` and the
+  game `needs_recovery` until `snapshot:recover` (a new channel) or the next start verifies a rollback; start-up
+  recovery runs before IPC and launches; delete local saves locks before it asks; open check 4 holds (Verified,
+  2026-10-29, `e2e/delete.spec.ts`).
+- 2026-10-29 Owner: the full test suite, desktop e2e included, runs in CI on the draft pull request for every push;
+  locally an agent runs unit tests and lint in full and only the e2e specs a change touches; one full local
+  `pnpm check` and `pnpm test:e2e` before the final pull request (plan Task 18).
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -567,6 +579,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   runs, 7 retried) and `window.spec.ts` passed 5 runs in a row. [V, 2026-10-28, Electron 45.0.0, macOS arm64,
   instrumented copies of the AC-18 test and a throwaway probe app run through `_electron.launch`; the cause inside
   AppKit is [A]]
+- An iframe at an IPv6 literal host (`http://[::1]:<port>`) cannot be read by the quiescent window: the job ends
+  with `EXP_TIMEOUT` "A frame of the job window is missing". [V, 2026-10-29, a first draft of
+  `apps/desktop/e2e/keys.spec.ts`, Electron 45.0.0, macOS arm64] [A] the cause: the stub's CSP `frame-src` lists the
+  iframe origin, and the CSP host-source grammar has no IPv6 literals, so Chromium blocks the frame.
+- A restore e2e test that kills the app (`crash-after:<step>`, SIGKILL) and starts it again needs the same
+  progress-lab port, because the game's URL and storage keys carry it: `launchApp({userData, progressLab})` reuses a
+  server the test started and stops. [V, 2026-10-29, `apps/desktop/e2e/restore.spec.ts`]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]

@@ -37,57 +37,50 @@ export async function deleteLocalSaves(
   const orphan = game ? null : repos.orphans.get(gameId);
   const entry = game ?? orphan;
   if (!entry) return fail("NOT_FOUND", "The game is not in the library.");
-  const confirmed = await deps.confirm({
-    title: "Delete local saves?",
-    message: `Delete what "${entry.title}" saved on this computer?`,
-    detail:
-      "Deleted: the game's localStorage and IndexedDB data on this computer. A backup is made first and kept " +
-      "(backups are never deleted automatically). Kept: snapshots, backups, cookies, the cache, and files the game " +
-      "keeps in other file systems (OPFS), which cannot be backed up yet.",
-    confirmLabel: "Delete local saves",
-  });
-  if (!confirmed) return fail("CANCELLED", "Nothing was deleted.");
-
-  const journal = beginJournal(repos.restoreJournal, {
-    id: deps.newId(),
-    gameId,
-    kind: "delete-saves",
-    step: "lock",
-  });
-  const context = {
-    journal,
-    ...(deps.faults ? { faults: deps.faults } : {}),
-    ...(options.onStep ? { onStep: options.onStep } : {}),
-  };
+  // R3 first: an open window refuses before any question, and the game cannot launch while the user decides.
+  const held = await holdQuiescentJob(gameId, "task", deps.job);
+  if (!held.ok) return held;
+  const hold: QuiescentHold = held.data;
+  let journal: ReturnType<typeof beginJournal> | null = null;
   const workers = workerSlot(deps.startWorker, {});
-  let hold: QuiescentHold | null = null;
-  const stopBeforeWipe = (failure: { ok: false; code: ErrorCode; message: string }) => {
-    journal.finish("failed");
-    log.warn("snapshot.delete-saves.failed", {
-      gameId,
-      code: failure.code,
-      step: journal.entry().step,
-    });
-    return failure;
-  };
   try {
-    // R3: the wipe set under the lock.
-    const locked = await runStep("lock", context, async () => {
-      const held = await holdQuiescentJob(gameId, "task", deps.job);
-      if (!held.ok) return held;
-      hold = held.data;
-      options.onLocked?.();
-      return { ok: true, data: held.data };
+    const confirmed = await deps.confirm({
+      title: "Delete local saves?",
+      message: `Delete what "${entry.title}" saved on this computer?`,
+      detail:
+        "Deleted: the game's localStorage and IndexedDB data on this computer. A backup is made first and kept " +
+        "(backups are never deleted automatically). Kept: snapshots, backups, cookies, the cache, and files the game " +
+        "keeps in other file systems (OPFS), which cannot be backed up yet.",
+      confirmLabel: "Delete local saves",
     });
+    if (!confirmed) return fail("CANCELLED", "Nothing was deleted.");
+    const opened = beginJournal(repos.restoreJournal, {
+      id: deps.newId(),
+      gameId,
+      kind: "delete-saves",
+      step: "lock",
+    });
+    journal = opened;
+    options.onLocked?.();
+    const context = {
+      journal: opened,
+      ...(deps.faults ? { faults: deps.faults } : {}),
+      ...(options.onStep ? { onStep: options.onStep } : {}),
+    };
+    const stopBeforeWipe = (failure: { ok: false; code: ErrorCode; message: string }) => {
+      opened.finish("failed");
+      log.warn("snapshot.delete-saves.failed", { gameId, code: failure.code, step: "backup" });
+      return failure;
+    };
+    const locked = await runStep("lock", context, async () => ({ ok: true, data: hold }));
     if (!locked.ok) return stopBeforeWipe(locked);
-    const held = locked.data;
     const keys = knownKeys(entry.url, repos.storageTargets.listForGame(gameId));
 
     // R4.
     const backupRevisionId = deps.newId();
-    journal.backup(backupRevisionId);
+    opened.backup(backupRevisionId);
     const backedUp = await runStep("backup", context, () =>
-      writeBackup(held, keys, backupRevisionId, deps),
+      writeBackup(hold, keys, backupRevisionId, deps),
     );
     if (!backedUp.ok) return stopBeforeWipe(backedUp);
     const backup = backedUp.data;
@@ -95,16 +88,16 @@ export async function deleteLocalSaves(
     // R5 and R8.
     const changed = await (async (): Promise<Result<void, ErrorCode>> => {
       const wiped = await runStep("wipe", context, async () => {
-        const worker = await workers.get(held.signal);
-        if (worker === null) return failureOf(held.signal);
-        return wipeKeys(held, keys, "all", worker);
+        const worker = await workers.get(hold.signal);
+        if (worker === null) return failureOf(hold.signal);
+        return wipeKeys(hold, keys, "all", worker);
       });
       if (!wiped.ok) return wiped;
       return runStep("commit", context, async () => {
         deps.transaction(() => {
           if (game) repos.games.update(gameId, { baseRevisionId: null });
           else repos.orphans.delete(gameId);
-          journal.finish("done");
+          opened.finish("done");
         });
         return { ok: true, data: undefined };
       });
@@ -116,11 +109,11 @@ export async function deleteLocalSaves(
     log.warn("snapshot.delete-saves.failed", {
       gameId,
       code: changed.code,
-      step: journal.entry().step,
+      step: opened.entry().step,
     });
-    const rolled = await rollBack(held, journal, backup, deps, options.onStep);
+    const rolled = await rollBack(hold, opened, backup, deps, options.onStep);
     if (rolled.ok) {
-      journal.finish("failed");
+      opened.finish("failed");
       return {
         ok: false,
         code: changed.code,
@@ -130,7 +123,7 @@ export async function deleteLocalSaves(
     return markNeedsRecovery(gameId, backup, rolled, deps);
   } finally {
     await workers.dispose();
-    (hold as QuiescentHold | null)?.release();
-    if (hold !== null) deps.afterChange?.(gameId);
+    hold.release();
+    if (journal !== null) deps.afterChange?.(gameId);
   }
 }
