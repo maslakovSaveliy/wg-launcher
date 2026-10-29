@@ -4,7 +4,7 @@
 // entry chunks out of order) closes the port, which the worker treats as a failed command. Entries go out and come in
 // as chunks of at most MAX_ENTRY_CHUNK_BYTES, as cloned ArrayBuffers (protocol.ts). Nothing here evaluates code it
 // receives (QW-5).
-import { FrameCommand, MAX_ENTRY_CHUNK_BYTES } from "./protocol.js";
+import { FrameCommand, HEARTBEAT_MS, MAX_ENTRY_CHUNK_BYTES } from "./protocol.js";
 import type { FrameScope } from "./scope.js";
 import type { EntrySink, FrameError, FrameExporter, FrameResult, FrameTarget } from "./types.js";
 
@@ -56,8 +56,16 @@ function chunkingSink(port: FramePort, nonce: string): EntrySink {
   };
 }
 
-/** Serves one frame's exporter on `port` until the port is closed. */
-export function serveFrame(port: FramePort, exporter: FrameExporter): void {
+/**
+ * Serves one frame's exporter on `port` until the port is closed. While a command runs it sends a `working` heartbeat
+ * every `heartbeatMs`, so a long import (decoded and written before it answers) is not taken for a silent frame.
+ */
+export function serveFrame(
+  port: FramePort,
+  exporter: FrameExporter,
+  options: { heartbeatMs?: number } = {},
+): void {
+  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS;
   let busy = false;
   let importing: Importing | null = null;
   let closed = false;
@@ -76,6 +84,9 @@ export function serveFrame(port: FramePort, exporter: FrameExporter): void {
     reply: (data: T) => Reply,
   ) => {
     busy = true;
+    const heartbeat = setInterval(() => {
+      if (!closed) port.postMessage({ type: "working", nonce });
+    }, heartbeatMs);
     void work()
       .then((result) => {
         if (closed) return;
@@ -90,6 +101,7 @@ export function serveFrame(port: FramePort, exporter: FrameExporter): void {
         }
       })
       .finally(() => {
+        clearInterval(heartbeat);
         busy = false;
       });
   };

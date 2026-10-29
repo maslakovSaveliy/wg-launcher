@@ -31,6 +31,9 @@ const storageKey = z.strictObject({
     .refine((s) => isHttpOrigin(s, false), "not an http(s) site")
     .nullable(),
 });
+/** How often a frame says it is still working on a command (Assumed: far below the worker's 30 s silence bound). */
+export const HEARTBEAT_MS = 5000;
+
 /** The most entry bytes one message carries (Assumed: small next to `maxEntryBytes`, 512 MiB, and cheap to clone). */
 export const MAX_ENTRY_CHUNK_BYTES = 1024 * 1024;
 
@@ -92,6 +95,8 @@ const detail = z.strictObject({
 });
 
 export const FrameReply = z.discriminatedUnion("type", [
+  // While a command runs, every HEARTBEAT_MS: the frame is working (an import decodes and writes before it answers).
+  z.strictObject({ type: z.literal("working"), nonce }),
   // An export answers with its `entry` messages, then one `summary` or `error`.
   entry,
   z.strictObject({ type: z.literal("inventory"), nonce, inventory }),

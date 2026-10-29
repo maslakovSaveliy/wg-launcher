@@ -5,6 +5,12 @@ export { ADAPTERS } from "./adapters/index.js";
 export { type Adapter, adapterScope } from "./adapters/schema.js";
 export { decideFlushState, type FlushObservation } from "./flush.js";
 export { type FramePort, serveFrame } from "./frame-server.js";
-export { FrameCommand, FrameReply, isRequestNonce, MAX_ENTRY_CHUNK_BYTES } from "./protocol.js";
+export {
+  FrameCommand,
+  FrameReply,
+  HEARTBEAT_MS,
+  isRequestNonce,
+  MAX_ENTRY_CHUNK_BYTES,
+} from "./protocol.js";
 export { ALL, type FrameScope, type Selection, selectsDatabase, selectsKey } from "./scope.js";
 export * from "./types.js";

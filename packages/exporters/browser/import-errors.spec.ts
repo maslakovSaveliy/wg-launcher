@@ -476,3 +476,72 @@ test("wipe-selected fails with IMP_WIPE_FAILED when another connection blocks a 
     error: { code: "IMP_WIPE_FAILED", detail: { database: "progress-lab" } },
   });
 });
+
+test("after a blocked wipe-selected, the rollback's CDP clear settles the queued delete before anything is written again", async ({
+  page,
+  lab,
+  openStub,
+}) => {
+  await play(page, lab, 1);
+  const world = await openStub(page);
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const open = indexedDB.open("progress-lab");
+        open.onsuccess = () => {
+          const db = open.result;
+          const g = globalThis as Record<string, unknown>;
+          g.held = db;
+          g.closedByBrowser = false;
+          db.onclose = () => {
+            g.closedByBrowser = true;
+          };
+          resolve(null);
+        };
+      }),
+  );
+  expect(await world.call("wipeSelected", PROGRESS_LAB)).toMatchObject({
+    ok: false,
+    error: { code: "IMP_WIPE_FAILED" },
+  });
+  // The rollback's wipe: the whole key through CDP, as R5 does.
+  const { frameTree } = await world.cdp.send("Page.getFrameTree");
+  const { storageKey } = await world.cdp.send("Storage.getStorageKey", {
+    frameId: frameTree.frame.id,
+  });
+  await world.cdp.send("Storage.clearDataForStorageKey", {
+    storageKey,
+    storageTypes: "local_storage,indexeddb",
+  });
+  const closedByBrowser = await page.evaluate(
+    () => (globalThis as Record<string, unknown>).closedByBrowser,
+  );
+  // The rollback's import: the database again, with a record.
+  await world.evaluate(`new Promise((resolve, reject) => {
+    const open = indexedDB.open("progress-lab", 1);
+    open.onupgradeneeded = () => open.result.createObjectStore("s");
+    open.onsuccess = () => {
+      const tx = open.result.transaction("s", "readwrite");
+      tx.objectStore("s").put("restored", 1);
+      tx.oncomplete = () => { open.result.close(); resolve(null); };
+      tx.onerror = () => reject(tx.error);
+    };
+    open.onerror = () => reject(open.error);
+  })`);
+  // The blocker goes away now, if the clear had not closed it already.
+  await page.evaluate(() => ((globalThis as Record<string, unknown>).held as IDBDatabase).close());
+  await page.waitForTimeout(500);
+  const survived = await world.evaluate<string | null>(`new Promise((resolve) => {
+    const open = indexedDB.open("progress-lab");
+    open.onupgradeneeded = () => { open.transaction.abort(); resolve(null); };
+    open.onsuccess = () => {
+      const db = open.result;
+      if (!db.objectStoreNames.contains("s")) { db.close(); resolve(null); return; }
+      const get = db.transaction("s").objectStore("s").get(1);
+      get.onsuccess = () => { db.close(); resolve(get.result ?? null); };
+    };
+    open.onerror = () => resolve(null);
+  })`);
+  console.log(JSON.stringify({ closedByBrowser, survived }));
+  expect({ closedByBrowser, survived }).toEqual({ closedByBrowser: true, survived: "restored" });
+});

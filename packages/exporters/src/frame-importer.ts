@@ -90,8 +90,14 @@ async function blobSource(env: FrameEnv, received: Map<string, Uint8Array>): Pro
   return (sha256) => blobs.get(sha256) ?? invalid("a referenced blob is missing");
 }
 
-/** Checks the structure and the selection, decodes every file and builds every value once; writes nothing. */
-function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
+/** Lets queued work run (the frame's heartbeat) between two long synchronous decodes. */
+const nextTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * Checks the structure and the selection, decodes every file and builds every value once; writes nothing. It yields
+ * a turn after each store file, so the frame keeps sending its heartbeat while it decodes.
+ */
+async function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
   const k = plan.keyIndex;
   const lsEntry = { entry: localStoragePath(k) };
   const items =
@@ -122,7 +128,8 @@ function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
     if ([...files.stores.keys()].some((s) => s >= schema.stores.length)) {
       invalid("a store file without a store in the schema", where);
     }
-    const stores = schema.stores.map((store, s) => {
+    const stores: Uint8Array[] = [];
+    for (const [s, store] of schema.stores.entries()) {
       const storeWhere = { database: schema.name, store: store.name, entry: storePath(k, d, s) };
       const bytes = files.stores.get(s) ?? invalid("a store file is missing", storeWhere);
       const records = at(storeWhere, () => decodeStoreRecords(bytes, refs));
@@ -132,8 +139,9 @@ function check(received: Received, plan: FrameImportPlan, blobs: Blobs) {
       for (const record of records) {
         buildValue(record, blobs, storeWhere);
       }
-      return bytes;
-    });
+      stores.push(bytes);
+      await nextTurn();
+    }
     databases.push({ d, schema, stores });
   }
   // Every blob entry must be referenced (snapshot-format.md section 7.4).
@@ -156,7 +164,7 @@ export async function importFrame(
     }
     const received = await receive(source, plan.keyIndex);
     const blobs = await blobSource(env, received.blobs);
-    const { items, databases } = check(received, plan, blobs);
+    const { items, databases } = await check(received, plan, blobs);
     writeLocalStorage(env, items);
     const summaries: DatabaseSummary[] = [];
     for (const planned of databases) {

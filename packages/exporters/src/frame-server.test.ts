@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 /** A served frame and the worker's end of its channel, recording every reply and whether the frame closed it. */
-function setUp(exporter: Partial<FrameExporter>) {
+function setUp(exporter: Partial<FrameExporter>, options: { heartbeatMs?: number } = {}) {
   const { port1, port2 } = new MessageChannel();
   open.push(port1, port2);
   const replies: Record<string, unknown>[] = [];
@@ -33,6 +33,7 @@ function setUp(exporter: Partial<FrameExporter>) {
   serveFrame(
     port2 as unknown as FramePort,
     { info: GENERIC_EXPORTER, ...exporter } as FrameExporter,
+    options,
   );
   const until = async (done: () => boolean) => {
     const deadline = Date.now() + 2000;
@@ -53,6 +54,25 @@ function setUp(exporter: Partial<FrameExporter>) {
 }
 
 describe("serveFrame (save-transfer.md section 5, step 10)", () => {
+  it("sends a heartbeat with the command's nonce while a command runs, and none after its answer", async () => {
+    const frame = setUp(
+      {
+        wipeSelected: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          return { ok: true, data: { localStorageItems: 0, databases: [] } };
+        },
+      },
+      { heartbeatMs: 20 },
+    );
+    frame.send({ type: "wipe-selected", nonce, scope: ALL });
+    await frame.until(() => frame.replies.some((r) => r.type === "wiped"));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const types = frame.replies.map((r) => r.type);
+    expect(types.filter((t) => t === "working").length).toBeGreaterThanOrEqual(2);
+    expect(types.at(-1)).toBe("wiped");
+    expect(frame.replies.every((r) => r.nonce === nonce)).toBe(true);
+  });
+
   it("answers an inventory with its nonce", async () => {
     const inventory = { localStorageItems: 2, databases: [], usageDetails: { indexedDB: 10 } };
     const frame = setUp({ inventory: async () => ({ ok: true, data: inventory }) });

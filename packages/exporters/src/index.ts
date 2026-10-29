@@ -12,6 +12,12 @@ export type { FrameEnv } from "./env.js";
 export { decideFlushState, type FlushObservation, type HookRun, PROMPT_CLOSE_MS } from "./flush.js";
 export { createFrameExporter } from "./frame-exporter.js";
 export { type FramePort, serveFrame } from "./frame-server.js";
-export { FrameCommand, FrameReply, isRequestNonce, MAX_ENTRY_CHUNK_BYTES } from "./protocol.js";
+export {
+  FrameCommand,
+  FrameReply,
+  HEARTBEAT_MS,
+  isRequestNonce,
+  MAX_ENTRY_CHUNK_BYTES,
+} from "./protocol.js";
 export { ALL, type FrameScope, type Selection, selectsDatabase, selectsKey } from "./scope.js";
 export * from "./types.js";
