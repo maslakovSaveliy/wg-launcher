@@ -329,6 +329,9 @@ progress-lab cannot serve the case (permissions, popups, downloads).
   (the macOS screen was locked, so it failed with `WrongDocumentError`, which the test then expects); `unresponsive`
   is emitted by the test against a really hung page (Chromium sent none while Playwright was attached); www ↔ apex is
   covered by the unit tests, the e2e redirects use development origins (`127.0.0.1` same-site, `localhost` cross-site).
+  Note (2026-10-29, CI fix 2): Force close now escalates when `forcefullyCrashRenderer` brings no
+  `render-process-gone` (SIGKILL of the renderer's process, then destroy), and the crash e2e kills the renderer by its
+  pid; see architecture.md section 4 "Crash and hang".
 - [x] Run failing, implement, run passing. If `stopAllWorkers` through `webContents.debugger` does not stop the worker
   (open check 1), stop, record the evidence, and ask the owner which fallback to take. (It does.)
 - [x] MEMORY.md and architecture §4: the AC-13 outcome [V].

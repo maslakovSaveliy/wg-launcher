@@ -195,7 +195,8 @@ test("a hung game is offered Force close, and a crash ends the session as crashe
     )
     .toEqual([hanging]);
   // Which step of Force close ended the hung renderer, for the CI log: `forcefullyCrashRenderer` alone (no later
-  // step), the SIGKILL, or the destroy (lifecycle.ts). Recorded, not asserted: each ends the session as crashed.
+  // step), the SIGKILL, or the destroy (lifecycle.ts). Recorded, not asserted: each ends the session as crashed, and
+  // each writes one `game.crashed` (the destroy with the reason `force-close-destroy`).
   const named = async (event: string) =>
     (await eventsNamed(launched as Launched, event))
       .filter((line) => line.gameId === hanging)
@@ -206,6 +207,7 @@ test("a hung game is offered Force close, and a crash ends the session as crashe
     `S-7 force close record (${process.platform}): ${JSON.stringify([
       ...(await named("game.crashed")),
       ...(await named("game.force-close-kill")),
+      ...(await named("game.force-close-kill-skipped")),
       ...(await named("game.force-close-destroy")),
     ])}`,
   );

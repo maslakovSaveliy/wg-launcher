@@ -314,29 +314,37 @@ export class GameRuntime {
   }
 
   /**
-   * Force close: each step runs only while the session is still active after the step before it (the
-   * `render-process-gone` handler ends it as crashed and destroys the window).
+   * Force close: each later step runs only while the session is still launching or running after the step before it
+   * (the `render-process-gone` handler ends it as crashed and destroys the window). A close the user started meanwhile
+   * is left to the close procedure, which is bounded itself: no kill or destroy turns it into a crash.
    */
   #forceClose(gameId: string, entry: Entry, window: GameWindow): void {
     const { log } = this.#deps;
     const stepMs = this.#deps.forceCloseStepMs ?? FORCE_CLOSE_STEP_MS;
     const kill = this.#deps.killProcess ?? ((pid: number) => process.kill(pid, "SIGKILL"));
-    const stillOpen = () => ACTIVE.has(entry.state) && !window.isDestroyed();
+    const escalate = () =>
+      (entry.state === "launching" || entry.state === "running") && !window.isDestroyed();
     let timer: ReturnType<typeof setTimeout> | undefined;
     entry.done.promise.then(() => clearTimeout(timer));
     window.webContents.forcefullyCrashRenderer();
     timer = setTimeout(() => {
-      if (!stillOpen()) return;
-      log.warn("game.force-close-kill", { gameId });
+      if (!escalate()) return;
       try {
         const pid = window.webContents.getOSProcessId();
-        if (pid > 0) kill(pid);
+        if (pid > 0) {
+          log.warn("game.force-close-kill", { gameId });
+          kill(pid);
+        } else {
+          log.warn("game.force-close-kill-skipped", { gameId });
+        }
       } catch (error) {
         log.warn("game.force-close-kill-failed", { gameId, error });
       }
       timer = setTimeout(() => {
-        if (!stillOpen()) return;
+        if (!escalate()) return;
         log.error("game.force-close-destroy", { gameId });
+        // Recorded as every crash is, with the step as its reason (no `render-process-gone` came).
+        log.error("game.crashed", { gameId, reason: "force-close-destroy" });
         this.#finish(gameId, entry, "crashed");
         window.destroy();
       }, stepMs);

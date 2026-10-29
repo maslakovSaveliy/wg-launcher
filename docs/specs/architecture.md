@@ -165,8 +165,11 @@ stateDiagram-v2
 - **Crash and hang.** `render-process-gone` ends the session as `crashed` and the library shows it; `unresponsive`
   offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. Force close does not rely on
   that call alone (`games/lifecycle.ts`, `FORCE_CLOSE_STEP_MS` 3 s, Assumed): if no `render-process-gone` came 3 s
-  after it, the renderer's OS process (`getOSProcessId()`) gets SIGKILL (`game.force-close-kill`), and if still none
-  came 3 s later the session ends as `crashed` and the window is destroyed (`game.force-close-destroy`). On Linux
+  after it, the renderer's OS process (`getOSProcessId()`) gets SIGKILL (`game.force-close-kill`; with no process,
+  `game.force-close-kill-skipped`), and if still none came 3 s later the session ends as `crashed` and the window is
+  destroyed (`game.force-close-destroy`, and `game.crashed` with the reason `force-close-destroy`). A close the user
+  started meanwhile is left to the close procedure, which is bounded itself: neither later step runs while the game
+  is `closing`. On Linux
   Electron 45 implements `forcefullyCrashRenderer` as a request to the renderer to crash on its IO thread instead of
   ending the process (Verified, 2026-10-29, `shell/browser/api/electron_api_web_contents.cc` at tag `v45.0.0`), and on
   an ubuntu-latest CI runner a `forcefullyCrashRenderer` on a game that was not hung brought no `render-process-gone`
@@ -175,8 +178,9 @@ stateDiagram-v2
   the crash path, and force-closes a really hung page; it emits the window's `unresponsive` event itself, because no
   such event came within 90 s of input to the hung page while Playwright was attached (Verified, 2026-10-28, same
   run); that Chromium suppresses it while a debugger is attached is Assumed. It prints which step ended the hung
-  renderer; which one does on Linux is known only from CI, and Force close is not verified on Linux until a CI run
-  passes it.
+  renderer: on the dev Mac `forcefullyCrashRenderer` itself (reason `killed`), on the ubuntu-latest runner the SIGKILL
+  3 s later (Verified, 2026-10-29, CI run 40828152449, where the S-7 test passed on both runners). That is a CI run,
+  which proves the build and the tests, not Linux as a verified platform.
 
 ## 5. Game windows and sessions
 

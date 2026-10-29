@@ -13,6 +13,8 @@ class FakeWindow extends EventEmitter {
   calls: string[] = [];
   /** When true, `forcefullyCrashRenderer` does nothing (no `render-process-gone`), as observed on a Linux runner. */
   crashIgnored = false;
+  /** What `getOSProcessId` answers (0 when the renderer has no process). */
+  pid = 4242;
   webContents = Object.assign(new EventEmitter(), {
     loading: true,
     load: Promise.withResolvers<void>(),
@@ -26,7 +28,7 @@ class FakeWindow extends EventEmitter {
       if (this.crashIgnored) return;
       this.webContents.emit("render-process-gone", {}, { reason: "killed", exitCode: 9 });
     },
-    getOSProcessId: () => 4242,
+    getOSProcessId: () => this.pid,
   });
   show() {
     this.visible = true;
@@ -73,6 +75,8 @@ function setUp(
     recoveryNotice?: (gameId: string) => string;
     killProcess?: (pid: number) => void;
     forceCloseStepMs?: number;
+    /** How long the close procedure takes (1 ms by default). */
+    closeDelayMs?: number;
   } = {},
 ) {
   const windows: FakeWindow[] = [];
@@ -82,7 +86,7 @@ function setUp(
   const confirm = vi.fn(async () => answers.shift() ?? false);
   const closeWindow = vi.fn(async (window: GameWindow) => {
     const outcome = options.closeOutcome ?? "closed";
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await new Promise((resolve) => setTimeout(resolve, options.closeDelayMs ?? 1));
     if (outcome === "closed") window.destroy();
     return outcome;
   });
@@ -330,8 +334,56 @@ describe("GameRuntime: closing, crash and hang", () => {
     await vi.waitFor(() => expect(runtime.state(GAME)).toBe("crashed"));
     expect(killed).toEqual([4242]);
     expect(log.error).toHaveBeenCalledWith("game.force-close-destroy", { gameId: GAME });
+    // The crash is recorded as every other crash is, with the step as its reason.
+    expect(log.error).toHaveBeenCalledWith("game.crashed", {
+      gameId: GAME,
+      reason: "force-close-destroy",
+    });
     expect(window.destroyed).toBe(true);
     expect(locks.holder(GAME)).toBe("none");
+  });
+
+  it("Force close sends no kill when the renderer has no process, and says so", async () => {
+    const killProcess = vi.fn();
+    const { runtime, windows, log } = setUp({ answers: [true], forceCloseStepMs: 5, killProcess });
+    await runtime.launch(GAME);
+    const window = windows[0];
+    if (!window) throw new Error("no window");
+    window.crashIgnored = true;
+    window.pid = 0;
+    window.emit("ready-to-show");
+    window.emit("unresponsive");
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("crashed"));
+    expect(killProcess).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith("game.force-close-kill-skipped", { gameId: GAME });
+    expect(log.warn).not.toHaveBeenCalledWith("game.force-close-kill", expect.anything());
+    expect(log.error).toHaveBeenCalledWith("game.force-close-destroy", { gameId: GAME });
+  });
+
+  it("Force close does not escalate into a close the user started: the close procedure ends it", async () => {
+    const killProcess = vi.fn();
+    const { runtime, windows, log } = setUp({
+      answers: [true],
+      forceCloseStepMs: 20,
+      killProcess,
+      closeDelayMs: 100,
+    });
+    await runtime.launch(GAME);
+    const window = windows[0];
+    if (!window) throw new Error("no window");
+    window.crashIgnored = true;
+    window.emit("ready-to-show");
+    window.emit("unresponsive");
+    // The close starts before the first step is due.
+    await vi.waitFor(() => expect(window.calls).toContain("crash"), { interval: 1 });
+    window.close();
+    expect(runtime.state(GAME)).toBe("closing");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(killProcess).not.toHaveBeenCalled();
+    expect(runtime.state(GAME)).toBe("closing");
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("exited"));
+    expect(killProcess).not.toHaveBeenCalled();
+    expect(log.error).not.toHaveBeenCalledWith("game.force-close-destroy", expect.anything());
   });
 
   it("Force close kills nothing when the crash came", async () => {
