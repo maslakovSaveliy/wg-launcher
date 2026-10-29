@@ -66,8 +66,14 @@ function framesOf(tree: unknown, out: Array<{ id: string; url: string }> = []) {
 export interface TargetWatch {
   /** Watches the page itself (step 6), with the bypass when `withBypass`. */
   watchPage(withBypass: boolean): Promise<void>;
-  /** Step 8 for the frames of one navigation. */
-  resolveKeys(slots: readonly FrameSlot[]): Promise<Result<void, ErrorCode>>;
+  /**
+   * Step 8 for the frames of one navigation. `found`, when given, receives each slot URL's Chromium storage key (used
+   * at run time only, for R5's `Storage.clearDataForStorageKey`; never stored or logged).
+   */
+  resolveKeys(
+    slots: readonly FrameSlot[],
+    found?: Map<string, string>,
+  ): Promise<Result<void, ErrorCode>>;
   /** The child targets attached now (their session ids). */
   children(): string[];
   /** Removes the listeners and detaches the debugger. */
@@ -130,7 +136,7 @@ export function watchTargets(options: {
   return {
     watchPage: (withBypass) => watch(undefined, withBypass),
     children: () => [...children],
-    async resolveKeys(slots) {
+    async resolveKeys(slots, found) {
       const where = new Map<string, { frameId: string; sessionId?: string }>();
       const tree = (await send("Page.getFrameTree")) as { frameTree?: unknown };
       for (const frame of framesOf(tree.frameTree)) where.set(frame.url, { frameId: frame.id });
@@ -170,6 +176,7 @@ export function watchTargets(options: {
             "A frame's storage key differs from the expected one.",
           );
         }
+        found?.set(slot.url, storageKey as string);
       }
       return OK;
     },

@@ -8,6 +8,7 @@ import {
   type FrameInventory,
   FrameReply,
   type FrameSummary,
+  MAX_ENTRY_CHUNK_BYTES,
 } from "@wg-launcher/exporters/wire";
 import { ERROR_CODES, type ErrorCode } from "@wg-launcher/shared";
 import type { EntryChunk } from "./collector.js";
@@ -47,6 +48,8 @@ function run<T>(
   command: Record<string, unknown>,
   onReply: (reply: Reply) => { done: T } | undefined,
   options: CommandOptions,
+  /** Sends the messages that follow the command (an import's entry chunks and its `end`), with its nonce. */
+  follow?: (post: (message: Record<string, unknown>) => void) => Promise<void>,
 ): Promise<T> {
   const nonce = randomBytes(16).toString("hex");
   const silenceMs = options.silenceMs ?? SILENCE_MS;
@@ -97,6 +100,21 @@ function run<T>(
     });
     arm();
     port.postMessage({ ...command, nonce });
+    if (follow === undefined) return;
+    // Each message sent counts as activity: a long file is not silence.
+    follow((message) => {
+      if (settled) return;
+      arm();
+      port.postMessage({ ...message, nonce });
+    }).catch((error: unknown) => {
+      // A failed second pass (a SnapError with its code, such as a file changed since validation).
+      const code = (error as { code?: unknown } | null)?.code;
+      const known = (ERROR_CODES as readonly unknown[]).includes(code);
+      abort(
+        known ? (code as ErrorCode) : "INTERNAL",
+        known && error instanceof Error ? error.message : "the entries could not be read",
+      );
+    });
   });
 }
 
@@ -135,6 +153,76 @@ export function frameExport(
       }
       return reply.type === "summary" ? { done: reply.summary } : fromError(reply);
     },
+    options,
+  );
+}
+
+export interface FrameImportCounts {
+  localStorageItems: number;
+  databases: number;
+  records: number;
+  blobs: number;
+}
+
+/**
+ * R6 for one frame: the import command, then every entry of `entries` as chunks of at most MAX_ENTRY_CHUNK_BYTES
+ * (cloned, never transferred), then `end`; resolves with the frame's summary.
+ */
+export function frameImport(
+  port: WorkerPort,
+  request: FrameExportRequest,
+  entries: AsyncIterable<{ path: string; bytes: Uint8Array }>,
+  options: CommandOptions = {},
+): Promise<FrameImportCounts> {
+  const { keyIndex, storageKey, scope } = request;
+  return run(
+    port,
+    { type: "import", keyIndex, storageKey, scope },
+    (reply) =>
+      reply.type === "summary"
+        ? {
+            done: {
+              localStorageItems: reply.summary.localStorageItems,
+              databases: reply.summary.databases.length,
+              records: reply.summary.databases.reduce((n, db) => n + db.records, 0),
+              blobs: reply.summary.blobs,
+            },
+          }
+        : fromError(reply),
+    options,
+    async (post) => {
+      for await (const { path, bytes } of entries) {
+        const size = bytes.byteLength;
+        let offset = 0;
+        do {
+          const end = Math.min(offset + MAX_ENTRY_CHUNK_BYTES, size);
+          post({ type: "entry", path, offset, size, bytes: bytes.slice(offset, end).buffer });
+          offset = end;
+        } while (offset < size);
+      }
+      post({ type: "end" });
+    },
+  );
+}
+
+/** R5 of a selective restore: the frame removes the selected localStorage keys and databases. */
+export function frameWipeSelected(
+  port: WorkerPort,
+  scope: FrameExportRequest["scope"],
+  options: CommandOptions = {},
+): Promise<{ localStorageItems: number; databases: number }> {
+  return run(
+    port,
+    { type: "wipe-selected", scope },
+    (reply) =>
+      reply.type === "wiped"
+        ? {
+            done: {
+              localStorageItems: reply.wiped.localStorageItems,
+              databases: reply.wiped.databases.length,
+            },
+          }
+        : fromError(reply),
     options,
   );
 }

@@ -15,6 +15,10 @@ export interface UtilityProcessLike {
 }
 
 export type ExportCounts = Extract<WorkerEvent, { type: "exported" }>["summary"];
+export type ImportCounts = Extract<WorkerEvent, { type: "imported" }>["summary"];
+export type Validated = Omit<Extract<WorkerEvent, { type: "validated" }>, "type" | "requestId">;
+export type PlannedKeys = Extract<WorkerCommand, { type: "expected" }>["keys"];
+export type ManifestKeys = Extract<WorkerCommand, { type: "digest" }>["storageKeys"];
 export type Written = Omit<Extract<WorkerEvent, { type: "written" }>, "type" | "requestId">;
 export type Limits = Extract<WorkerCommand, { type: "begin" }>["limits"];
 
@@ -31,6 +35,21 @@ export interface SnapshotWorker {
   inventory(port: unknown): Promise<Result<FrameInventory, ErrorCode>>;
   exportFrame(port: unknown, request: FrameExportRequest): Promise<Result<ExportCounts, ErrorCode>>;
   write(options: WriteOptions): Promise<Result<Written, ErrorCode>>;
+  /** R1: validates the file at `path` fully and keeps it for `importFrame` and `expected`. */
+  validate(path: string): Promise<Result<Validated, ErrorCode>>;
+  /** R2: the hash a re-export of the planned keys must have. */
+  expected(keys: PlannedKeys): Promise<Result<string, ErrorCode>>;
+  /** R6: the frame imports the validated file's key `from` as its key `request.keyIndex`. */
+  importFrame(
+    port: unknown,
+    request: FrameExportRequest & { from: number },
+  ): Promise<Result<ImportCounts, ErrorCode>>;
+  wipeSelected(
+    port: unknown,
+    scope: FrameExportRequest["scope"],
+  ): Promise<Result<{ localStorageItems: number; databases: number }, ErrorCode>>;
+  /** R7: the `contentHash` of what this job's exports received, under `storageKeys`. */
+  digest(storageKeys: ManifestKeys): Promise<Result<string, ErrorCode>>;
   /** Entry bytes received so far, as the worker measured them. */
   onReceived(listener: (bytes: number) => void): void;
   /**
@@ -148,6 +167,29 @@ export async function startSnapshotWorker(deps: {
       if (event.type !== "written") return failed(event);
       const { type: _type, requestId: _id, ...written } = event;
       return { ok: true, data: written };
+    },
+    async validate(path) {
+      const event = await request({ type: "validate", path });
+      if (event.type !== "validated") return failed(event);
+      const { type: _type, requestId: _id, ...validated } = event;
+      return { ok: true, data: validated };
+    },
+    async expected(keys) {
+      const event = await request({ type: "expected", keys });
+      return event.type === "expected" ? { ok: true, data: event.contentHash } : failed(event);
+    },
+    async importFrame(port, { from, keyIndex, storageKey, scope }) {
+      const op = { op: "import", from, keyIndex, storageKey, scope };
+      const event = await request({ type: "frame", op }, [port]);
+      return event.type === "imported" ? { ok: true, data: event.summary } : failed(event);
+    },
+    async wipeSelected(port, scope) {
+      const event = await request({ type: "frame", op: { op: "wipe-selected", scope } }, [port]);
+      return event.type === "wiped" ? { ok: true, data: event.wiped } : failed(event);
+    },
+    async digest(storageKeys) {
+      const event = await request({ type: "digest", storageKeys });
+      return event.type === "digested" ? { ok: true, data: event.contentHash } : failed(event);
     },
     onReceived(listener) {
       received.push(listener);

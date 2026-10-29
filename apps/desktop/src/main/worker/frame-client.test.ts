@@ -7,7 +7,14 @@ import {
   serveFrame,
 } from "@wg-launcher/exporters/wire";
 import { afterEach, describe, expect, it } from "vitest";
-import { FrameCommandError, frameExport, frameInventory, type WorkerPort } from "./frame-client.js";
+import {
+  FrameCommandError,
+  frameExport,
+  frameImport,
+  frameInventory,
+  frameWipeSelected,
+  type WorkerPort,
+} from "./frame-client.js";
 
 const storageKey = { origin: "http://localhost:4317", topLevelSite: null };
 const ALL = { localStorage: "all", indexedDB: "all" } as const;
@@ -155,5 +162,72 @@ describe("frame commands from the worker (save-transfer.md section 5, step 10)",
   it("gives up with EXP_TIMEOUT when the frame stays silent", async () => {
     const port = channel(() => {});
     expect((await failureOf(frameInventory(port, { silenceMs: 50 }))).code).toBe("EXP_TIMEOUT");
+  });
+
+  it("streams an import (chunks of an entry back to back, then end) and resolves with the summary's counts", async () => {
+    const big = new Uint8Array(MAX_ENTRY_CHUNK_BYTES + 7).fill(9);
+    let received: Array<{ path: string; bytes: Uint8Array }> = [];
+    const port = channel({
+      importFrame: async (source) => {
+        received = [];
+        for await (const entry of source) received.push(entry);
+        return {
+          ok: true,
+          data: {
+            localStorageItems: 2,
+            databases: [{ name: "d", version: 1, stores: 1, records: 5 }],
+            blobs: 1,
+            notExported: [],
+          },
+        };
+      },
+    });
+    async function* entries() {
+      yield { path: "blobs/b", bytes: new Uint8Array(0) };
+      yield { path: "data/0/local-storage.cbor", bytes: big };
+    }
+    const counts = await frameImport(port, { keyIndex: 0, storageKey, scope: ALL }, entries());
+    expect(counts).toEqual({ localStorageItems: 2, databases: 1, records: 5, blobs: 1 });
+    expect(received.map((e) => [e.path, e.bytes.length])).toEqual([
+      ["blobs/b", 0],
+      ["data/0/local-storage.cbor", big.length],
+    ]);
+    expect(received[1]?.bytes.every((b) => b === 9)).toBe(true);
+  });
+
+  it("fails an import with the code of a failed second pass and closes the port", async () => {
+    let closed = false;
+    const port = channel((frame) => {
+      frame.on("close", () => {
+        closed = true;
+      });
+      frame.on("message", () => {});
+    });
+    async function* entries(): AsyncGenerator<{ path: string; bytes: Uint8Array }> {
+      yield { path: "data/0/local-storage.cbor", bytes: new Uint8Array(1) };
+      throw Object.assign(new Error("the file changed since it was validated"), {
+        code: "SNAP_CONTENT_HASH_MISMATCH",
+      });
+    }
+    const failure = await failureOf(
+      frameImport(port, { keyIndex: 0, storageKey, scope: ALL }, entries()),
+    );
+    expect(failure.code).toBe("SNAP_CONTENT_HASH_MISMATCH");
+    await expect.poll(() => closed).toBe(true);
+  });
+
+  it("runs wipe-selected and passes IMP_WIPE_FAILED on", async () => {
+    const scope = { localStorage: { include: ["p:"], exclude: [] }, indexedDB: ALL.indexedDB };
+    const port = channel({
+      wipeSelected: async () => ({ ok: true, data: { localStorageItems: 2, databases: ["a"] } }),
+    });
+    expect(await frameWipeSelected(port, scope)).toEqual({ localStorageItems: 2, databases: 1 });
+    const blocked = channel({
+      wipeSelected: async () => ({
+        ok: false,
+        error: { code: "IMP_WIPE_FAILED", message: "another connection blocks the delete" },
+      }),
+    });
+    expect((await failureOf(frameWipeSelected(blocked, scope))).code).toBe("IMP_WIPE_FAILED");
   });
 });

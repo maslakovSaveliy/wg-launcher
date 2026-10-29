@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MessageChannel, type MessagePort } from "node:worker_threads";
@@ -165,6 +165,104 @@ describe("the snapshot worker's commands", () => {
       requestId: 3,
       code: "INTERNAL",
       message: "No such job.",
+    });
+  });
+
+  it("validates a written file, gives its expected hash, imports it into a frame and digests a re-export (R1, R2, R6, R7)", async () => {
+    const { core, events, exportFrame, write } = setUp();
+    await core.handle({ type: "begin", jobId: 1, limits: {} }, []);
+    await exportFrame();
+    await write();
+    const written = events.at(-1) as Extract<WorkerEvent, { type: "written" }>;
+
+    await core.handle({ type: "begin", jobId: 7, limits: {} }, []);
+    const path = join(dir, "snapshots", "x.wgsnap");
+    await core.handle({ type: "validate", jobId: 7, requestId: 10, path }, []);
+    expect(events.at(-1)).toMatchObject({
+      type: "validated",
+      requestId: 10,
+      manifest: { revisionId: MANIFEST.revisionId, contentHash: written.contentHash },
+      entries: 1,
+    });
+    const keys = [{ from: 0, to: 0, ...storageKey, role: "top" as const }];
+    await core.handle({ type: "expected", jobId: 7, requestId: 11, keys }, []);
+    expect(events.at(-1)).toEqual({
+      type: "expected",
+      requestId: 11,
+      contentHash: written.contentHash,
+    });
+
+    let imported: Array<{ path: string; length: number }> = [];
+    exporter.importFrame = async (source) => {
+      imported = [];
+      for await (const entry of source)
+        imported.push({ path: entry.path, length: entry.bytes.length });
+      return { ok: true, data: { localStorageItems: 1, databases: [], blobs: 0, notExported: [] } };
+    };
+    await core.handle(
+      {
+        type: "frame",
+        jobId: 7,
+        requestId: 12,
+        op: { op: "import", from: 0, keyIndex: 0, storageKey, scope: ALL },
+      },
+      [framePort()],
+    );
+    expect(events.at(-1)).toEqual({
+      type: "imported",
+      requestId: 12,
+      summary: { localStorageItems: 1, databases: 0, records: 0, blobs: 0 },
+    });
+    expect(imported).toEqual([{ path: "data/0/local-storage.cbor", length: LOCAL.length }]);
+
+    await core.handle(
+      {
+        type: "frame",
+        jobId: 7,
+        requestId: 13,
+        op: { op: "export", keyIndex: 0, storageKey, scope: ALL },
+      },
+      [framePort()],
+    );
+    await core.handle(
+      { type: "digest", jobId: 7, requestId: 14, storageKeys: MANIFEST.storageKeys },
+      [],
+    );
+    expect(events.at(-1)).toEqual({
+      type: "digested",
+      requestId: 14,
+      contentHash: written.contentHash,
+      entries: 1,
+    });
+  });
+
+  it("fails an import or an expected hash before anything was validated", async () => {
+    const { core, events } = setUp();
+    await core.handle({ type: "begin", jobId: 1, limits: {} }, []);
+    await core.handle(
+      {
+        type: "frame",
+        jobId: 1,
+        requestId: 5,
+        op: { op: "import", from: 0, keyIndex: 0, storageKey, scope: ALL },
+      },
+      [framePort()],
+    );
+    expect(events.at(-1)).toMatchObject({ type: "failed", requestId: 5, code: "INTERNAL" });
+    await core.handle({ type: "expected", jobId: 1, requestId: 6, keys: [] }, []);
+    expect(events.at(-1)).toMatchObject({ type: "failed", requestId: 6, code: "INTERNAL" });
+  });
+
+  it("passes a validation failure on with its SNAP_ code", async () => {
+    const { core, events } = setUp();
+    await core.handle({ type: "begin", jobId: 1, limits: {} }, []);
+    const path = join(dir, "tmp", "garbage.wgsnap");
+    await writeFile(path, "not a snapshot");
+    await core.handle({ type: "validate", jobId: 1, requestId: 9, path }, []);
+    expect(events.at(-1)).toMatchObject({
+      type: "failed",
+      requestId: 9,
+      code: "SNAP_ZSTD_INVALID",
     });
   });
 });

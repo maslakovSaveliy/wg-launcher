@@ -63,6 +63,10 @@ const manifestFields = z.strictObject({
 });
 export type ManifestFields = z.infer<typeof manifestFields>;
 
+const keyIndex = z.int().min(0).max(31);
+/** The storage keys of a manifest, in manifest order (at most `maxStorageKeys`). */
+const manifestKeys = manifestFields.shape.storageKeys;
+
 export const WorkerCommand = z.discriminatedUnion("type", [
   /** Starts a job: the limits its entries are held to. */
   z.strictObject({ type: z.literal("begin"), jobId: id, limits: limitsSchema }),
@@ -76,13 +80,40 @@ export const WorkerCommand = z.discriminatedUnion("type", [
     requestId: id,
     op: z.discriminatedUnion("op", [
       z.strictObject({ op: z.literal("inventory") }),
-      z.strictObject({
-        op: z.literal("export"),
-        keyIndex: z.int().min(0).max(31),
-        storageKey,
-        scope,
-      }),
+      z.strictObject({ op: z.literal("export"), keyIndex, storageKey, scope }),
+      /**
+       * R6: the frame imports the validated file's key `from` as its key `keyIndex` (the second pass over the
+       * file re-checks every entry).
+       */
+      z.strictObject({ op: z.literal("import"), from: keyIndex, keyIndex, storageKey, scope }),
+      /** R5 of a selective restore: the frame removes only the selected localStorage keys and databases. */
+      z.strictObject({ op: z.literal("wipe-selected"), scope }),
     ]),
+  }),
+  /** R1: validates the `.wgsnap` at `path` (a stored file or the private copy in `tmp/`) and keeps it for R6. */
+  z.strictObject({ type: z.literal("validate"), jobId: id, requestId: id, path }),
+  /** R2: the `contentHash` a re-export of the planned keys must have (snapshot-format.md section 5). */
+  z.strictObject({
+    type: z.literal("expected"),
+    jobId: id,
+    requestId: id,
+    keys: z
+      .array(
+        z.strictObject({
+          from: keyIndex,
+          to: keyIndex,
+          ...storageKey.shape,
+          role: z.enum(["top", "frame"]),
+        }),
+      )
+      .max(32),
+  }),
+  /** R7: the `contentHash` of the entries this job's exports received, under `storageKeys`; nothing is written. */
+  z.strictObject({
+    type: z.literal("digest"),
+    jobId: id,
+    requestId: id,
+    storageKeys: manifestKeys,
   }),
   /**
    * Writes the job's entries as a `.wgsnap` to `partialPath` (in `tmp/`), flushes it, reads it back through the full
@@ -101,6 +132,7 @@ export const WorkerCommand = z.discriminatedUnion("type", [
 export type WorkerCommand = z.infer<typeof WorkerCommand>;
 
 const count = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
+const hash = z.string().regex(/^[0-9a-f]{64}$/);
 const code = z.enum(ERROR_CODES);
 
 export const WorkerEvent = z.discriminatedUnion("type", [
@@ -126,12 +158,36 @@ export const WorkerEvent = z.discriminatedUnion("type", [
       notExported: z.array(z.enum(["fileSystem", "cacheStorage", "serviceWorkers"])).max(3),
     }),
   }),
+  z.strictObject({
+    type: z.literal("imported"),
+    requestId: id,
+    summary: z.strictObject({
+      localStorageItems: count,
+      databases: count,
+      records: count,
+      blobs: count,
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("wiped"),
+    requestId: id,
+    wiped: z.strictObject({ localStorageItems: count, databases: count }),
+  }),
+  z.strictObject({
+    type: z.literal("validated"),
+    requestId: id,
+    manifest: manifestFields.extend({ contentHash: hash }),
+    sizeBytes: count,
+    entries: count,
+  }),
+  z.strictObject({ type: z.literal("expected"), requestId: id, contentHash: hash }),
+  z.strictObject({ type: z.literal("digested"), requestId: id, contentHash: hash, entries: count }),
   /** Entry bytes the job has received so far, measured (architecture.md section 6: real bytes only). */
   z.strictObject({ type: z.literal("received"), jobId: id, bytes: count }),
   z.strictObject({
     type: z.literal("written"),
     requestId: id,
-    contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+    contentHash: hash,
     sizeBytes: count,
     entries: count,
   }),
