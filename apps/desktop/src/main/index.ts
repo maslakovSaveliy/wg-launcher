@@ -24,7 +24,7 @@ import { createCovers } from "./covers.js";
 import { type Db, openDatabase, type WritableDb } from "./db/database.js";
 import { type Dialogs, type ErrorSpec, liveParent, nativeDialogs } from "./dialogs.js";
 import { FLAVOR } from "./flavor.js";
-import { installBaselineHandlers } from "./games/game-session.js";
+import { gameSession, installBaselineHandlers } from "./games/game-session.js";
 import type { GameRuntime, GameState } from "./games/lifecycle.js";
 import { createHandlers } from "./ipc/handlers/index.js";
 import { registerIpc } from "./ipc/register.js";
@@ -41,9 +41,15 @@ import { type AppPaths, appPaths, prepareAppPaths, resolveUserData } from "./pat
 import { parseDeepLink, parseLaunchInput } from "./policy/deep-link.js";
 import { createShortcut, shortcutsSupported } from "./shortcuts.js";
 import { createStorageCheckScheduler } from "./snapshots/check-scheduler.js";
+import { clearCache } from "./snapshots/clear-cache.js";
+import { deleteLocalSaves } from "./snapshots/delete-saves.js";
 import { exportSnapshot } from "./snapshots/export.js";
-import { createSnapshotDeps } from "./snapshots/jobs.js";
+import { createSnapshotDeps, verifySession } from "./snapshots/jobs.js";
+import { recoverAtStartup, retryRecovery } from "./snapshots/recovery.js";
+import { runRestore } from "./snapshots/restore.js";
+import type { TaskDeps } from "./snapshots/restore-steps.js";
 import { runStorageCheck } from "./snapshots/storage-check.js";
+import { verifySnapshot } from "./snapshots/verify.js";
 import { fixPartitioningSwitch } from "./start-up.js";
 
 /** What later parts of the main process (database, IPC, jobs) are built on. */
@@ -206,6 +212,35 @@ async function start(userData: string): Promise<AppContext> {
           log,
         })
       : null;
+  // Restore, delete, verify and recovery (save-transfer.md section 6) on the same deps as export.
+  const taskDeps: TaskDeps | null =
+    games && snapshotDeps
+      ? {
+          ...snapshotDeps,
+          repos: games.repos,
+          paths,
+          fileOf: (relative) => join(userData, relative),
+          confirm: (spec) => dialogs.confirm(spec),
+          recovery: {
+            mark: (gameId) => games.locks.markNeedsRecovery(gameId),
+            clear: (gameId) => games.locks.clearNeedsRecovery(gameId),
+          },
+          // "Local data" is checked again after an import or a delete (architecture.md section 11).
+          afterChange: (gameId) => checks?.gameExited(gameId),
+          verifySession: () => verifySession(log),
+          ...(hooks ? { faults: hooks.faults } : {}),
+        }
+      : null;
+  if (taskDeps) hooks?.watchTasks(taskDeps);
+  // Before any launch: an import or delete a crash interrupted is rolled back first; its game is refused until then.
+  if (taskDeps) {
+    const recovery = recoverAtStartup(taskDeps);
+    if (recovery.pending.length > 0)
+      log.warn("snapshot.recovery.at-start", { games: recovery.pending.length });
+    void recovery.done.then(() => hooks?.recoveryFinished());
+  } else {
+    hooks?.recoveryFinished();
+  }
   if (checks) {
     onExited = (gameId) => checks.gameExited(gameId);
     for (const event of ["browser-window-focus", "browser-window-blur"] as const) {
@@ -257,14 +292,28 @@ async function start(userData: string): Promise<AppContext> {
       ...(db.readOnly ? { readOnlyReason: db.reason } : {}),
       dialogs,
       covers: createCovers({ coversDir: paths.covers, tmpDir: paths.tmp }),
-      snapshots: snapshotDeps
-        ? {
-            export: (gameId, options) => exportSnapshot(gameId, options, snapshotDeps),
-            sendProgress,
-            fileOf: (path) => join(userData, path),
-            copy: (from, to) => copyFile(from, to),
-          }
-        : null,
+      snapshots:
+        snapshotDeps && taskDeps && games
+          ? {
+              export: (gameId, options) => exportSnapshot(gameId, options, snapshotDeps),
+              restore: (request, taskHooks) => runRestore({ ...request, ...taskHooks }, taskDeps),
+              verify: (gameId, revisionId, taskHooks) =>
+                verifySnapshot(gameId, revisionId, taskDeps, taskHooks),
+              recover: (gameId, taskHooks) => retryRecovery(gameId, taskDeps, taskHooks),
+              deleteSaves: (gameId, taskHooks) => deleteLocalSaves(gameId, taskDeps, taskHooks),
+              clearCache: (gameId) =>
+                clearCache(gameId, {
+                  games: games.repos.games,
+                  locks: games.locks,
+                  confirm: (spec) => dialogs.confirm(spec),
+                  session: (id) => gameSession(id, { log }),
+                  log,
+                }),
+              sendProgress,
+              fileOf: (path) => join(userData, path),
+              copy: (from, to) => copyFile(from, to),
+            }
+          : null,
       shortcuts: {
         supported: shortcutsSupported(process.platform),
         create: (game) =>

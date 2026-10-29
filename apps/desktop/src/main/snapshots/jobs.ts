@@ -1,21 +1,24 @@
 // The Electron side of the snapshot jobs: the quiescent window (save-transfer.md section 5, step 3), the game's
 // session, the handshake channel, message channels and the snapshot worker process. Everything that decides
 // something lives in quiescent/job.ts, export.ts and storage-check.ts; this module only builds their deps.
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import {
   BrowserWindow,
   MessageChannelMain,
   type Session,
+  session,
   utilityProcess,
   webContents,
 } from "electron";
 import type { Repos } from "../db/repos/index.js";
-import { gameSession } from "../games/game-session.js";
+import { gameSession, setUpGameSession } from "../games/game-session.js";
 import type { Logger } from "../log/logger.js";
 import type { AppPaths } from "../paths.js";
 import { startSnapshotWorker } from "../worker/client.js";
 import type { SnapshotDeps } from "./export.js";
 import type { JobDeps, JobSession, JobWindow } from "./quiescent/job.js";
+import type { TaskDeps } from "./restore-steps.js";
 
 export interface SnapshotDepsOptions {
   repos: Repos;
@@ -96,5 +99,19 @@ export function createSnapshotDeps(options: SnapshotDepsOptions): SnapshotDeps {
     log,
     newId: options.newId,
     now: Date.now,
+  };
+}
+
+/**
+ * A fresh in-memory partition for `snapshot:verify` (save-transfer.md section 6): `wg-verify-<nonce>` with 128 random
+ * bits, no `persist:` prefix (Electron keeps such a partition in memory), the game policy installed; `dispose` clears
+ * all of its data.
+ */
+export function verifySession(log: Logger): ReturnType<NonNullable<TaskDeps["verifySession"]>> {
+  const ses = session.fromPartition(`wg-verify-${randomBytes(16).toString("hex")}`);
+  setUpGameSession(ses, "verify", { log });
+  return {
+    session: ses as unknown as JobSession,
+    dispose: () => ses.clearStorageData(),
   };
 }

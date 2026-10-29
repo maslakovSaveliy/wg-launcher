@@ -10,6 +10,15 @@ import type { GameRuntime } from "../../games/lifecycle.js";
 import type { LockManager } from "../../games/locks.js";
 import type { Logger } from "../../log/logger.js";
 import type { ExportOptions } from "../../snapshots/export.js";
+import type { FaultPoint } from "../../snapshots/faults.js";
+import type { KeyMapping } from "../../snapshots/key-check.js";
+import type { RestoreOutcome, RestoreSource } from "../../snapshots/restore.js";
+
+/** What a task reports while it runs: the lock is held (the call then answers), and each real step. */
+export interface TaskHooks {
+  onLocked(): void;
+  onStep(step: FaultPoint): void;
+}
 
 /** What the handlers need when the database is writable. */
 export interface Library {
@@ -41,6 +50,15 @@ export interface HandlerContext {
 /** What the snapshot channels need (snapshots/export.ts and the file system). */
 export interface Snapshots {
   export(gameId: string, options: ExportOptions): Promise<Result<Snapshot, ErrorCode>>;
+  restore(
+    request: { gameId: string; source: RestoreSource; mapping?: readonly KeyMapping[] },
+    hooks: TaskHooks,
+  ): Promise<Result<RestoreOutcome, ErrorCode>>;
+  verify(gameId: string, revisionId: string, hooks: TaskHooks): Promise<Result<unknown, ErrorCode>>;
+  recover(gameId: string, hooks: TaskHooks): Promise<Result<unknown, ErrorCode>>;
+  /** "Delete local saves" of a library entry or of a removed game's data. */
+  deleteSaves(gameId: string, hooks: TaskHooks): Promise<Result<unknown, ErrorCode>>;
+  clearCache(gameId: string): Promise<Result<Record<string, never>, ErrorCode>>;
   /** Sends a `task:progress` event to the launcher page. */
   sendProgress(event: TaskProgressEvent): void;
   /** The absolute path of a stored snapshot (rows hold it relative to userData). */

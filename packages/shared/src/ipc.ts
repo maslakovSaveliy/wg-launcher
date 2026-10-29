@@ -1,7 +1,7 @@
 // The launcher IPC contract of architecture.md section 6: one zod schema per request and response. Main validates
 // every request with these schemas after its sender check; the renderer only uses the types. Every object is a
 // `z.strictObject` (unknown keys are rejected, plan M7), ids are lowercase UUIDv7, and no request carries a file
-// path or a URL to open. Channels of later tasks (import, verify, deleting data) are added with those tasks.
+// path or a URL to open.
 
 import { z } from "zod";
 import { ERROR_CODES, type ErrorCode } from "./errors.js";
@@ -80,6 +80,14 @@ export const storageKeyRefSchema = z.strictObject({
 
 const component = z.strictObject({ id: z.string(), version: z.string() });
 
+/** One origin of a snapshot and the origin of this game its storage goes to (save-transfer.md section 2). */
+export const keyMappingSchema = z.strictObject({
+  from: z.string().max(2048),
+  to: z.string().max(2048),
+});
+
+const taskId = z.strictObject({ taskId: gameIdSchema });
+
 /** A stored snapshot as the UI sees it (architecture.md section 7): the row's fields, never its file path. */
 export const snapshotRowSchema = z.strictObject({
   revisionId: gameIdSchema,
@@ -134,6 +142,8 @@ export const IPC_CONTRACT = {
     request: empty,
     response: z.strictObject({ orphans: z.array(orphanSchema) }),
   },
+  // "Delete local saves" for a removed game's data (architecture.md section 12): backup first.
+  "library:deleteOrphanData": { request: byId, response: taskId },
   "game:launch": {
     request: byId,
     response: z.strictObject({
@@ -142,6 +152,9 @@ export const IPC_CONTRACT = {
     }),
   },
   "game:focus": { request: byId, response: empty },
+  // Both ask in a native dialog first; the cache is cleared at once, the saves through a task with a backup first.
+  "game:clearCache": { request: byId, response: empty },
+  "game:deleteSaves": { request: byId, response: taskId },
   // The save dialog runs in main: no path crosses IPC (architecture.md section 8).
   "shortcut:create": { request: byId, response: z.strictObject({ created: z.boolean() }) },
   // Answers once the game's lock is held; progress and the outcome follow as `task:progress` events.
@@ -152,6 +165,21 @@ export const IPC_CONTRACT = {
     }),
     response: z.strictObject({ taskId: gameIdSchema }),
   },
+  // `"file"` opens the file dialog in main; the mapping is confirmed again in a native dialog main writes.
+  "snapshot:import": {
+    request: z.strictObject({
+      gameId: gameIdSchema,
+      source: z.union([z.strictObject({ revisionId: gameIdSchema }), z.literal("file")]),
+      mapping: z.array(keyMappingSchema).max(32).optional(),
+    }),
+    response: taskId,
+  },
+  "snapshot:verify": {
+    request: z.strictObject({ gameId: gameIdSchema, revisionId: gameIdSchema }),
+    response: taskId,
+  },
+  // "Retry recovery" of a game marked needs_recovery (save-transfer.md section 6, "Failed rollback").
+  "snapshot:recover": { request: byId, response: taskId },
   "snapshot:list": {
     request: byId,
     response: z.strictObject({ snapshots: z.array(snapshotRowSchema) }),
@@ -191,6 +219,7 @@ export type GameStateEvent = z.output<typeof gameStateEventSchema>;
 
 export type SnapshotRow = z.output<typeof snapshotRowSchema>;
 export type StorageKeyRef = z.output<typeof storageKeyRefSchema>;
+export type KeyMappingRef = z.output<typeof keyMappingSchema>;
 
 /**
  * Main to the launcher renderer only, on `TASK_PROGRESS_CHANNEL` (bridge.ts): one event per real step of a task and
@@ -200,8 +229,22 @@ export type StorageKeyRef = z.output<typeof storageKeyRefSchema>;
 export const taskProgressEventSchema = z.strictObject({
   taskId: gameIdSchema,
   gameId: gameIdSchema,
-  kind: z.enum(["export"]),
-  step: z.enum(["lock", "read", "write"]),
+  kind: z.enum(["export", "import", "verify", "delete-saves", "recover"]),
+  step: z.enum([
+    "lock",
+    "read",
+    "write",
+    "validate",
+    "plan",
+    "backup",
+    "wipe",
+    "import",
+    "verify",
+    "commit",
+    "rollback-wipe",
+    "rollback-import",
+    "rollback-verify",
+  ]),
   status: z.enum(["running", "done", "failed"]),
   bytesDone: z.int().min(0).optional(),
   bytesTotal: z.int().min(0).optional(),

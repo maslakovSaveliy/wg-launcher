@@ -166,3 +166,27 @@ describe("LockManager: a launch or a user task cancels a background lease (M5)",
     expect(background.signal.aborted).toBe(false);
   });
 });
+
+describe("LockManager: recovery (save-transfer.md section 6, failed rollback)", () => {
+  it("refuses every request while a game needs recovery, but grants the recovery lease", async () => {
+    const { locks } = manager();
+    locks.markNeedsRecovery(GAME);
+    expect(await locks.acquire(GAME, "session")).toEqual({ code: "NEEDS_RECOVERY" });
+    expect(await locks.acquire(GAME, "task")).toEqual({ code: "NEEDS_RECOVERY" });
+    const recovery = await locks.acquireForRecovery(GAME);
+    expect(isLease(recovery) && recovery.kind).toBe("task");
+    // The mark stays until the rollback verified and cleared it.
+    expect(locks.holder(GAME)).toBe("needs_recovery");
+    expect(await locks.acquireForRecovery(GAME)).toEqual({ code: "GAME_BUSY" });
+    if (isLease(recovery)) recovery.release();
+    locks.clearNeedsRecovery(GAME);
+    expect(locks.holder(GAME)).toBe("none");
+  });
+
+  it("refuses the recovery lease while the game's window is open", async () => {
+    const { locks } = manager();
+    await lease(locks, "session");
+    locks.markNeedsRecovery(GAME);
+    expect(await locks.acquireForRecovery(GAME)).toEqual({ code: "GAME_RUNNING" });
+  });
+});

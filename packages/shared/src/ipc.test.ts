@@ -18,13 +18,23 @@ const VALID: { [C in IpcChannel]: Record<string, unknown> } = {
   "library:update": { gameId: ID, title: "New", cover: "pick" },
   "library:remove": { gameId: ID },
   "library:orphans": {},
+  "library:deleteOrphanData": { gameId: ID },
   "game:launch": { gameId: ID },
   "game:focus": { gameId: ID },
+  "game:clearCache": { gameId: ID },
+  "game:deleteSaves": { gameId: ID },
   "shortcut:create": { gameId: ID },
   "snapshot:export": {
     gameId: ID,
     frameKeys: [{ origin: "http://127.0.0.1:4317", topLevelSite: "http://localhost" }],
   },
+  "snapshot:import": {
+    gameId: ID,
+    source: { revisionId: ID },
+    mapping: [{ from: "http://localhost:4317", to: "http://127.0.0.1:4317" }],
+  },
+  "snapshot:verify": { gameId: ID, revisionId: ID },
+  "snapshot:recover": { gameId: ID },
   "snapshot:list": { gameId: ID },
   "snapshot:saveAs": { gameId: ID, revisionId: ID },
   "settings:get": {},
@@ -123,8 +133,32 @@ describe("IPC contract (architecture.md section 6)", () => {
 describe("snapshot channels and task progress (architecture.md section 6)", () => {
   const exportRequest = request("snapshot:export");
 
-  it("bumps the bridge version for the snapshot functions and onTaskProgress", () => {
-    expect(BRIDGE_VERSION).toBe(4);
+  it("bumps the bridge version for the restore, verify, recovery and delete functions", () => {
+    expect(BRIDGE_VERSION).toBe(5);
+  });
+
+  it("snapshot:import takes a stored revision or a file chosen in main, and up to 32 origin mappings", () => {
+    const importRequest = request("snapshot:import");
+    const map = { from: "http://a.test", to: "http://b.test" };
+    expect(importRequest.safeParse({ gameId: ID, source: "file" }).success).toBe(true);
+    expect(
+      importRequest.safeParse({
+        gameId: ID,
+        source: { revisionId: ID },
+        mapping: Array(32).fill(map),
+      }).success,
+    ).toBe(true);
+    expect(
+      importRequest.safeParse({ gameId: ID, source: "file", mapping: Array(33).fill(map) }).success,
+    ).toBe(false);
+    // No path ever crosses IPC.
+    expect(importRequest.safeParse({ gameId: ID, source: { path: "/x.wgsnap" } }).success).toBe(
+      false,
+    );
+    expect(
+      importRequest.safeParse({ gameId: ID, source: "file", mapping: [{ ...map, via: "x" }] })
+        .success,
+    ).toBe(false);
   });
 
   it("snapshot:export takes up to 32 frame keys, each an origin and a top-level site or null", () => {

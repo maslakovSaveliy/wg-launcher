@@ -78,7 +78,12 @@ export function createRestoreJournalRepo(db: WritableDb) {
     get: read,
     update(
       id: string,
-      patch: { step?: string; state?: JournalState; backupRevisionId?: string | null },
+      patch: {
+        step?: string;
+        state?: JournalState;
+        revisionId?: string | null;
+        backupRevisionId?: string | null;
+      },
     ): JournalEntry | null {
       updateWhere(
         db,
@@ -86,7 +91,12 @@ export function createRestoreJournalRepo(db: WritableDb) {
         "id",
         id,
         patch,
-        { step: "step", state: "state", backupRevisionId: "backup_revision_id" },
+        {
+          step: "step",
+          state: "state",
+          revisionId: "revision_id",
+          backupRevisionId: "backup_revision_id",
+        },
         { updated_at: db.now() },
       );
       return read(id);

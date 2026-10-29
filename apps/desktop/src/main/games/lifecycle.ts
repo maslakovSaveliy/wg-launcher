@@ -57,6 +57,8 @@ export interface RuntimeDeps {
   openWindow(request: OpenWindowRequest): GameWindow;
   /** The close procedure (`closeGameWindow`), run after the window's `close` event was prevented. */
   closeWindow(window: GameWindow, gameId: string): Promise<CloseOutcome>;
+  /** The text of a NEEDS_RECOVERY refusal, naming the backup that holds the game's saves (save-transfer.md 6). */
+  recoveryNotice?(gameId: string): string;
   /** For tests; defaults to `LAUNCH_SHOW_TIMEOUT_MS`. */
   launchShowTimeoutMs?: number;
   /** Called after every state change, once per change (the `game:state` event of architecture.md section 6). */
@@ -122,6 +124,11 @@ export class GameRuntime {
     return entry && ACTIVE.has(entry.state) ? entry.window : null;
   }
 
+  #refuse(gameId: string, code: LaunchCode): LaunchResult {
+    const notice = code === "NEEDS_RECOVERY" ? this.#deps.recoveryNotice?.(gameId) : undefined;
+    return notice === undefined ? fail(code) : { ok: false, code, message: notice };
+  }
+
   async launch(gameId: string): Promise<LaunchResult> {
     const { log } = this.#deps;
     if (!isUuidV7(gameId)) return fail("INVALID_ARGUMENT");
@@ -134,7 +141,7 @@ export class GameRuntime {
     }
     const game = this.#deps.games.get(gameId);
     if (!game) return fail("NOT_FOUND");
-    if (game.needsRecovery) return fail("NEEDS_RECOVERY");
+    if (game.needsRecovery) return this.#refuse(gameId, "NEEDS_RECOVERY");
     const checked = checkEntryUrl(game.url, this.#deps.flavor);
     if (!checked.ok) return fail("URL_NOT_ALLOWED");
 
@@ -152,7 +159,7 @@ export class GameRuntime {
       this.#entries.delete(gameId);
       this.#deps.onState?.(gameId, "idle");
       log.info("game.launch-refused", { gameId, code: lease.code });
-      return fail(lease.code);
+      return this.#refuse(gameId, lease.code);
     }
     entry.lease = lease;
 

@@ -66,6 +66,7 @@ function setUp(
     closeOutcome?: "closed" | "stayed";
     answers?: boolean[];
     launchShowTimeoutMs?: number;
+    recoveryNotice?: (gameId: string) => string;
   } = {},
 ) {
   const windows: FakeWindow[] = [];
@@ -97,6 +98,7 @@ function setUp(
       return window as unknown as GameWindow;
     },
     closeWindow,
+    ...(options.recoveryNotice ? { recoveryNotice: options.recoveryNotice } : {}),
     ...(options.launchShowTimeoutMs === undefined
       ? {}
       : { launchShowTimeoutMs: options.launchShowTimeoutMs }),
@@ -154,6 +156,26 @@ describe("GameRuntime.launch: one window per game (F-5, Review Focus 3)", () => 
       code: "NEEDS_RECOVERY",
     });
     expect(recovery.windows).toHaveLength(0);
+  });
+
+  it("names the backup when it refuses a game that needs recovery, flagged or marked in the lock manager", async () => {
+    const notice = 'Its saves are kept in the backup of x (revision y); use "Retry recovery".';
+    const flagged = setUp({
+      game: { id: GAME, url: URL_OF_GAME, title: "Lab", needsRecovery: true },
+      recoveryNotice: () => notice,
+    });
+    expect(await flagged.runtime.launch(GAME)).toEqual({
+      ok: false,
+      code: "NEEDS_RECOVERY",
+      message: notice,
+    });
+    const marked = setUp({ recoveryNotice: () => notice });
+    marked.locks.markNeedsRecovery(GAME);
+    expect(await marked.runtime.launch(GAME)).toEqual({
+      ok: false,
+      code: "NEEDS_RECOVERY",
+      message: notice,
+    });
   });
 
   it("refuses an entry URL this build does not allow", async () => {

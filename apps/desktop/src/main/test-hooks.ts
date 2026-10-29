@@ -4,6 +4,7 @@
 
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
+import type { FrameInventory } from "@wg-launcher/exporters/wire";
 import type { ErrorCode, Result } from "@wg-launcher/shared";
 import { uuidv7 } from "@wg-launcher/shared";
 import { BrowserWindow, session } from "electron";
@@ -11,18 +12,31 @@ import type { Db } from "./db/database.js";
 import { readUserVersion } from "./db/migrate.js";
 import type { Repos } from "./db/repos/index.js";
 import type { PlaySession } from "./db/repos/play-sessions.js";
+import type { JournalEntry } from "./db/repos/restore-journal.js";
 import type { Snapshot } from "./db/repos/snapshots.js";
 import type { StorageCheck } from "./db/repos/storage-checks.js";
 import type { WindowState } from "./db/repos/window-state.js";
 import type { ConfirmSpec, Dialogs, ErrorSpec, OpenFileSpec, SaveFileSpec } from "./dialogs.js";
+import { gameSession } from "./games/game-session.js";
 import type { GameRuntime, GameState, LaunchResult } from "./games/lifecycle.js";
 import type { AppPaths } from "./paths.js";
 import { checkEntryUrl } from "./policy/url-rules.js";
+import { clearCache } from "./snapshots/clear-cache.js";
+import { deleteLocalSaves } from "./snapshots/delete-saves.js";
 import { type ExportTestControls, exportSnapshot, type SnapshotDeps } from "./snapshots/export.js";
+import { type FaultHook, faultHook } from "./snapshots/faults.js";
 import { isQuiescentWindow } from "./snapshots/jobs.js";
+import type { KeyMapping } from "./snapshots/key-check.js";
 import type { StorageKeyRef } from "./snapshots/keys.js";
+import { knownKeys } from "./snapshots/keys.js";
 import type { JobDeps } from "./snapshots/quiescent/job.js";
+import { holdQuiescentJob } from "./snapshots/quiescent/job.js";
+import { retryRecovery } from "./snapshots/recovery.js";
+import { type RestoreOutcome, type RestoreSource, runRestore } from "./snapshots/restore.js";
+import { ALL, type TaskDeps } from "./snapshots/restore-steps.js";
 import { runStorageCheck } from "./snapshots/storage-check.js";
+import { verifySnapshot } from "./snapshots/verify.js";
+import { workerSlot } from "./worker/slot.js";
 
 /**
  * What the next quiescent jobs do right after each stub navigation (the canary controls of save-transfer.md section
@@ -116,6 +130,33 @@ export interface TestHooks {
   runningServiceWorkers(gameId: string): number;
   /** The app's windows a user can see or get: every window but the hidden quiescent ones of snapshot jobs. */
   windowCount(): number;
+  /**
+   * Restores a snapshot as `snapshot:import` does (a queued confirm answers its dialog); `faults` (save-transfer.md
+   * section 6, AC-8) apply until set again with `setFaults`.
+   */
+  restoreSnapshot(
+    gameId: string,
+    options: { source: RestoreSource; mapping?: KeyMapping[] },
+  ): Promise<Result<RestoreOutcome, ErrorCode>>;
+  /** `fail:<step>` and `crash-after:<step>` specs for the next restores and deletes (faults.ts). */
+  setFaults(specs: string[]): void;
+  deleteLocalSaves(gameId: string): Promise<Result<unknown, ErrorCode>>;
+  clearCache(gameId: string): Promise<Result<unknown, ErrorCode>>;
+  verifySnapshot(gameId: string, revisionId: string): Promise<Result<Snapshot, ErrorCode>>;
+  retryRecovery(gameId: string): Promise<Result<unknown, ErrorCode>>;
+  /** Every journal entry of the game, oldest first. */
+  journalOf(gameId: string): JournalEntry[];
+  /** The game's row as the launch rule sees it, or null. */
+  gameRow(gameId: string): { needsRecovery: boolean; baseRevisionId: string | null } | null;
+  /** Whether start-up recovery has finished (every pending rollback ran). */
+  recoveryDone: boolean;
+  /**
+   * The `contentHash` of everything stored under the game's known keys (generic exporter, no filter), read through a
+   * quiescent window and hashed in the worker; nothing is written. Two equal digests mean equal storage.
+   */
+  storageDigest(gameId: string): Promise<Result<string, ErrorCode>>;
+  /** The quiescent inventory of each known key: `origin topLevelSite` to its counts and usage numbers. */
+  storageInventory(gameId: string): Promise<Result<Record<string, FrameInventory>, ErrorCode>>;
   /** Focuses the game's window (the storage check waits while a game window is focused). */
   focusGameWindow(gameId: string): boolean;
   /** Whether a game window has the focus now, as the storage check scheduler sees it. */
@@ -177,6 +218,9 @@ export function installTestHooks(init: {
   watchLauncher(window: BrowserWindow): void;
   watchDatabase(db: Db): void;
   watchSnapshots(deps: SnapshotDeps): void;
+  watchTasks(deps: TaskDeps): void;
+  faults: FaultHook;
+  recoveryFinished(): void;
   afterNavigation: NonNullable<JobDeps["afterNavigation"]>;
   harnessWorld: NonNullable<JobDeps["harnessWorld"]>;
   onSecondInstance(): void;
@@ -185,6 +229,58 @@ export function installTestHooks(init: {
   let testWindows = 0;
   let games: { runtime: GameRuntime; repos: Repos } | null = null;
   let snapshots: SnapshotDeps | null = null;
+  let tasks: TaskDeps | null = null;
+  let database: Db | null = null;
+  let faults: FaultHook = () => undefined;
+  const needTasks = () => {
+    if (!tasks) throw new Error("The restore jobs are not up (read-only database?).");
+    return tasks;
+  };
+  /** Runs one quiescent window over the game's known keys under a task lease (digest and inventory). */
+  const readKnown = async <T>(
+    gameId: string,
+    perFrame: (
+      worker: Awaited<ReturnType<SnapshotDeps["startWorker"]>>,
+      frame: { key: { index: number; origin: string; topLevelSite: string | null }; port: unknown },
+    ) => Promise<Result<void, ErrorCode>>,
+    finish: (
+      worker: Awaited<ReturnType<SnapshotDeps["startWorker"]>>,
+      keys: ReturnType<typeof knownKeys>,
+    ) => Promise<Result<T, ErrorCode>>,
+  ): Promise<Result<T, ErrorCode>> => {
+    const deps = needTasks();
+    const game = deps.repos.games.get(gameId) ?? deps.repos.orphans.get(gameId);
+    if (!game) return { ok: false, code: "NOT_FOUND", message: "No such game." };
+    const keys = knownKeys(game.url, deps.repos.storageTargets.listForGame(gameId));
+    const held = await holdQuiescentJob(gameId, "task", deps.job);
+    if (!held.ok) return held;
+    const workers = workerSlot(deps.startWorker, {});
+    try {
+      return await held.data.run<T>({
+        direction: "export",
+        lock: "task",
+        keys,
+        async runFrames(frames, context) {
+          const worker = await workers.get(context.signal);
+          if (worker === null) return { ok: false, code: "CANCELLED", message: "Stopped." };
+          for (const frame of frames) {
+            const done = await perFrame(worker, frame);
+            if (!done.ok) return done;
+          }
+          return { ok: true, data: undefined };
+        },
+        async commit(context) {
+          const worker = await workers.get(context.signal);
+          if (worker === null) return { ok: false, code: "CANCELLED", message: "Stopped." };
+          return finish(worker, keys);
+        },
+        async discard() {},
+      });
+    } finally {
+      await workers.dispose();
+      held.data.release();
+    }
+  };
   let control: QuiescentControl = { kind: "none" };
   const needSnapshots = () => {
     if (!snapshots) throw new Error("The snapshot jobs are not up (read-only database?).");
@@ -317,6 +413,79 @@ export function installTestHooks(init: {
     runningServiceWorkers: (gameId) =>
       Object.keys(session.fromPartition(`persist:game:${gameId}`).serviceWorkers.getAllRunning())
         .length,
+    restoreSnapshot: (gameId, options) =>
+      runRestore(
+        {
+          gameId,
+          source: options.source,
+          ...(options.mapping ? { mapping: options.mapping } : {}),
+        },
+        needTasks(),
+      ),
+    setFaults(specs) {
+      // A crash is a crash: no clean-up, no log flush (Review Focus 2).
+      faults = faultHook(specs, () => process.kill(process.pid, "SIGKILL"));
+    },
+    deleteLocalSaves: (gameId) => deleteLocalSaves(gameId, needTasks()),
+    clearCache: (gameId) => {
+      const deps = needTasks();
+      return clearCache(gameId, {
+        games: deps.repos.games,
+        locks: deps.job.locks,
+        confirm: deps.confirm,
+        session: (id) => gameSession(id, { log: deps.log }),
+        log: deps.log,
+      });
+    },
+    verifySnapshot: (gameId, revisionId) => verifySnapshot(gameId, revisionId, needTasks()),
+    retryRecovery: (gameId) => retryRecovery(gameId, needTasks()),
+    journalOf(gameId) {
+      if (!database) return [];
+      return (
+        database.raw
+          .prepare("SELECT id FROM restore_journal WHERE game_id = ? ORDER BY started_at, id")
+          .all(gameId) as Array<{ id: string }>
+      ).flatMap(({ id }) => {
+        const entry = needTasks().repos.restoreJournal.get(id);
+        return entry ? [{ ...entry }] : [];
+      });
+    },
+    gameRow(gameId) {
+      const game = needGames().repos.games.get(gameId);
+      return game
+        ? { needsRecovery: game.needsRecovery, baseRevisionId: game.baseRevisionId }
+        : null;
+    },
+    recoveryDone: false,
+    storageDigest: (gameId) =>
+      readKnown(
+        gameId,
+        async (worker, frame) => {
+          const exported = await worker.exportFrame(frame.port, {
+            keyIndex: frame.key.index,
+            storageKey: { origin: frame.key.origin, topLevelSite: frame.key.topLevelSite },
+            scope: ALL,
+          });
+          return exported.ok ? { ok: true, data: undefined } : exported;
+        },
+        (worker, keys) =>
+          worker.digest(
+            keys.map(({ origin, topLevelSite, role }) => ({ origin, topLevelSite, role })),
+          ),
+      ),
+    storageInventory(gameId) {
+      const found: Record<string, FrameInventory> = {};
+      return readKnown(
+        gameId,
+        async (worker, frame) => {
+          const inventory = await worker.inventory(frame.port);
+          if (!inventory.ok) return inventory;
+          found[`${frame.key.origin} ${frame.key.topLevelSite ?? ""}`.trim()] = inventory.data;
+          return { ok: true, data: undefined };
+        },
+        async () => ({ ok: true, data: found }),
+      );
+    },
     closeGame(gameId) {
       const window = needGames().runtime.windowOf(gameId);
       if (!window || window.isDestroyed()) return false;
@@ -344,10 +513,18 @@ export function installTestHooks(init: {
       });
     },
     watchDatabase(db) {
+      database = db;
       hooks.database = { readOnly: db.readOnly, userVersion: readUserVersion(db.raw) };
     },
     watchSnapshots(deps) {
       snapshots = deps;
+    },
+    watchTasks(deps) {
+      tasks = deps;
+    },
+    faults: (point, when) => faults(point, when),
+    recoveryFinished() {
+      hooks.recoveryDone = true;
     },
     // Playwright's `_electron` attaches to every page, the quiescent window included, and evaluates an empty script
     // in its own utility world there; that world is the harness, not the game (canary.ts).

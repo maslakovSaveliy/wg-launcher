@@ -12,6 +12,8 @@
 // | background     | cancels it, then granted | cancels it, then granted | GAME_BUSY          |
 // | needs_recovery | NEEDS_RECOVERY           | NEEDS_RECOVERY           | NEEDS_RECOVERY     |
 //
+// Only `acquireForRecovery` (the rollback that clears the mark) is granted a `task` lease under `needs_recovery`.
+//
 // Background work never blocks what the user does: a session or task request aborts the background lease's
 // `AbortSignal` (reason code `CANCELLED`) and waits for the job to release it, at most `releaseTimeoutMs` (2 s). If
 // the job does not let go in time the request is refused with `INTERNAL` and logged, because a game launched or a
@@ -123,6 +125,16 @@ export class LockManager {
     }
     if (this.#recovery.has(gameId)) return { code: "NEEDS_RECOVERY" };
     return this.#grant(gameId, kind);
+  }
+
+  /**
+   * A `task` lease for the rollback of a game marked `needs_recovery`: the mark refuses everything else, and stays
+   * (so launches are still refused) until the rollback has verified and calls `clearNeedsRecovery`.
+   */
+  async acquireForRecovery(gameId: string): Promise<Lease | LockRefusal> {
+    const held = this.#pending.get(gameId) ?? this.#held.get(gameId)?.lease.kind ?? "none";
+    if (held === "none") return this.#grant(gameId, "task");
+    return { code: held === "session" ? "GAME_RUNNING" : "GAME_BUSY" };
   }
 
   #grant(gameId: string, kind: LockKind): Lease {

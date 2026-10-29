@@ -5,6 +5,7 @@ import { HELLO_CHANNEL, PORT_CHANNEL } from "./handshake.js";
 import {
   type ConnectedFrame,
   failureOf,
+  holdQuiescentJob,
   type JobContext,
   type JobDeps,
   type JobKey,
@@ -244,7 +245,7 @@ function fakes(options: Options = {}) {
     direction: "export",
     lock: "task",
     keys,
-    runFrames: vi.fn(async (frames: readonly ConnectedFrame[]) => {
+    runFrames: vi.fn(async (frames: readonly ConnectedFrame[], _context: JobContext) => {
       boom("runFrames");
       ran.push([...frames]);
       return { ok: true as const, data: undefined };
@@ -591,6 +592,73 @@ describe("runQuiescentJob (save-transfer.md section 5)", () => {
     expect(await runQuiescentJob(GAME, setUp.plan, setUp.deps)).toMatchObject({
       code: "EXP_TIMEOUT",
     });
+  });
+});
+
+describe("holdQuiescentJob: one lease and one slot over several windows (restore R3 to R7)", () => {
+  it("runs two windows under one lease and one slot and gives both back once", async () => {
+    const slots = new JobSlots(1);
+    const { deps, plan, nothingLeft } = fakes({ slots });
+    const held = await holdQuiescentJob(GAME, "task", deps);
+    if (!held.ok) throw new Error(held.code);
+    expect(await held.data.run(plan)).toEqual({ ok: true, data: "committed" });
+    // The slot stays taken between the windows: another job is refused meanwhile.
+    expect(slots.running).toBe(1);
+    expect(await held.data.run(plan)).toEqual({ ok: true, data: "committed" });
+    expect(nothingLeft()).toMatchObject({ windowDestroyed: true, released: false });
+    held.data.release();
+    held.data.release();
+    expect(slots.running).toBe(0);
+    expect(nothingLeft()).toEqual(CLEAN);
+  });
+
+  it("clears a frame's whole key through CDP with the key Chromium reported, inside runFrames only", async () => {
+    const { deps, plan, commands } = fakes();
+    let outside: unknown;
+    plan.runFrames.mockImplementation(
+      async (frames: readonly ConnectedFrame[], context: JobContext) => {
+        for (const frame of frames)
+          await context.clearStorage(frame.key, "local_storage,indexeddb");
+        return { ok: true as const, data: undefined };
+      },
+    );
+    plan.commit.mockImplementation(async (context: JobContext) => {
+      outside = await context.clearStorage(TOP, "local_storage").catch((error: unknown) => error);
+      return { ok: true, data: "committed" };
+    });
+    expect(await runQuiescentJob(GAME, plan, deps)).toEqual({ ok: true, data: "committed" });
+    expect(commands.filter((c) => c === "Storage.clearDataForStorageKey")).toHaveLength(2);
+    expect(outside).toBeInstanceOf(Error);
+  });
+
+  it("refuses with the lock's code and takes no slot", async () => {
+    const slots = new JobSlots(2);
+    const { deps } = fakes({ refuse: "NEEDS_RECOVERY", slots });
+    expect(await holdQuiescentJob(GAME, "task", deps)).toMatchObject({
+      ok: false,
+      code: "NEEDS_RECOVERY",
+    });
+    expect(slots.running).toBe(0);
+  });
+
+  it("takes the recovery lease when asked to (the rollback of a game marked needs_recovery)", async () => {
+    const { deps } = fakes({ refuse: "NEEDS_RECOVERY" });
+    const recovery = vi.fn(deps.locks.acquire);
+    let granted = false;
+    deps.locks.acquireForRecovery = async () => {
+      granted = true;
+      return {
+        gameId: GAME,
+        kind: "task",
+        signal: new AbortController().signal,
+        release: () => undefined,
+      };
+    };
+    const held = await holdQuiescentJob(GAME, "task", deps, { recovery: true });
+    expect(held.ok).toBe(true);
+    expect(granted).toBe(true);
+    expect(recovery).not.toHaveBeenCalled();
+    if (held.ok) held.data.release();
   });
 });
 

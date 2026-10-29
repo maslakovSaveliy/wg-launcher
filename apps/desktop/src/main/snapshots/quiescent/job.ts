@@ -35,7 +35,7 @@ import {
 import { type InterceptorSession, installInterceptor } from "./interceptor.js";
 import { type FrameSlot, type JobKey, layOutNavigations } from "./layout.js";
 import { type JobSlots, SNAPSHOT_JOB_SLOTS } from "./slots.js";
-import { type Failure, fail, JobStop } from "./stop.js";
+import { type Failure, fail, failureOf, JobStop } from "./stop.js";
 import { type JobDebugger, watchTargets } from "./targets.js";
 import { WorkerScopes, workerScopeOrigin } from "./worker-scopes.js";
 
@@ -67,6 +67,11 @@ export interface JobContext {
    * stop never discards the commit, whose outcome the job waits for.
    */
   committed(): void;
+  /**
+   * CDP `Storage.clearDataForStorageKey` for a key of the current navigation, with `storageTypes` (a CDP list such as
+   * `local_storage,indexeddb`); inside `runFrames` only.
+   */
+  clearStorage(key: JobKey, storageTypes: string): Promise<void>;
 }
 
 export interface JobPlan<T> {
@@ -93,6 +98,8 @@ export interface JobPlan<T> {
   discard(): Promise<void>;
   /** Test controls only (open check 3); production always sends `all`. */
   bypass?: Bypass;
+  /** Another session than the game's (verify's fresh in-memory partition); QW-2 counts its `webContents`. */
+  session?: JobSession;
 }
 
 type Listener = (...args: never[]) => void;
@@ -128,7 +135,11 @@ export interface JobSession extends InterceptorSession {
 }
 
 export interface JobDeps {
-  locks: { acquire(gameId: string, kind: "task" | "background"): Promise<Lease | LockRefusal> };
+  locks: {
+    acquire(gameId: string, kind: "task" | "background"): Promise<Lease | LockRefusal>;
+    /** A `task` lease although the game is marked `needs_recovery` (the rollback that clears the mark). */
+    acquireForRecovery?(gameId: string): Promise<Lease | LockRefusal>;
+  };
   /** The game's session with its policy installed (`gameSession`). */
   session(gameId: string): JobSession;
   createWindow(options: { session: JobSession; preload: string; subframes: boolean }): JobWindow;
@@ -174,36 +185,54 @@ export const JOB_TIMING: JobTiming = {
 
 const OK = { ok: true, data: undefined } as const;
 
+/** `JobContext.clearStorage` outside `runFrames`: there is no frame (or no window) to clear through. */
+const noFrames: JobContext["clearStorage"] = async () => {
+  throw new JobStop(fail("INTERNAL", "No frame of this navigation resolves that key."));
+};
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export async function runQuiescentJob<T>(
-  gameId: string,
-  plan: JobPlan<T>,
-  deps: JobDeps,
-  signal?: AbortSignal,
-): Promise<Result<T, ErrorCode>> {
-  const timing = { ...JOB_TIMING, ...deps.timing };
-  const { log } = deps;
-  const quiet =
-    plan.direction === "export" ? "EXP_QUIESCENCE_VIOLATION" : "IMP_QUIESCENCE_VIOLATION";
+/** A lease and a job slot held across several quiescent windows (a restore runs R4 to R7 under one lock, R3). */
+export interface QuiescentHold {
+  readonly gameId: string;
+  readonly lock: "task" | "background";
+  /** Aborted when the hold is cancelled (a launch cancelling a background lease, the caller's signal). */
+  readonly signal: AbortSignal;
+  /** Runs steps 2 to 12 of one quiescent window under this hold; the plan's `lock` is ignored. */
+  run<T>(plan: JobPlan<T>): Promise<Result<T, ErrorCode>>;
+  /** Gives the slot back, then the lease. Idempotent. */
+  release(): void;
+}
 
-  // Step 1.
-  const lease = await deps.locks.acquire(gameId, plan.lock);
+/**
+ * Step 1 alone: the game's lease (`recovery` takes it although the game is marked `needs_recovery`, for the
+ * rollback that clears the mark) and a job slot. The caller runs windows with `run` and must `release`.
+ */
+export async function holdQuiescentJob(
+  gameId: string,
+  lock: "task" | "background",
+  deps: JobDeps,
+  options: { signal?: AbortSignal; recovery?: boolean } = {},
+): Promise<Result<QuiescentHold, ErrorCode>> {
+  const { log } = deps;
+  const { signal } = options;
+  const lease =
+    options.recovery && deps.locks.acquireForRecovery
+      ? await deps.locks.acquireForRecovery(gameId)
+      : await deps.locks.acquire(gameId, lock);
   if (!("release" in lease)) {
     log.info("snapshot.job.refused", { gameId, code: lease.code });
     return fail(lease.code, refusalMessage(lease.code));
   }
-  const abort = new AbortController();
-  let stopped: Failure | null = null;
-  const stop = (failure: Failure) => {
-    if (stopped !== null) return;
-    stopped = failure;
-    abort.abort(new JobStop(failure));
+  const cancelled = new AbortController();
+  const onCancel = () => {
+    if (!cancelled.signal.aborted) {
+      cancelled.abort(new JobStop(fail("CANCELLED", "The job was cancelled.")));
+    }
   };
-  const onCancel = () => stop(fail("CANCELLED", "The job was cancelled."));
   // A user task may take a background job's slot (slots.ts): the background job is then cancelled like this.
   const slots = deps.slots ?? SNAPSHOT_JOB_SLOTS;
-  const slot = await slots.take(plan.lock, onCancel);
+  const slot = await slots.take(lock, onCancel);
   if (!slot.ok) {
     lease.release();
     if (slot.code === "INTERNAL") {
@@ -216,10 +245,67 @@ export async function runQuiescentJob<T>(
       "Two snapshot jobs are running already; try again when one has finished.",
     );
   }
-  const giveSlot = slot.give;
   lease.signal.addEventListener("abort", onCancel);
   signal?.addEventListener("abort", onCancel);
   if (lease.signal.aborted || signal?.aborted) onCancel();
+  let released = false;
+  return {
+    ok: true,
+    data: {
+      gameId,
+      lock,
+      signal: cancelled.signal,
+      run: (plan) => runWindow(gameId, lock, plan, deps, cancelled.signal),
+      release() {
+        if (released) return;
+        released = true;
+        lease.signal.removeEventListener("abort", onCancel);
+        signal?.removeEventListener("abort", onCancel);
+        slot.give();
+        lease.release();
+      },
+    },
+  };
+}
+
+export async function runQuiescentJob<T>(
+  gameId: string,
+  plan: JobPlan<T>,
+  deps: JobDeps,
+  signal?: AbortSignal,
+): Promise<Result<T, ErrorCode>> {
+  const held = await holdQuiescentJob(gameId, plan.lock, deps, signal ? { signal } : {});
+  if (!held.ok) return held;
+  try {
+    plan.onLocked?.();
+    return await held.data.run(plan);
+  } finally {
+    held.data.release();
+  }
+}
+
+/** Steps 2 to 12 of one window, its commit or discard, under a hold whose `holdSignal` cancels it. */
+async function runWindow<T>(
+  gameId: string,
+  lock: "task" | "background",
+  plan: JobPlan<T>,
+  deps: JobDeps,
+  holdSignal: AbortSignal,
+): Promise<Result<T, ErrorCode>> {
+  const timing = { ...JOB_TIMING, ...deps.timing };
+  const { log } = deps;
+  const quiet =
+    plan.direction === "export" ? "EXP_QUIESCENCE_VIOLATION" : "IMP_QUIESCENCE_VIOLATION";
+  const abort = new AbortController();
+  let stopped: Failure | null = null;
+  const stop = (failure: Failure) => {
+    if (stopped !== null) return;
+    stopped = failure;
+    abort.abort(new JobStop(failure));
+  };
+  const onCancel = () => stop(failureOf(holdSignal));
+  holdSignal.addEventListener("abort", onCancel);
+  if (holdSignal.aborted) onCancel();
   let bytes = 0;
   const startedAt = Date.now();
   const watchdog = setInterval(
@@ -234,6 +320,7 @@ export async function runQuiescentJob<T>(
     Math.min(500, timing.deadlineMs),
   );
   let durable = false;
+  let clear: JobContext["clearStorage"] = noFrames;
   const context: JobContext = {
     signal: abort.signal,
     addBytes: (n) => {
@@ -242,18 +329,31 @@ export async function runQuiescentJob<T>(
     committed: () => {
       durable = true;
     },
+    clearStorage: (key, storageTypes) => clear(key, storageTypes),
   };
+  const setClear = (next: JobContext["clearStorage"]) => {
+    clear = next;
+  };
+  const planLocked = { ...plan, lock };
 
   try {
-    plan.onLocked?.();
-    log.info("snapshot.job.start", { gameId, keys: plan.keys.length, lock: plan.lock });
-    const windowed = await quiescentWindow(gameId, plan, deps, timing, context, stop, quiet);
+    log.info("snapshot.job.start", { gameId, keys: plan.keys.length, lock });
+    const windowed = await quiescentWindow(
+      gameId,
+      planLocked,
+      deps,
+      timing,
+      context,
+      stop,
+      quiet,
+      setClear,
+    );
     const failure: Failure | null = stopped ?? (windowed.ok ? null : windowed);
     if (failure !== null) {
       await plan
         .discard()
         .catch((error: unknown) => log.error("snapshot.job.discard-failed", { gameId, error }));
-      log.warn("snapshot.job.failed", { gameId, lock: plan.lock, code: failure.code });
+      log.warn("snapshot.job.failed", { gameId, lock, code: failure.code });
       return failure;
     }
     // The commit honors the context's signal itself, and once it has committed its outcome stands. A commit that
@@ -278,21 +378,12 @@ export async function runQuiescentJob<T>(
     } else {
       outcome = settled;
     }
-    if (outcome.ok) log.info("snapshot.job.done", { gameId, lock: plan.lock });
-    else
-      log.warn("snapshot.job.failed", {
-        gameId,
-        lock: plan.lock,
-        code: outcome.code,
-        step: "commit",
-      });
+    if (outcome.ok) log.info("snapshot.job.done", { gameId, lock });
+    else log.warn("snapshot.job.failed", { gameId, lock, code: outcome.code, step: "commit" });
     return outcome;
   } finally {
     clearInterval(watchdog);
-    lease.signal.removeEventListener("abort", onCancel);
-    signal?.removeEventListener("abort", onCancel);
-    giveSlot();
-    lease.release();
+    holdSignal.removeEventListener("abort", onCancel);
   }
 }
 
@@ -318,12 +409,13 @@ async function quiescentWindow<T>(
   context: JobContext,
   stop: (failure: Failure) => void,
   quiet: ErrorCode,
+  setClear: (clear: JobContext["clearStorage"]) => void,
 ): Promise<Result<void, ErrorCode>> {
   const { log } = deps;
   const nonce = newJobNonce();
   const layout = layOutNavigations(plan.keys, nonce);
   const bypass = plan.bypass ?? "all";
-  const ses = deps.session(gameId);
+  const ses = plan.session ?? deps.session(gameId);
   const canary = createCanary({
     preloadPath: deps.preloadPath,
     ...(deps.harnessWorld ? { harnessWorld: deps.harnessWorld } : {}),
@@ -470,11 +562,25 @@ async function quiescentWindow<T>(
       }
 
       // Step 8.
-      const keyed = await targets.resolveKeys(navigation.frames);
+      const chromiumKeys = new Map<string, string>();
+      const keyed = await targets.resolveKeys(navigation.frames, chromiumKeys);
       if (!keyed.ok) {
         log.error("snapshot.quiescent.key-check-failed", { gameId, code: keyed.code });
         return keyed;
       }
+      // R5's wipe of a frame's whole key: the Chromium key string is used here only, never stored or logged.
+      setClear(async (key, storageTypes) => {
+        const slot = navigation.frames.find((frame) => frame.key.index === key.index);
+        const storageKey = slot === undefined ? undefined : chromiumKeys.get(slot.url);
+        if (storageKey === undefined) {
+          throw new JobStop(fail("INTERNAL", "No frame of this navigation resolves that key."));
+        }
+        await guard(
+          dbg.sendCommand("Storage.clearDataForStorageKey", { storageKey, storageTypes }),
+          timing.loadMs,
+          "Clearing a storage key",
+        );
+      });
 
       // Step 9.
       const handshake = current;
@@ -498,7 +604,9 @@ async function quiescentWindow<T>(
 
       // Step 10.
       // A stopped job (a launch cancelling a storage check, the canary, the watchdog) stops waiting at once.
-      const ran = await guard(plan.runFrames(frames, context), null, "Reading");
+      const ran = await guard(plan.runFrames(frames, context), null, "Reading").finally(() =>
+        setClear(noFrames),
+      );
       if (!ran.ok) return ran;
       if (context.signal.aborted) return fail(quiet, "The job was stopped.");
     }
@@ -520,6 +628,7 @@ async function quiescentWindow<T>(
     return fail("INTERNAL", "The job window failed.");
   } finally {
     // Step 12 (the lease is released by the caller, after commit or discard).
+    setClear(noFrames);
     for (const cleanup of cleanups.reverse()) {
       try {
         cleanup();

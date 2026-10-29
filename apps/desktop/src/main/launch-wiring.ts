@@ -27,6 +27,7 @@ import {
 import { type createLaunchQueue, createNoticeChain, handleLaunchRequest } from "./launch-input.js";
 import { focusLauncher } from "./launcher-window.js";
 import type { Logger } from "./log/logger.js";
+import { recoveryNotice } from "./snapshots/recovery.js";
 
 /** The game runtime with the real windows, sessions and close procedure (architecture.md sections 4 and 5). */
 export function createGames(
@@ -90,6 +91,8 @@ export function createGames(
       });
       return window;
     },
+    // A refused launch of a game that needs recovery names the backup (save-transfer.md section 6).
+    recoveryNotice: (gameId) => recoveryNotice(repos, gameId),
     // Step 1 of the close procedure stops playtime, so the procedure's time is not counted (architecture.md 4).
     closeWindow: (window, gameId) =>
       closeGameWindow(window as BrowserWindow, {

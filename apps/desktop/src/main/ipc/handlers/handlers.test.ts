@@ -44,6 +44,11 @@ function setUp(
   };
   const snapshots = {
     export: vi.fn(),
+    restore: vi.fn(),
+    verify: vi.fn(),
+    recover: vi.fn(),
+    deleteSaves: vi.fn(),
+    clearCache: vi.fn(async (_gameId: string) => ({ ok: true as const, data: {} })),
     sendProgress: vi.fn(),
     fileOf: (path: string) => join(dir, path),
     copy: vi.fn(async (_from: string, _to: string) => undefined),
@@ -490,6 +495,88 @@ describe("settings", () => {
     expect(dataOf("settings:get", await handlers["settings:get"]({}))).toEqual({});
     expect(dataOf("settings:set", await handlers["settings:set"]({}))).toEqual({});
     expect(repos.settings.all()).toEqual({});
+  });
+});
+
+describe("snapshot:import, delete local saves and clear cache (architecture.md section 6)", () => {
+  it("opens the file dialog in main for a file source, and Cancel imports nothing", async () => {
+    const { handlers, snapshots, dialogs } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    dialogs.openFile.mockResolvedValueOnce(null);
+    expect(
+      await handlers["snapshot:import"]({ gameId: game.gameId, source: "file" }),
+    ).toMatchObject({
+      ok: false,
+      code: "CANCELLED",
+    });
+    expect(snapshots.restore).not.toHaveBeenCalled();
+    dialogs.openFile.mockResolvedValueOnce("/chosen/x.wgsnap");
+    snapshots.restore.mockImplementation(async (_request, hooks) => {
+      hooks.onStep("validate");
+      hooks.onLocked();
+      hooks.onStep("backup");
+      return { ok: true, data: {} };
+    });
+    const mapping = [{ from: "https://a.example", to: "https://b.example" }];
+    const { taskId } = dataOf(
+      "snapshot:import",
+      await handlers["snapshot:import"]({ gameId: game.gameId, source: "file", mapping }),
+    );
+    expect(snapshots.restore.mock.calls[0]?.[0]).toEqual({
+      gameId: game.gameId,
+      source: { file: "/chosen/x.wgsnap" },
+      mapping,
+    });
+    await vi.waitFor(() => expect(snapshots.sendProgress).toHaveBeenCalledTimes(3));
+    expect(
+      snapshots.sendProgress.mock.calls.map(([e]) => [e.taskId, e.kind, e.step, e.status]),
+    ).toEqual([
+      [taskId, "import", "validate", "running"],
+      [taskId, "import", "backup", "running"],
+      [taskId, "import", "backup", "done"],
+    ]);
+  });
+
+  it("returns a key mismatch found before the lock as the call's result", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.restore.mockResolvedValue({
+      ok: false,
+      code: "IMP_STORAGE_KEY_MISMATCH",
+      message: "The snapshot's storage keys do not match this game.",
+    });
+    expect(
+      await handlers["snapshot:import"]({ gameId: game.gameId, source: { revisionId: uuidv7() } }),
+    ).toMatchObject({ ok: false, code: "IMP_STORAGE_KEY_MISMATCH" });
+    expect(snapshots.sendProgress).not.toHaveBeenCalled();
+  });
+
+  it("runs delete local saves as a task, for a library entry and for a removed game's data only", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.deleteSaves.mockImplementation(async (_gameId, hooks) => {
+      hooks.onLocked();
+      return { ok: true, data: {} };
+    });
+    dataOf("game:deleteSaves", await handlers["game:deleteSaves"]({ gameId: game.gameId }));
+    // A library entry is not a removed game's data.
+    expect(await handlers["library:deleteOrphanData"]({ gameId: game.gameId })).toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await handlers["game:clearCache"]({ gameId: game.gameId })).toEqual({
+      ok: true,
+      data: {},
+    });
+    expect(snapshots.clearCache).toHaveBeenCalledWith(game.gameId);
   });
 });
 
