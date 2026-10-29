@@ -183,7 +183,9 @@ describe("the snapshot worker's commands", () => {
       requestId: 10,
       manifest: { revisionId: MANIFEST.revisionId, contentHash: written.contentHash },
       entries: 1,
+      dataBytes: LOCAL.length,
     });
+    expect(written.dataBytes).toBe(LOCAL.length);
     const keys = [{ from: 0, to: 0, ...storageKey, role: "top" as const }];
     await core.handle({ type: "expected", jobId: 7, requestId: 11, keys }, []);
     expect(events.at(-1)).toEqual({

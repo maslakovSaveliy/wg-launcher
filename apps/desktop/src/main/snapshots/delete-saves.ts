@@ -11,11 +11,10 @@ import type { FaultPoint } from "./faults.js";
 import { beginJournal } from "./journal.js";
 import { knownKeys } from "./keys.js";
 import { failureOf, holdQuiescentJob, type QuiescentHold } from "./quiescent/job.js";
-import { markNeedsRecovery } from "./restore.js";
 import {
   backupName,
+  changeOrRollBack,
   fail,
-  rollBack,
   runStep,
   type TaskDeps,
   wipeKeys,
@@ -44,13 +43,19 @@ export async function deleteLocalSaves(
   let journal: ReturnType<typeof beginJournal> | null = null;
   const workers = workerSlot(deps.startWorker, {});
   try {
+    const kept =
+      "Kept: snapshots, backups, cookies, the cache, and files the game keeps in other file systems (OPFS), which " +
+      "cannot be backed up yet.";
     const confirmed = await deps.confirm({
       title: "Delete local saves?",
       message: `Delete what "${entry.title}" saved on this computer?`,
-      detail:
-        "Deleted: the game's localStorage and IndexedDB data on this computer. A backup is made first and kept " +
-        "(backups are never deleted automatically). Kept: snapshots, backups, cookies, the cache, and files the game " +
-        "keeps in other file systems (OPFS), which cannot be backed up yet.",
+      detail: game
+        ? "Deleted: the game's localStorage and IndexedDB data on this computer. A backup is made first and kept " +
+          `(backups are never deleted automatically). ${kept}`
+        : "Deleted: what this removed game stored in localStorage and IndexedDB on this computer, and its entry " +
+          'under "Data of removed games". A backup is made first and kept in the backups folder of WGLauncher\'s ' +
+          "data (backups are never deleted automatically), but this version has no way to restore it once the " +
+          `removed game's entry is gone. ${kept}`,
       confirmLabel: "Delete local saves",
     });
     if (!confirmed) return fail("CANCELLED", "Nothing was deleted.");
@@ -64,12 +69,17 @@ export async function deleteLocalSaves(
     options.onLocked?.();
     const context = {
       journal: opened,
+      log,
       ...(deps.faults ? { faults: deps.faults } : {}),
       ...(options.onStep ? { onStep: options.onStep } : {}),
     };
     const stopBeforeWipe = (failure: { ok: false; code: ErrorCode; message: string }) => {
       opened.finish("failed");
-      log.warn("snapshot.delete-saves.failed", { gameId, code: failure.code, step: "backup" });
+      log.warn("snapshot.delete-saves.failed", {
+        gameId,
+        code: failure.code,
+        step: opened.entry().step,
+      });
       return failure;
     };
     const locked = await runStep("lock", context, async () => ({ ok: true, data: hold }));
@@ -83,44 +93,47 @@ export async function deleteLocalSaves(
       writeBackup(hold, keys, backupRevisionId, deps),
     );
     if (!backedUp.ok) return stopBeforeWipe(backedUp);
-    const backup = backedUp.data;
+    const backup = backedUp.data.snapshot;
+    const backupBytes = backedUp.data.dataBytes;
 
-    // R5 and R8.
-    const changed = await (async (): Promise<Result<void, ErrorCode>> => {
-      const wiped = await runStep("wipe", context, async () => {
-        const worker = await workers.get(hold.signal);
-        if (worker === null) return failureOf(hold.signal);
-        return wipeKeys(hold, keys, "all", worker);
-      });
-      if (!wiped.ok) return wiped;
-      return runStep("commit", context, async () => {
-        deps.transaction(() => {
-          if (game) repos.games.update(gameId, { baseRevisionId: null });
-          else repos.orphans.delete(gameId);
-          opened.finish("done");
+    // R5 and R8; any failure, or anything thrown, rolls back.
+    const changed = await changeOrRollBack(
+      hold,
+      opened,
+      backup,
+      deps,
+      async () => {
+        const wiped = await runStep("wipe", context, async () => {
+          const worker = await workers.get(hold.signal);
+          if (worker === null) return failureOf(hold.signal);
+          return wipeKeys(hold, keys, "all", worker, {
+            budgetBytes: backupBytes,
+            point: "wipe",
+            ...(deps.faults ? { faults: deps.faults } : {}),
+          });
         });
-        return { ok: true, data: undefined };
-      });
-    })();
+        if (!wiped.ok) return wiped;
+        return runStep("commit", context, async () => {
+          deps.transaction(() => {
+            if (game) repos.games.update(gameId, { baseRevisionId: null });
+            else repos.orphans.delete(gameId);
+            opened.finish("done");
+          });
+          return { ok: true, data: undefined };
+        });
+      },
+      options.onStep,
+    );
     if (changed.ok) {
       log.info("snapshot.delete-saves.done", { gameId, backupRevisionId, keys: keys.length });
       return { ok: true, data: { backupRevisionId } };
     }
-    log.warn("snapshot.delete-saves.failed", {
-      gameId,
+    if (changed.code === "IMP_RECOVERY_FAILED") return changed;
+    return {
+      ok: false,
       code: changed.code,
-      step: opened.entry().step,
-    });
-    const rolled = await rollBack(hold, opened, backup, deps, options.onStep);
-    if (rolled.ok) {
-      opened.finish("failed");
-      return {
-        ok: false,
-        code: changed.code,
-        message: `${changed.message} Nothing was deleted: the saves were put back from ${backupName(backup)}.`,
-      };
-    }
-    return markNeedsRecovery(gameId, backup, rolled, deps);
+      message: `${changed.message} Nothing was deleted: the saves were put back from ${backupName(backup)}.`,
+    };
   } finally {
     await workers.dispose();
     hold.release();

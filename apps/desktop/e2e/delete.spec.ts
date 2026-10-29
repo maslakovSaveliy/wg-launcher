@@ -13,6 +13,7 @@ import {
   gameRow,
   journalOf,
   ok,
+  setFaults,
   snapshotRows,
   storageDigest,
   storageInventory,
@@ -77,6 +78,34 @@ test("delete local saves backs up and verifies first, then wipes; refused while 
   const { hash: after } = await play(app, gameId, 0);
   expect(after).toBe(empty);
   expect(after).not.toBe(h5);
+  await close(app, gameId);
+});
+
+test("a delete that fails at the wipe or at the commit puts the saves back from its backup (AC-16)", async () => {
+  test.setTimeout(150_000);
+  launched = await launchApp();
+  const app = launched;
+  const gameId = await addGame(app, `${app.progressLab.local}/`, "progress-lab");
+  const { hash } = await play(app, gameId, 4);
+  await close(app, gameId);
+  const before = ok(await storageDigest(app, gameId));
+  for (const step of ["wipe", "commit"]) {
+    await setFaults(app, [`fail:${step}`]);
+    await queueConfirm(app, true);
+    const result = await deleteLocalSaves(app, gameId);
+    expect(result, step).toMatchObject({ ok: false, code: "INTERNAL" });
+    expect(result.ok ? "" : result.message, step).toContain("Nothing was deleted");
+    expect(ok(await storageDigest(app, gameId)), step).toBe(before);
+    expect((await journalOf(app, gameId)).at(-1), step).toMatchObject({
+      kind: "delete-saves",
+      state: "failed",
+      step: "rollback-verify",
+    });
+  }
+  await setFaults(app, []);
+  expect(await gameRow(app, gameId)).toMatchObject({ needsRecovery: false });
+  const { hash: again } = await play(app, gameId, 0);
+  expect(again).toBe(hash);
   await close(app, gameId);
 });
 

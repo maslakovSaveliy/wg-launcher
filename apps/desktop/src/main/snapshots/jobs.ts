@@ -105,7 +105,9 @@ export function createSnapshotDeps(options: SnapshotDepsOptions): SnapshotDeps {
 /**
  * A fresh in-memory partition for `snapshot:verify` (save-transfer.md section 6): `wg-verify-<nonce>` with 128 random
  * bits, no `persist:` prefix (Electron keeps such a partition in memory), the game policy installed; `dispose` clears
- * all of its data.
+ * all of its data. Electron has no API to free a session, so each verify leaves an empty `Session` object (its
+ * handlers included) in memory until the app quits: a small cost per verify (Assumed; not measured), bounded by how
+ * often the user verifies.
  */
 export function verifySession(log: Logger): ReturnType<NonNullable<TaskDeps["verifySession"]>> {
   const ses = session.fromPartition(`wg-verify-${randomBytes(16).toString("hex")}`);

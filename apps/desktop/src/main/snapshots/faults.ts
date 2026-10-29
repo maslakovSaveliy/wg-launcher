@@ -1,7 +1,9 @@
 // Fault injection for the restore protocol (save-transfer.md section 6, AC-8; plan Review Focus 2), test flavor only:
 // the e2e suite names a point and what happens there. `fail:<point>` makes that step fail as soon as it starts (after
-// its journal entry was written); `crash-after:<point>` lets the step finish and then ends the process at once, as a
-// crash or a power loss would. Production passes no hook. Pure apart from the injected `crash`.
+// its journal entry was written); `throw:<point>` throws a plain Error there instead, as an unexpected bug would;
+// `slow:<point>:<ms>` makes the step's quiescent window wait that long inside its deadline, as a large save would;
+// `crash-after:<point>` lets the step finish and then ends the process at once, as a crash or a power loss would.
+// Production passes no hook. Pure apart from the injected `crash`.
 
 /** The steps of a restore or a delete, in order (save-transfer.md section 6, R1 to R8). */
 export const RESTORE_STEPS = [
@@ -21,10 +23,17 @@ export const ROLLBACK_STEPS = ["rollback-wipe", "rollback-import", "rollback-ver
 export type RollbackStep = (typeof ROLLBACK_STEPS)[number];
 
 export type FaultPoint = RestoreStep | RollbackStep;
-export type FaultSpec = `fail:${FaultPoint}` | `crash-after:${FaultPoint}`;
+export type FaultSpec =
+  | `fail:${FaultPoint}`
+  | `throw:${FaultPoint}`
+  | `crash-after:${FaultPoint}`
+  | `slow:${FaultPoint}:${number}`;
 
-/** Called when a step starts and when it has finished. Throws `InjectedFault` to fail the step. */
-export type FaultHook = (point: FaultPoint, when: "start" | "end") => void;
+/**
+ * Called when a step starts, inside its quiescent window (`window`: returns how many milliseconds the window waits),
+ * and when it has finished. Throws to fail the step.
+ */
+export type FaultHook = (point: FaultPoint, when: "start" | "window" | "end") => number | undefined;
 
 export class InjectedFault extends Error {
   constructor(readonly point: FaultPoint) {
@@ -35,14 +44,21 @@ export class InjectedFault extends Error {
 
 const POINTS: readonly string[] = [...RESTORE_STEPS, ...ROLLBACK_STEPS];
 
-/** Parses a fault spec; anything else is null (the hook then does nothing). */
-export function parseFault(
-  spec: string,
-): { mode: "fail" | "crash-after"; point: FaultPoint } | null {
-  const [mode, point, ...rest] = spec.split(":");
+type Mode = "fail" | "throw" | "crash-after" | "slow";
+const MODES: readonly string[] = ["fail", "throw", "crash-after", "slow"];
+
+/** Parses a fault spec; anything else is null. */
+export function parseFault(spec: string): { mode: Mode; point: FaultPoint; ms: number } | null {
+  const [mode, point, ms, ...rest] = spec.split(":");
   if (rest.length > 0 || point === undefined || !POINTS.includes(point)) return null;
-  if (mode !== "fail" && mode !== "crash-after") return null;
-  return { mode, point: point as FaultPoint };
+  if (mode === undefined || !MODES.includes(mode)) return null;
+  if (mode === "slow") {
+    const delay = Number(ms);
+    return ms !== undefined && /^\d+$/.test(ms) && Number.isSafeInteger(delay)
+      ? { mode, point: point as FaultPoint, ms: delay }
+      : null;
+  }
+  return ms === undefined ? { mode: mode as Mode, point: point as FaultPoint, ms: 0 } : null;
 }
 
 /** The hook for a list of specs; `crash` ends the process (the test flavor kills it, no clean-up). */
@@ -53,10 +69,16 @@ export function faultHook(specs: readonly string[], crash: () => void): FaultHoo
     return [parsed];
   });
   return (point, when) => {
+    let delay = 0;
     for (const fault of faults) {
       if (fault.point !== point) continue;
       if (fault.mode === "fail" && when === "start") throw new InjectedFault(point);
+      if (fault.mode === "throw" && when === "start") {
+        throw new Error(`A test bug in the ${point} step.`);
+      }
+      if (fault.mode === "slow" && when === "window") delay += fault.ms;
       if (fault.mode === "crash-after" && when === "end") crash();
     }
+    return delay;
   };
 }

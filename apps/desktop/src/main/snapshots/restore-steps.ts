@@ -77,23 +77,49 @@ const manifestKeys = (keys: readonly JobKey[]) =>
  * Runs one step: writes it to the journal before it starts, reports it, and calls the test fault hook at its start
  * and, once it succeeded, at its end (`crash-after:<step>` ends the process there).
  */
+export interface StepContext {
+  journal?: Journal;
+  faults?: FaultHook;
+  onStep?(point: FaultPoint): void;
+  log?: Pick<TaskDeps["log"], "error">;
+}
+
+/**
+ * Nothing a step does throws past it: an error (a journal write, a file system call, a bug) is the step's INTERNAL
+ * failure, so a failure after R5 always reaches the rollback.
+ */
 export async function runStep<T>(
   point: FaultPoint,
-  context: { journal?: Journal; faults?: FaultHook; onStep?(point: FaultPoint): void },
+  context: StepContext,
   run: () => Promise<Result<T, ErrorCode>>,
 ): Promise<Result<T, ErrorCode>> {
-  context.journal?.step(point);
-  context.onStep?.(point);
   try {
+    context.journal?.step(point);
+    context.onStep?.(point);
     context.faults?.(point, "start");
     const result = await run();
     if (result.ok) context.faults?.(point, "end");
     return result;
   } catch (error) {
     if (error instanceof InjectedFault) return fail("INTERNAL", error.message);
-    throw error;
+    context.log?.error("snapshot.step.threw", { step: point, error });
+    return fail("INTERNAL", `The ${point} step failed unexpectedly.`);
   }
 }
+
+/** How a window runs: its session, the data it handles (its deadline), whether a cancel stops it, its step. */
+export interface WindowOptions {
+  session?: JobSession;
+  /** Bytes of save data the window handles, known before it starts; each MiB extends its deadline (job.ts). */
+  budgetBytes?: number;
+  /** False for the rollback: a cancel must not stop it (the watchdog and the canary still do). */
+  cancellable?: boolean;
+  /** The step and the fault hook: `slow:<step>:<ms>` waits inside the window (test flavor). */
+  point?: FaultPoint;
+  faults?: FaultHook;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** One window over `keys` whose frames each run `perFrame`; nothing to commit. */
 function frameWindow(
@@ -106,27 +132,38 @@ function frameWindow(
       clearStorage(key: JobKey, storageTypes: string): Promise<void>;
     },
   ) => Promise<Result<void, ErrorCode>>,
-  options: { session?: JobSession; commit?: () => Promise<Result<void, ErrorCode>> } = {},
+  options: WindowOptions & { commit?: () => Promise<Result<void, ErrorCode>> } = {},
 ): Promise<Result<void, ErrorCode>> {
-  return hold.run<void>({
-    direction: "import",
-    lock: hold.lock,
-    keys,
-    ...(options.session ? { session: options.session } : {}),
-    async runFrames(frames, context) {
-      for (const frame of frames) {
+  let first = true;
+  return hold.run<void>(
+    {
+      direction: "import",
+      lock: hold.lock,
+      keys,
+      ...(options.session ? { session: options.session } : {}),
+      async runFrames(frames, context) {
+        if (first) {
+          first = false;
+          // The deadline grows with the data this window handles (save-transfer.md section 6).
+          context.addBytes(options.budgetBytes ?? 0);
+          const delay = options.point ? (options.faults?.(options.point, "window") ?? 0) : 0;
+          if (delay > 0) await sleep(delay);
+        }
+        for (const frame of frames) {
+          if (context.signal.aborted) return failureOf(context.signal);
+          const done = await perFrame(frame, context);
+          if (!done.ok) return done;
+        }
+        return OK;
+      },
+      async commit(context) {
         if (context.signal.aborted) return failureOf(context.signal);
-        const done = await perFrame(frame, context);
-        if (!done.ok) return done;
-      }
-      return OK;
+        return options.commit ? options.commit() : OK;
+      },
+      async discard() {},
     },
-    async commit(context) {
-      if (context.signal.aborted) return failureOf(context.signal);
-      return options.commit ? options.commit() : OK;
-    },
-    async discard() {},
-  });
+    { cancellable: options.cancellable !== false },
+  );
 }
 
 /**
@@ -139,8 +176,9 @@ export async function writeBackup(
   keys: readonly JobKey[],
   backupRevisionId: string,
   deps: TaskDeps,
-): Promise<Result<Snapshot, ErrorCode>> {
+): Promise<Result<{ snapshot: Snapshot; dataBytes: number }, ErrorCode>> {
   const { gameId } = hold;
+  let listening = false;
   const workers = workerSlot(deps.startWorker, {});
   const dir = join(deps.paths.backups, gameId);
   const partialPath = join(deps.paths.tmp, `${backupRevisionId}.wgsnap.partial`);
@@ -151,13 +189,22 @@ export async function writeBackup(
   };
   let row: Snapshot | null = null;
   try {
-    const result = await hold.run<Snapshot>({
+    const result = await hold.run<{ snapshot: Snapshot; dataBytes: number }>({
       direction: "export",
       lock: hold.lock,
       keys,
       async runFrames(frames, context) {
         const worker = await workers.get(context.signal);
         if (worker === null) return failureOf(context.signal);
+        if (!listening) {
+          // The size is not known before the read: the deadline grows with the bytes the worker measured.
+          listening = true;
+          let reported = 0;
+          worker.onReceived((bytes) => {
+            context.addBytes(bytes - reported);
+            reported = bytes;
+          });
+        }
         for (const frame of frames) {
           const exported = await worker.exportFrame(frame.port, {
             keyIndex: frame.key.index,
@@ -228,7 +275,7 @@ export async function writeBackup(
           sizeBytes: written.data.sizeBytes,
           entries: written.data.entries,
         });
-        return { ok: true, data: snapshot };
+        return { ok: true, data: { snapshot, dataBytes: written.data.dataBytes } };
       },
       async discard() {
         await workers.dispose();
@@ -261,20 +308,26 @@ export async function wipeKeys(
   keys: readonly JobKey[],
   scope: FrameScope | "all",
   worker: SnapshotWorker,
+  options: WindowOptions = {},
 ): Promise<Result<void, ErrorCode>> {
-  const wiped = await frameWindow(hold, keys, async (frame, context) => {
-    if (scope !== "all") {
-      const done = await worker.wipeSelected(frame.port, scope);
-      return done.ok ? OK : done;
-    }
-    await context.clearStorage(frame.key, "local_storage,indexeddb");
-    const inventory = await worker.inventory(frame.port);
-    if (!inventory.ok) return inventory;
-    if (inventory.data.localStorageItems > 0 || inventory.data.databases.length > 0) {
-      return fail("IMP_WIPE_FAILED", "A storage key still held data after it was cleared.");
-    }
-    return OK;
-  });
+  const wiped = await frameWindow(
+    hold,
+    keys,
+    async (frame, context) => {
+      if (scope !== "all") {
+        const done = await worker.wipeSelected(frame.port, scope);
+        return done.ok ? OK : done;
+      }
+      await context.clearStorage(frame.key, "local_storage,indexeddb");
+      const inventory = await worker.inventory(frame.port);
+      if (!inventory.ok) return inventory;
+      if (inventory.data.localStorageItems > 0 || inventory.data.databases.length > 0) {
+        return fail("IMP_WIPE_FAILED", "A storage key still held data after it was cleared.");
+      }
+      return OK;
+    },
+    options,
+  );
   return wiped.ok ? wiped : asWipeFailure(wiped);
 }
 
@@ -284,7 +337,7 @@ export function importKeys(
   keys: readonly PlannedKey[],
   scope: FrameScope,
   worker: SnapshotWorker,
-  options: { session?: JobSession } = {},
+  options: WindowOptions = {},
 ): Promise<Result<void, ErrorCode>> {
   return frameWindow(
     hold,
@@ -313,7 +366,7 @@ export function verifyKeys(
   scope: FrameScope,
   worker: SnapshotWorker,
   expected: string,
-  options: { session?: JobSession } = {},
+  options: WindowOptions = {},
 ): Promise<Result<void, ErrorCode>> {
   return frameWindow(
     hold,
@@ -359,40 +412,137 @@ export async function rollBack(
 ): Promise<Result<void, ErrorCode>> {
   const { gameId } = hold;
   const workers = workerSlot(deps.startWorker, {});
-  const context = {
+  // Nobody can cancel a rollback: the worker and every window run on a signal no cancel aborts.
+  const never = new AbortController().signal;
+  const context: StepContext = {
     journal,
+    log: deps.log,
     ...(deps.faults ? { faults: deps.faults } : {}),
     ...(onStep ? { onStep } : {}),
   };
+  const windowOf = (point: FaultPoint, budgetBytes: number): WindowOptions => ({
+    cancellable: false,
+    budgetBytes,
+    point,
+    ...(deps.faults ? { faults: deps.faults } : {}),
+  });
   try {
     deps.log.warn("snapshot.rollback.start", { gameId, backupRevisionId: backup.revisionId });
     const wiped = await runStep("rollback-wipe", context, async () => {
-      const worker = await workers.get(hold.signal);
-      if (worker === null) return failureOf(hold.signal);
+      const worker = await workers.get(never);
+      if (worker === null) return fail("INTERNAL", "The snapshot worker did not start.");
       const validated = await worker.validate(deps.fileOf(backup.path));
       if (!validated.ok) return validated;
       if (validated.data.manifest.contentHash !== backup.contentHash) {
         return fail("IMP_RECOVERY_FAILED", "The backup file differs from its record.");
       }
       const keys = ownKeys(validated.data.manifest.storageKeys);
-      const done = await wipeKeys(hold, keys, "all", worker);
-      return done.ok ? { ok: true, data: { worker, keys } } : done;
+      const { dataBytes } = validated.data;
+      const done = await wipeKeys(hold, keys, "all", worker, windowOf("rollback-wipe", dataBytes));
+      return done.ok ? { ok: true, data: { worker, keys, dataBytes } } : done;
     });
     if (!wiped.ok) return wiped;
-    const { worker, keys } = wiped.data;
+    const { worker, keys, dataBytes } = wiped.data;
     const imported = await runStep("rollback-import", context, () =>
-      importKeys(hold, keys, ALL, worker),
+      importKeys(hold, keys, ALL, worker, windowOf("rollback-import", dataBytes)),
     );
     if (!imported.ok) return imported;
     const verified = await runStep("rollback-verify", context, () =>
-      verifyKeys(hold, keys, ALL, worker, backup.contentHash),
+      verifyKeys(
+        hold,
+        keys,
+        ALL,
+        worker,
+        backup.contentHash,
+        windowOf("rollback-verify", dataBytes),
+      ),
     );
     if (!verified.ok) return verified;
     deps.log.info("snapshot.rollback.done", { gameId, backupRevisionId: backup.revisionId });
     return OK;
+  } catch (error) {
+    // Anything that throws here is a failed rollback, never an escape that leaves the game launchable.
+    deps.log.error("snapshot.rollback.threw", { gameId, error });
+    return fail("INTERNAL", "The rollback failed unexpectedly.");
   } finally {
-    await workers.dispose();
+    await workers.dispose().catch(() => undefined);
   }
+}
+
+/**
+ * A failed rollback: IMP_RECOVERY_FAILED, the game marked `needs_recovery` (in the lock manager first, then in the
+ * database, so a launch is refused naming the backup), the journal left `rolling-back` for the next start-up and
+ * "Retry recovery". The backup is never deleted.
+ */
+export function markNeedsRecovery(
+  gameId: string,
+  backup: Pick<Snapshot, "revisionId" | "createdAt">,
+  cause: { code: ErrorCode; message: string },
+  deps: Pick<TaskDeps, "repos" | "recovery" | "log">,
+): { ok: false; code: ErrorCode; message: string } {
+  deps.recovery.mark(gameId);
+  try {
+    if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: true });
+  } catch (error) {
+    // The mark in the lock manager stands, and the journal entry makes the next start roll back again.
+    deps.log.error("snapshot.recovery.flag-failed", { gameId, error });
+  }
+  deps.log.error("snapshot.rollback.failed", {
+    gameId,
+    code: cause.code,
+    backupRevisionId: backup.revisionId,
+  });
+  return {
+    ok: false,
+    code: "IMP_RECOVERY_FAILED",
+    message: `The saves could not be put back. They are kept in ${backupName(backup)}; use "Retry recovery".`,
+  };
+}
+
+/**
+ * R5 to R8 of a restore or a delete, and the rollback when they fail. From the wipe on, the game is marked in the lock
+ * manager, so whatever happens no launch or task gets in before the change committed or a rollback verified (a crash
+ * leaves the journal entry, and the next start rolls back). Nothing here throws: an error in `change` is a failure
+ * that rolls back, an error in the rollback a failed rollback.
+ */
+export async function changeOrRollBack(
+  hold: QuiescentHold,
+  journal: Journal,
+  backup: Snapshot,
+  deps: TaskDeps,
+  change: () => Promise<Result<void, ErrorCode>>,
+  onStep?: (point: FaultPoint) => void,
+): Promise<Result<void, ErrorCode>> {
+  const { gameId } = hold;
+  deps.recovery.mark(gameId);
+  let changed: Result<void, ErrorCode>;
+  try {
+    changed = await change();
+  } catch (error) {
+    deps.log.error("snapshot.change.threw", { gameId, error });
+    changed = fail("INTERNAL", "Something went wrong while the saves were changed.");
+  }
+  if (changed.ok) {
+    deps.recovery.clear(gameId);
+    return changed;
+  }
+  deps.log.warn("snapshot.change.failed", { gameId, code: changed.code });
+  const rolled = await rollBack(hold, journal, backup, deps, onStep);
+  if (!rolled.ok) return markNeedsRecovery(gameId, backup, rolled, deps);
+  try {
+    journal.finish("failed");
+  } catch (error) {
+    // The data equals the backup, but the entry still says the rollback has not verified: keep the game refused.
+    deps.log.error("snapshot.journal.finish-failed", { gameId, error });
+    return markNeedsRecovery(
+      gameId,
+      backup,
+      fail("INTERNAL", "The journal could not be closed."),
+      deps,
+    );
+  }
+  deps.recovery.clear(gameId);
+  return { ok: false, code: changed.code, message: changed.message };
 }
 
 /** The scope of the snapshot's adapter, or "all"; an adapter this build does not have cannot be honored. */

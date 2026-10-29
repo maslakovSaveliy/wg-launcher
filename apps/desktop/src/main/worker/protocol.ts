@@ -179,6 +179,8 @@ export const WorkerEvent = z.discriminatedUnion("type", [
     manifest: manifestFields.extend({ contentHash: hash }),
     sizeBytes: count,
     entries: count,
+    /** The sum of the entries' sizes (uncompressed data), which sizes the restore windows' deadlines. */
+    dataBytes: count,
   }),
   z.strictObject({ type: z.literal("expected"), requestId: id, contentHash: hash }),
   z.strictObject({ type: z.literal("digested"), requestId: id, contentHash: hash, entries: count }),
@@ -190,6 +192,7 @@ export const WorkerEvent = z.discriminatedUnion("type", [
     contentHash: hash,
     sizeBytes: count,
     entries: count,
+    dataBytes: count,
   }),
   z.strictObject({
     type: z.literal("failed"),

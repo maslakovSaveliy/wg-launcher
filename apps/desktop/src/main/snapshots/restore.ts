@@ -21,7 +21,7 @@ import type { Snapshot } from "../db/repos/snapshots.js";
 import type { Validated } from "../worker/client.js";
 import { workerSlot } from "../worker/slot.js";
 import type { FaultPoint } from "./faults.js";
-import { beginJournal } from "./journal.js";
+import { beginJournal, type Journal } from "./journal.js";
 import {
   type CheckedKeys,
   checkStorageKeys,
@@ -35,10 +35,10 @@ import {
   ALL,
   adapterScopeOf,
   backupName,
+  changeOrRollBack,
   fail,
   importKeys,
   type PlannedKey,
-  rollBack,
   runStep,
   type TaskDeps,
   verifyKeys,
@@ -78,7 +78,7 @@ interface Plan {
 }
 
 /** `maxStorageKeys` (snapshot-format.md section 8): a backup holds at most this many keys. */
-const MAX_STORAGE_KEYS = 32;
+const MAX_STORAGE_KEYS = DEFAULT_LIMITS.maxStorageKeys;
 
 const keyText = (key: StorageKeyRef) =>
   key.topLevelSite === null ? key.origin : `${key.origin} (inside ${key.topLevelSite})`;
@@ -184,7 +184,8 @@ function confirmation(
 ) {
   const lines = [
     `The saves of "${title}" on this computer will be replaced by the snapshot of ${validated.manifest.createdAt}.`,
-    "A backup of the current saves is made first and kept; if anything fails, they are restored from it.",
+    "A backup of the current saves is made first and kept. If anything fails, the launcher puts them back from it; if " +
+      'even that fails, the game stays closed and the backup is kept for "Retry recovery".',
   ];
   if (validated.manifest.flushState === "unconfirmed") {
     lines.push(
@@ -238,6 +239,7 @@ export async function runRestore(
   });
   const context = {
     journal,
+    log,
     ...(deps.faults ? { faults: deps.faults } : {}),
     ...(request.onStep ? { onStep: request.onStep } : {}),
   };
@@ -245,7 +247,6 @@ export async function runRestore(
   const workers = workerSlot(deps.startWorker, {});
   const signal = request.signal ?? new AbortController().signal;
   let hold: QuiescentHold | null = null;
-  let committed = false;
   /** R1 to R4 changed nothing: the entry is closed and the copy removed. */
   const stopBeforeWipe = async (failure: { ok: false; code: ErrorCode; message: string }) => {
     journal.finish("failed");
@@ -329,69 +330,46 @@ export async function runRestore(
       writeBackup(held, plan.wipeSet, backupRevisionId, deps),
     );
     if (!backedUp.ok) return await stopBeforeWipe(backedUp);
-    const backup = backedUp.data;
+    const backup = backedUp.data.snapshot;
+    const backupBytes = backedUp.data.dataBytes;
 
-    // R5 to R8; any failure rolls back.
+    // R5 to R8; any failure, or anything thrown, rolls back.
     const keys: PlannedKey[] = plan.checked.keys;
-    const changed = await (async (): Promise<Result<void, ErrorCode>> => {
-      const wiped = await runStep("wipe", context, () =>
-        wipeKeys(held, plan.wipeSet, plan.selective ? plan.scope : "all", worker),
-      );
-      if (!wiped.ok) return wiped;
-      const imported = await runStep("import", context, () =>
-        importKeys(held, keys, plan.scope, worker),
-      );
-      if (!imported.ok) return imported;
-      const verified = await runStep("verify", context, () =>
-        verifyKeys(held, keys, plan.scope, worker, expected),
-      );
-      if (!verified.ok) return verified;
-      return runStep("commit", context, async () => {
-        const { revisionId } = validated.manifest;
-        const dir = join(deps.paths.snapshots, gameId);
-        const finalPath = join(dir, `${revisionId}.wgsnap`);
-        const adopt = copy !== null && repos.snapshots.findByRevision(revisionId) === null;
-        if (adopt) {
-          await mkdir(dir, { recursive: true });
-          await rename(copy as string, finalPath);
-        }
-        try {
-          deps.transaction(() => {
-            if (adopt) {
-              const { manifest } = validated;
-              repos.snapshots.addIfAbsent({
-                revisionId,
-                gameId,
-                kind: "imported",
-                manifestGameId: manifest.gameId,
-                parentRevisionId: manifest.parentRevisionId,
-                createdAt: manifest.createdAt,
-                deviceId: manifest.deviceId,
-                exporterId: manifest.exporter.id,
-                exporterVersion: manifest.exporter.version,
-                ...(manifest.adapter
-                  ? { adapterId: manifest.adapter.id, adapterVersion: manifest.adapter.version }
-                  : {}),
-                contentHash: manifest.contentHash,
-                sizeBytes: validated.sizeBytes,
-                path: `snapshots/${gameId}/${revisionId}.wgsnap`,
-                flushState: manifest.flushState,
-              });
-            }
-            // The partition's data now descends from the restored revision (save-transfer.md, "Revision parents").
-            repos.games.update(gameId, { baseRevisionId: revisionId });
-            journal.finish("done");
-          });
-        } catch (error) {
-          if (adopt) await rm(finalPath, { force: true });
-          log.error("snapshot.restore.commit-failed", { gameId, error });
-          return fail("INTERNAL", "The restore could not be recorded.");
-        }
-        committed = true;
-        return { ok: true, data: undefined };
-      });
-    })();
-
+    const step = (point: FaultPoint, budgetBytes: number) => ({
+      budgetBytes,
+      point,
+      ...(deps.faults ? { faults: deps.faults } : {}),
+    });
+    const changed = await changeOrRollBack(
+      held,
+      journal,
+      backup,
+      deps,
+      async () => {
+        const wiped = await runStep("wipe", context, () =>
+          wipeKeys(
+            held,
+            plan.wipeSet,
+            plan.selective ? plan.scope : "all",
+            worker,
+            step("wipe", backupBytes),
+          ),
+        );
+        if (!wiped.ok) return wiped;
+        const imported = await runStep("import", context, () =>
+          importKeys(held, keys, plan.scope, worker, step("import", validated.dataBytes)),
+        );
+        if (!imported.ok) return imported;
+        const verified = await runStep("verify", context, () =>
+          verifyKeys(held, keys, plan.scope, worker, expected, step("verify", validated.dataBytes)),
+        );
+        if (!verified.ok) return verified;
+        return runStep("commit", context, () =>
+          commitRestore(gameId, validated, copy, journal, deps),
+        );
+      },
+      request.onStep,
+    );
     if (changed.ok) {
       log.info("snapshot.restore.done", {
         gameId,
@@ -409,46 +387,73 @@ export async function runRestore(
         },
       };
     }
-    log.warn("snapshot.restore.failed", { gameId, code: changed.code, step: journal.entry().step });
-    const rolled = await rollBack(held, journal, backup, deps, request.onStep);
-    if (rolled.ok) {
-      journal.finish("failed");
-      return {
-        ok: false,
-        code: changed.code,
-        message: `${changed.message} The saves were put back from ${backupName(backup)}.`,
-      };
-    }
-    return markNeedsRecovery(gameId, backup, rolled, deps);
+    if (changed.code === "IMP_RECOVERY_FAILED") return changed;
+    return {
+      ok: false,
+      code: changed.code,
+      message: `${changed.message} The saves were put back from ${backupName(backup)}.`,
+    };
   } finally {
     await workers.dispose();
-    if (copy !== null && !committed) await rm(copy, { force: true });
+    // The private copy goes whatever happened; R8 moved it into snapshots/ when it was adopted.
+    if (copy !== null) await rm(copy, { force: true }).catch(() => undefined);
     (hold as QuiescentHold | null)?.release();
     if (hold !== null) deps.afterChange?.(gameId);
   }
 }
 
 /**
- * A failed rollback: IMP_RECOVERY_FAILED, the game marked `needs_recovery` (in the lock manager and the database, so a
- * launch is refused naming the backup), the journal left `rolling-back` for the next start-up and "Retry recovery".
- * The backup is never deleted.
+ * R8: in one transaction, the `imported` row of an external file (moved into `snapshots/<gameId>/` just before), the
+ * game's base revision and the journal's `done`. An external file whose revision is stored already is not adopted
+ * again; its copy is removed with the others.
  */
-export function markNeedsRecovery(
+async function commitRestore(
   gameId: string,
-  backup: Pick<Snapshot, "revisionId" | "createdAt">,
-  cause: { code: ErrorCode; message: string },
-  deps: Pick<TaskDeps, "repos" | "recovery" | "log">,
-): { ok: false; code: ErrorCode; message: string } {
-  deps.recovery.mark(gameId);
-  if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: true });
-  deps.log.error("snapshot.rollback.failed", {
-    gameId,
-    code: cause.code,
-    backupRevisionId: backup.revisionId,
-  });
-  return {
-    ok: false,
-    code: "IMP_RECOVERY_FAILED",
-    message: `The saves could not be put back. They are kept in ${backupName(backup)}; use "Retry recovery".`,
-  };
+  validated: Validated,
+  copy: string | null,
+  journal: Journal,
+  deps: TaskDeps,
+): Promise<Result<void, ErrorCode>> {
+  const { repos, log } = deps;
+  const { manifest } = validated;
+  const { revisionId } = manifest;
+  const dir = join(deps.paths.snapshots, gameId);
+  const finalPath = join(dir, `${revisionId}.wgsnap`);
+  const adopt = copy !== null && repos.snapshots.findByRevision(revisionId) === null;
+  try {
+    if (adopt) {
+      await mkdir(dir, { recursive: true });
+      await rename(copy as string, finalPath);
+    }
+    deps.transaction(() => {
+      if (adopt) {
+        repos.snapshots.addIfAbsent({
+          revisionId,
+          gameId,
+          kind: "imported",
+          manifestGameId: manifest.gameId,
+          parentRevisionId: manifest.parentRevisionId,
+          createdAt: manifest.createdAt,
+          deviceId: manifest.deviceId,
+          exporterId: manifest.exporter.id,
+          exporterVersion: manifest.exporter.version,
+          ...(manifest.adapter
+            ? { adapterId: manifest.adapter.id, adapterVersion: manifest.adapter.version }
+            : {}),
+          contentHash: manifest.contentHash,
+          sizeBytes: validated.sizeBytes,
+          path: `snapshots/${gameId}/${revisionId}.wgsnap`,
+          flushState: manifest.flushState,
+        });
+      }
+      // The partition's data now descends from the restored revision (save-transfer.md, "Revision parents").
+      repos.games.update(gameId, { baseRevisionId: revisionId });
+      journal.finish("done");
+    });
+  } catch (error) {
+    if (adopt) await rm(finalPath, { force: true }).catch(() => undefined);
+    log.error("snapshot.restore.commit-failed", { gameId, error });
+    return fail("INTERNAL", "The restore could not be recorded.");
+  }
+  return { ok: true, data: undefined };
 }

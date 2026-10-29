@@ -113,6 +113,8 @@ export const restoreSnapshot = (
 ) => call(launched, "restoreSnapshot", gameId, options);
 export const setFaults = (launched: Launched, specs: string[]) =>
   call(launched, "setFaults", specs);
+export const setJobTiming = (launched: Launched, timing: Parameters<Hooks["setJobTiming"]>[0]) =>
+  call(launched, "setJobTiming", timing);
 export const deleteLocalSaves = (launched: Launched, gameId: string) =>
   call(launched, "deleteLocalSaves", gameId);
 export const clearCache = (launched: Launched, gameId: string) =>

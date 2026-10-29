@@ -36,8 +36,9 @@ export async function verifySnapshot(
   if (!held.ok) return held;
   options.onLocked?.();
   const workers = workerSlot(deps.startWorker, {});
-  const fresh = deps.verifySession();
+  let fresh: ReturnType<NonNullable<TaskDeps["verifySession"]>> | null = null;
   try {
+    fresh = deps.verifySession();
     const worker = await workers.get(held.data.signal);
     if (worker === null) return failureOf(held.data.signal);
     const validated = await worker.validate(deps.fileOf(row.path));
@@ -66,7 +67,7 @@ export async function verifySnapshot(
   } finally {
     await workers.dispose();
     await fresh
-      .dispose()
+      ?.dispose()
       .catch((error: unknown) => log.error("snapshot.verify.clear-failed", { error }));
     held.data.release();
   }

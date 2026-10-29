@@ -41,6 +41,8 @@ export interface Written {
   contentHash: string;
   sizeBytes: number;
   entries: number;
+  /** The sum of the entries' sizes. */
+  dataBytes: number;
 }
 
 const errnoOf = (error: unknown) => {
@@ -121,6 +123,7 @@ export async function writeVerified(request: WriteRequest): Promise<Written> {
       contentHash: written.contentHash,
       sizeBytes: compressedSize,
       entries: validated.manifest.entries.length,
+      dataBytes: validated.manifest.entries.reduce((n, entry) => n + entry.size, 0),
     };
   } catch (error) {
     await handle?.close().catch(() => undefined);

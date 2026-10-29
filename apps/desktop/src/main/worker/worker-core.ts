@@ -167,6 +167,7 @@ export function createWorkerCore(options: WorkerCoreOptions) {
               },
               sizeBytes: source.compressedSize,
               entries: entries.length,
+              dataBytes: entries.reduce((n, entry) => n + entry.size, 0),
             });
           } catch (error) {
             post({ type: "failed", requestId, ...failure(error) });

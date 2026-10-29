@@ -631,6 +631,20 @@ describe("holdQuiescentJob: one lease and one slot over several windows (restore
     expect(outside).toBeInstanceOf(Error);
   });
 
+  it("runs a window a cancel cannot stop when asked to (the rollback), while a plain window is cancelled", async () => {
+    const { deps, plan, leaseController } = fakes();
+    const held = await holdQuiescentJob(GAME, "task", deps);
+    if (!held.ok) throw new Error(held.code);
+    leaseController.abort();
+    expect(held.data.signal.aborted).toBe(true);
+    expect(await held.data.run(plan)).toMatchObject({ ok: false, code: "CANCELLED" });
+    expect(await held.data.run(plan, { cancellable: false })).toEqual({
+      ok: true,
+      data: "committed",
+    });
+    held.data.release();
+  });
+
   it("refuses with the lock's code and takes no slot", async () => {
     const slots = new JobSlots(2);
     const { deps } = fakes({ refuse: "NEEDS_RECOVERY", slots });

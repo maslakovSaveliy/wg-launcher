@@ -230,4 +230,17 @@ describe("frame commands from the worker (save-transfer.md section 5, step 10)",
     });
     expect((await failureOf(frameWipeSelected(blocked, scope))).code).toBe("IMP_WIPE_FAILED");
   });
+
+  it("keeps waiting while the frame sends heartbeats, longer than the silence bound", async () => {
+    const port = channel((frame) => {
+      frame.on("message", ({ nonce }: { nonce: string }) => {
+        const beat = setInterval(() => frame.postMessage({ type: "working", nonce }), 20);
+        setTimeout(() => {
+          clearInterval(beat);
+          frame.postMessage({ type: "inventory", nonce, inventory: INVENTORY });
+        }, 200);
+      });
+    });
+    expect(await frameInventory(port, { silenceMs: 60 })).toEqual(INVENTORY);
+  });
 });

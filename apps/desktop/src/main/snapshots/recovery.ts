@@ -11,8 +11,7 @@ import type { JournalEntry } from "../db/repos/restore-journal.js";
 import type { FaultPoint } from "./faults.js";
 import { reachedWipe, resumeJournal } from "./journal.js";
 import { holdQuiescentJob } from "./quiescent/job.js";
-import { markNeedsRecovery } from "./restore.js";
-import { backupName, fail, rollBack, type TaskDeps } from "./restore-steps.js";
+import { backupName, fail, markNeedsRecovery, rollBack, type TaskDeps } from "./restore-steps.js";
 
 /** The text a refused launch shows while a game needs recovery: it names the backup that holds its saves. */
 export function recoveryNotice(
@@ -43,7 +42,7 @@ function pendingEntry(
 async function recoverEntry(
   entry: JournalEntry,
   deps: TaskDeps,
-  onStep?: (point: FaultPoint) => void,
+  hooks: { onLocked?(): void; onStep?(point: FaultPoint): void } = {},
 ): Promise<Result<void, ErrorCode>> {
   const { gameId } = entry;
   const backup =
@@ -60,13 +59,26 @@ async function recoverEntry(
     deps.log.warn("snapshot.recovery.not-started", { gameId, code: held.code });
     return held;
   }
+  // Answered only now, with the lease held: a refusal is the call's own result.
+  hooks.onLocked?.();
   const journal = resumeJournal(deps.repos.restoreJournal, entry);
   try {
-    const rolled = await rollBack(held.data, journal, backup, deps, onStep);
+    // The rollback never throws: any error in it is a failed rollback.
+    const rolled = await rollBack(held.data, journal, backup, deps, hooks.onStep);
     if (!rolled.ok) return markNeedsRecovery(gameId, backup, rolled, deps);
-    journal.finish("failed");
+    try {
+      journal.finish("failed");
+      if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: false });
+    } catch (error) {
+      deps.log.error("snapshot.recovery.record-failed", { gameId, error });
+      return markNeedsRecovery(
+        gameId,
+        backup,
+        fail("INTERNAL", "The recovery could not be recorded."),
+        deps,
+      );
+    }
     deps.recovery.clear(gameId);
-    if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: false });
     deps.log.info("snapshot.recovery.done", { gameId, backupRevisionId: backup.revisionId });
     return { ok: true, data: undefined };
   } finally {
@@ -114,6 +126,5 @@ export async function retryRecovery(
 ): Promise<Result<void, ErrorCode>> {
   const entry = pendingEntry(deps.repos, gameId);
   if (entry === undefined) return fail("NOT_FOUND", "No recovery is pending for this game.");
-  options.onLocked?.();
-  return recoverEntry(entry, deps, options.onStep);
+  return recoverEntry(entry, deps, options);
 }

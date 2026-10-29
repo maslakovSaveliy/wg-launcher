@@ -37,7 +37,10 @@ function setUp() {
     write: vi.fn(async (options: WriteOptions) => {
       writeFileSync(options.finalPath, "snapshot");
       return answer === "written"
-        ? { ok: true as const, data: { contentHash: "a".repeat(64), sizeBytes: 8, entries: 1 } }
+        ? {
+            ok: true as const,
+            data: { contentHash: "a".repeat(64), sizeBytes: 8, entries: 1, dataBytes: 8 },
+          }
         : {
             ok: false as const,
             code: "INTERNAL" as const,

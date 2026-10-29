@@ -6,7 +6,7 @@
 // verify ("Export verified").
 
 import { createReadStream } from "node:fs";
-import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -37,6 +37,7 @@ import {
   restoreSnapshot,
   retryRecovery,
   setFaults,
+  setJobTiming,
   snapshotRows,
   storageDigest,
   validated,
@@ -203,6 +204,83 @@ test("a failed rollback marks the game needs_recovery, a launch names the backup
   expect((await snapshotRows(app, gameId)).some((row) => row.revisionId === backupId)).toBe(true);
 });
 
+test("a slow import and an equally slow rollback both finish: each window's deadline grows with its data", async () => {
+  test.setTimeout(240_000);
+  launched = await launchApp();
+  const app = launched;
+  const gameId = await addGame(app, `${app.progressLab.local}/`, "progress-lab");
+  await play(app, gameId, 7);
+  const snapshot = ok(await exportSnapshot(app, gameId));
+  const h9 = await play(app, gameId, 2);
+  const before = ok(await storageDigest(app, gameId));
+  // A short base deadline and a long allowance per MiB: only a window sized from its data outlasts a 6 s import.
+  await setJobTiming(app, { deadlineMs: 4000, deadlinePerMiBMs: 1_000_000_000 });
+
+  // The import is slow but finishes; the verify fails; the rollback's import is just as slow and finishes too.
+  await setFaults(app, ["slow:import:6000", "slow:rollback-import:6000", "fail:verify"]);
+  await queueConfirm(app, true);
+  const result = await restoreSnapshot(app, gameId, {
+    source: { revisionId: snapshot.revisionId },
+  });
+  expect(result).toMatchObject({ ok: false, code: "INTERNAL" });
+  expect((await journalOf(app, gameId)).at(-1)).toMatchObject({
+    state: "failed",
+    step: "rollback-verify",
+  });
+  expect(ok(await storageDigest(app, gameId))).toBe(before);
+
+  // "Retry recovery" of a failed rollback is sized the same way.
+  await setFaults(app, ["fail:import", "fail:rollback-import"]);
+  await queueConfirm(app, true);
+  expect(
+    await restoreSnapshot(app, gameId, { source: { revisionId: snapshot.revisionId } }),
+  ).toMatchObject({ ok: false, code: "IMP_RECOVERY_FAILED" });
+  await setFaults(app, ["slow:rollback-import:6000"]);
+  ok(await retryRecovery(app, gameId));
+  expect(await gameRow(app, gameId)).toMatchObject({ needsRecovery: false });
+  expect(ok(await storageDigest(app, gameId))).toBe(before);
+  await setJobTiming(app, null);
+  await setFaults(app, []);
+  expect(await hashOf(app, gameId)).toBe(h9);
+});
+
+test("an unexpected error after the wipe still rolls back, and one inside the rollback marks the game for recovery", async () => {
+  test.setTimeout(180_000);
+  launched = await launchApp();
+  const app = launched;
+  const gameId = await addGame(app, `${app.progressLab.local}/`, "progress-lab");
+  await play(app, gameId, 7);
+  const snapshot = ok(await exportSnapshot(app, gameId));
+  const h8 = await play(app, gameId, 1);
+  const before = ok(await storageDigest(app, gameId));
+
+  // A plain Error (no test fault value) thrown when the commit starts.
+  await setFaults(app, ["throw:commit"]);
+  await queueConfirm(app, true);
+  expect(
+    await restoreSnapshot(app, gameId, { source: { revisionId: snapshot.revisionId } }),
+  ).toMatchObject({ ok: false, code: "INTERNAL" });
+  expect((await journalOf(app, gameId)).at(-1)).toMatchObject({
+    state: "failed",
+    step: "rollback-verify",
+  });
+  expect(await gameRow(app, gameId)).toMatchObject({ needsRecovery: false });
+  expect(ok(await storageDigest(app, gameId))).toBe(before);
+
+  // A plain Error inside the rollback is a failed rollback, never an escape that frees the game.
+  await setFaults(app, ["fail:import", "throw:rollback-import"]);
+  await queueConfirm(app, true);
+  expect(
+    await restoreSnapshot(app, gameId, { source: { revisionId: snapshot.revisionId } }),
+  ).toMatchObject({ ok: false, code: "IMP_RECOVERY_FAILED" });
+  expect(await gameRow(app, gameId)).toMatchObject({ needsRecovery: true });
+  expect(await launchGame(app, gameId)).toMatchObject({ ok: false, code: "NEEDS_RECOVERY" });
+  await setFaults(app, []);
+  ok(await retryRecovery(app, gameId));
+  expect(ok(await storageDigest(app, gameId))).toBe(before);
+  expect(await hashOf(app, gameId)).toBe(h8);
+});
+
 test("a crash right after the wipe is rolled back at the next start, before any launch (Review Focus 2)", async () => {
   test.setTimeout(180_000);
   const userData = await mkdtemp(join(tmpdir(), "wg-e2e-crash-"));
@@ -288,6 +366,12 @@ test("a file whose revision is stored with other content is IMP_REVISION_CONFLIC
   expect(ok(await storageDigest(app, b))).toBe(before);
   expect(await snapshotRows(app, b)).toEqual([]);
 
+  // A file of a stored revision with the same content: restored, not adopted again, and its private copy removed.
+  await queueConfirm(app, true);
+  ok(await restoreSnapshot(app, b, { source: { file: stored } }));
+  expect((await snapshotRows(app, b)).map((row) => row.kind)).toEqual(["backup"]);
+  expect(await readdir(join(app.userData, "tmp"))).toEqual([]);
+
   // The same data under a new revision: restored, then stored as B's `imported` row next to its backup.
   const revisionId = uuidv7();
   const fresh = join(dir, "fresh.wgsnap");
@@ -330,4 +414,14 @@ test("verify restores into a fresh in-memory partition, sets Export verified and
   expect(await badges()).toContain("export-verified");
   expect(ok(await storageDigest(app, gameId))).toBe(before);
   expect(await hashOf(app, gameId)).toBe(h8);
+
+  // A file that is not the one recorded (another valid snapshot in its place) fails and sets nothing.
+  const second = ok(await exportSnapshot(app, gameId));
+  await copyFile(join(app.userData, snapshot.path), join(app.userData, second.path));
+  expect(await verifySnapshot(app, gameId, second.revisionId)).toMatchObject({
+    ok: false,
+    code: "IMP_VERIFY_MISMATCH",
+  });
+  const rows = await snapshotRows(app, gameId);
+  expect(rows.find((row) => row.revisionId === second.revisionId)?.verifiedAt).toBeNull();
 });

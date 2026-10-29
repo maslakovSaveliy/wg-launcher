@@ -198,8 +198,12 @@ export interface QuiescentHold {
   readonly lock: "task" | "background";
   /** Aborted when the hold is cancelled (a launch cancelling a background lease, the caller's signal). */
   readonly signal: AbortSignal;
-  /** Runs steps 2 to 12 of one quiescent window under this hold; the plan's `lock` is ignored. */
-  run<T>(plan: JobPlan<T>): Promise<Result<T, ErrorCode>>;
+  /**
+   * Runs steps 2 to 12 of one quiescent window under this hold; the plan's `lock` is ignored. With `cancellable:
+   * false` a cancel of the hold does not stop the window (a rollback must finish); the watchdog and the canary still
+   * do.
+   */
+  run<T>(plan: JobPlan<T>, options?: { cancellable?: boolean }): Promise<Result<T, ErrorCode>>;
   /** Gives the slot back, then the lease. Idempotent. */
   release(): void;
 }
@@ -255,7 +259,14 @@ export async function holdQuiescentJob(
       gameId,
       lock,
       signal: cancelled.signal,
-      run: (plan) => runWindow(gameId, lock, plan, deps, cancelled.signal),
+      run: (plan, runOptions) =>
+        runWindow(
+          gameId,
+          lock,
+          plan,
+          deps,
+          runOptions?.cancellable === false ? new AbortController().signal : cancelled.signal,
+        ),
       release() {
         if (released) return;
         released = true;

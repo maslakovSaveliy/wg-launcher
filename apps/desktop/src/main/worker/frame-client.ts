@@ -1,7 +1,8 @@
 // The worker's end of one quiescent frame's port (save-transfer.md section 5, step 10): typed commands with a fresh
 // 128-bit nonce each (`crypto.randomBytes`, QW-4), every reply validated with `FrameReply`. Anything unexpected (an
 // invalid reply, another nonce, an entry in answer to an inventory) aborts the command and closes the port; a closed
-// port fails it; a frame silent for `silenceMs` is `EXP_TIMEOUT` (section 3: a missing reply).
+// port fails it; a frame silent for `silenceMs` is `EXP_TIMEOUT` (section 3: a missing reply). A frame's `working`
+// heartbeat (every HEARTBEAT_MS while it runs a command) counts as activity.
 import { randomBytes } from "node:crypto";
 import {
   type FrameExportRequest,
@@ -82,6 +83,8 @@ function run<T>(
         return;
       }
       arm();
+      // A heartbeat only says the frame is still working on this command (save-transfer.md section 3).
+      if (parsed.data.type === "working") return;
       try {
         const result = onReply(parsed.data);
         if (result !== undefined) finish({ value: result.done });

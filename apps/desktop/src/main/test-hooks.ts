@@ -29,7 +29,7 @@ import { isQuiescentWindow } from "./snapshots/jobs.js";
 import type { KeyMapping } from "./snapshots/key-check.js";
 import type { StorageKeyRef } from "./snapshots/keys.js";
 import { knownKeys } from "./snapshots/keys.js";
-import type { JobDeps } from "./snapshots/quiescent/job.js";
+import type { JobDeps, JobTiming } from "./snapshots/quiescent/job.js";
 import { holdQuiescentJob } from "./snapshots/quiescent/job.js";
 import { retryRecovery } from "./snapshots/recovery.js";
 import { type RestoreOutcome, type RestoreSource, runRestore } from "./snapshots/restore.js";
@@ -138,8 +138,10 @@ export interface TestHooks {
     gameId: string,
     options: { source: RestoreSource; mapping?: KeyMapping[] },
   ): Promise<Result<RestoreOutcome, ErrorCode>>;
-  /** `fail:<step>` and `crash-after:<step>` specs for the next restores and deletes (faults.ts). */
+  /** `fail:`, `throw:`, `slow:<step>:<ms>` and `crash-after:` specs for the next restores and deletes (faults.ts). */
   setFaults(specs: string[]): void;
+  /** The quiescent jobs' timing from now on (job.ts `JobTiming`); null restores the defaults. */
+  setJobTiming(timing: Partial<JobTiming> | null): void;
   deleteLocalSaves(gameId: string): Promise<Result<unknown, ErrorCode>>;
   clearCache(gameId: string): Promise<Result<unknown, ErrorCode>>;
   verifySnapshot(gameId: string, revisionId: string): Promise<Result<Snapshot, ErrorCode>>;
@@ -433,6 +435,12 @@ export function installTestHooks(init: {
     setFaults(specs) {
       // A crash is a crash: no clean-up, no log flush (Review Focus 2).
       faults = faultHook(specs, () => process.kill(process.pid, "SIGKILL"));
+    },
+    setJobTiming(timing) {
+      // The restore jobs share this object with export and the storage check.
+      const { job } = needSnapshots();
+      if (timing === null) delete job.timing;
+      else job.timing = timing;
     },
     deleteLocalSaves: (gameId) => deleteLocalSaves(gameId, needTasks()),
     clearCache: (gameId) => {

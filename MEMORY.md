@@ -165,7 +165,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `IMP_WIPE_FAILED` is never retried, the job rolls back; a failed rollback leaves the journal `rolling-back` and the
   game `needs_recovery` until `snapshot:recover` (a new channel) or the next start verifies a rollback; start-up
   recovery runs before IPC and launches; delete local saves locks before it asks; open check 4 holds (Verified,
-  2026-10-29, `e2e/delete.spec.ts`).
+  2026-10-29, `e2e/delete.spec.ts`). Every restore window's deadline is sized from its data, frames send a `working`
+  heartbeat every 5 s, nothing thrown after the wipe escapes the rollback, and rollback windows ignore cancels
+  (save-transfer.md section 6, "Deadlines" and "No escape after the wipe").
 - 2026-10-29 Owner: the full test suite, desktop e2e included, runs in CI on the draft pull request for every push;
   locally an agent runs unit tests and lint in full and only the e2e specs a change touches; one full local
   `pnpm check` and `pnpm test:e2e` before the final pull request (plan Task 18).
@@ -583,6 +585,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   with `EXP_TIMEOUT` "A frame of the job window is missing". [V, 2026-10-29, a first draft of
   `apps/desktop/e2e/keys.spec.ts`, Electron 45.0.0, macOS arm64] [A] the cause: the stub's CSP `frame-src` lists the
   iframe origin, and the CSP host-source grammar has no IPv6 literals, so Chromium blocks the frame.
+- CDP `Storage.clearDataForStorageKey` with `indexeddb` closes an open connection of that key (its `close` event
+  fires), so a `deleteDatabase` that the connection blocked does not land after a later write. [V, 2026-10-29,
+  `packages/exporters/browser/import-errors.spec.ts`, bundled Chromium 156.0.8078.4] [A] the same in Electron 45.
 - A restore e2e test that kills the app (`crash-after:<step>`, SIGKILL) and starts it again needs the same
   progress-lab port, because the game's URL and storage keys carry it: `launchApp({userData, progressLab})` reuses a
   server the test started and stops. [V, 2026-10-29, `apps/desktop/e2e/restore.spec.ts`]

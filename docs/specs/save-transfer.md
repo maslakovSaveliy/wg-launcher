@@ -125,7 +125,9 @@ interface FrameInventory {
   `null`, while the same message cloned arrived whole. Verified (2026-10-28, a throwaway probe app on Electron 45.0.0,
   macOS arm64). `serveFrame` is the frame's end: one command at a time; an invalid message, a command while another
   runs, import chunks out of order or with another nonce close the port, which the worker treats as a failed command.
-  Verified (2026-10-28, `packages/exporters/src/frame-server.test.ts`, Vitest on Node 24.22.1).
+  Verified (2026-10-28, `packages/exporters/src/frame-server.test.ts`, Vitest on Node 24.22.1). While a command runs,
+  the frame replies `working` every `HEARTBEAT_MS` (5 s, Assumed), which the worker counts as activity (Phase 1 Task
+  14, section 6 "Deadlines").
 
 ## 4. Generic exporter
 
@@ -409,7 +411,8 @@ commands (`worker/source.ts`). `Assumed` unless tagged otherwise.
   record of its frame references. A revision already stored with another `contentHash`, or a stored row whose file
   says otherwise, is `IMP_REVISION_CONFLICT`. Verified (2026-10-29, `apps/desktop/e2e/restore.spec.ts`: a file with
   the stored revision id and no data was refused with nothing written; the same data under a new revision was restored
-  and adopted as the game's `imported` row in `snapshots/<gameId>/`).
+  and adopted as the game's `imported` row in `snapshots/<gameId>/`; the stored file itself, chosen as a file, was
+  restored without a second row, and its private copy left `tmp/` empty).
 - **R2.** `checkStorageKeys` (section 2) applies the mapping and checks every key; a mapping of an origin the
   snapshot lacks, a repeated `from`, or a non-origin is `INVALID_ARGUMENT`, and two keys mapped onto one storage key
   are `IMP_STORAGE_KEY_MISMATCH`. A first-party `frame` key needs a top-level origin of its own site in the target, as a
@@ -450,22 +453,50 @@ commands (`worker/source.ts`). `Assumed` unless tagged otherwise.
   data; `crash-after:wipe` killed the app (SIGKILL) and the next start rolled back before any launch, with the
   pre-import hash and a valid backup (Review Focus 2). Mutation runs: without `recoverAtStartup` the crash test failed,
   without the rollback the fault test failed.
-- **Faults (test flavor).** `fail:<step>` fails a step when it starts, after its journal write; `crash-after:<step>`
-  kills the process once the step finished; steps are R1 to R8 and the three rollback steps (`faults.ts`). Production
-  passes no hook.
+- **Faults (test flavor).** `fail:<step>` fails a step when it starts, after its journal write; `throw:<step>` throws a
+  plain `Error` there; `slow:<step>:<ms>` waits inside the step's window; `crash-after:<step>` kills the process once
+  the step finished; steps are R1 to R8 and the three rollback steps (`faults.ts`). Production passes no hook.
 - **Delete local saves** takes the lock first and asks while holding it (as "Remove from library" does), so an open
   window refuses before any question; it works for a removed game's data too (`library:deleteOrphanData`), whose orphan
-  row is deleted at R8. **Clear cache** holds a `task` lease and asks first. **Verify** holds the game's `task` lease,
+  row is deleted at R8 (its confirmation says that its backup is kept on disk but cannot be restored from the app once
+  the entry is gone). A failure at its wipe or commit puts the saves back from its backup (Verified, 2026-10-29,
+  `delete.spec.ts`). **Clear cache** holds a `task` lease and asks first. **Verify** holds the game's `task` lease,
   validates the stored file (its `contentHash` must equal the row's) and runs R6 and R7 in a fresh
-  `wg-verify-<128-bit hex>` partition with the game policy installed, then clears that partition's data. Verified
-  (2026-10-29, `apps/desktop/e2e/restore.spec.ts` and `delete.spec.ts`).
-- **Known limits.** A frame command that stays silent for 30 s fails it (the import of a very large frame decodes and
-  writes everything before it answers), which rolls the restore back: safe, but large saves may need a longer bound.
-  The worker posts an import's chunks without backpressure, so a frame holds that frame's entries in memory, as the
-  export side does. An iframe at an IPv6 literal host (`http://[::1]:<port>`) could not be read by the quiescent
-  window (`EXP_TIMEOUT`, "A frame of the job window is missing"); the cause is Assumed to be the stub's CSP
-  `frame-src`, whose host-source grammar has no IPv6 literals (seen 2026-10-29 in a first draft of
-  `apps/desktop/e2e/keys.spec.ts`, which now moves the iframe to another port instead).
+  `wg-verify-<128-bit hex>` partition with the game policy installed, then clears that partition's data; a file that
+  is not the recorded one is `IMP_VERIFY_MISMATCH` and sets nothing. Verified (2026-10-29,
+  `apps/desktop/e2e/restore.spec.ts` and `delete.spec.ts`).
+- **Deadlines.** The watchdog of each window allows 60 s plus 1 s per MiB of the data it handles (section 5), so every
+  window is sized before it starts or as it reads: the backup by the bytes the worker measured, the wipe by the
+  backup's data size, the import and the verify by the snapshot's (the sum of its entry sizes, reported by the
+  worker's `validate`), and each rollback window by the backup's data size (from its own validation, so recovery
+  after a restart is sized the same way). A frame sends a `working` heartbeat every 5 s while it runs a command
+  (`HEARTBEAT_MS`, Assumed), and the importer yields a turn after each store file it decodes, so the worker's 30 s
+  silence bound only ends a frame that stopped working. Before this, every window but an export's had a flat 60 s
+  whatever its size: a slow import failed, and a rollback import of the same size failed the same way, leaving the
+  saves only in a backup. Verified (2026-10-29, `apps/desktop/e2e/restore.spec.ts` "a slow import…": with a 4 s base
+  deadline, a 6 s import and a 6 s rollback import both finished and the data equalled the pre-import state, and
+  "Retry recovery" with a 6 s rollback import succeeded; with the sizes set to zero, the same test ended
+  `IMP_RECOVERY_FAILED`; `frame-server.test.ts`, `frame-client.test.ts` for the heartbeat).
+- **No escape after the wipe.** From R5 on the game is marked in the lock manager until the change committed or a
+  rollback verified, `runStep` turns any error into its step's INTERNAL failure, the change is wrapped once more, and
+  the rollback never throws (an error inside it is a failed rollback). So an unexpected error after the wipe still
+  rolls back, and one inside the rollback leaves the game `needs_recovery`. Rollback and recovery windows run on a
+  signal no cancel aborts; the watchdog and the canary still stop them. Verified (2026-10-29, `restore.spec.ts` "an
+  unexpected error…" with `throw:commit` and `throw:rollback-import`; with both catches removed the error escaped the
+  restore; `job.test.ts` for the signal).
+- **A blocked `wipe-selected` cannot land later.** After `IMP_WIPE_FAILED` the job rolls back, and the rollback wipes
+  with CDP `Storage.clearDataForStorageKey`, which closed the blocking connection (its `close` event fired); a
+  database written after that clear survived the blocker's close, so the queued delete did not land after the
+  rollback. Verified (2026-10-29, `packages/exporters/browser/import-errors.spec.ts`, bundled Chromium 156.0.8078.4);
+  the same in Electron 45 is Assumed, and the rollback's verify would catch a late delete before it reports success.
+- **Known limits.** A single store file that takes longer than 30 s to decode blocks the frame's heartbeat and fails
+  the command (Assumed to need saves far above progress-lab's; then the restore rolls back, sized as above). The worker
+  posts an import's chunks without backpressure, so a frame holds that frame's entries in memory, as the export side
+  does. An iframe at an IPv6 literal host (`http://[::1]:<port>`) could not be read by the quiescent window
+  (`EXP_TIMEOUT`, "A frame of the job window is missing"); the cause is Assumed to be the stub's CSP `frame-src`, whose
+  host-source grammar has no IPv6 literals (seen 2026-10-29 in a first draft of `apps/desktop/e2e/keys.spec.ts`,
+  which now moves the iframe to another port instead). Each verify leaves one empty in-memory `Session` object until
+  the app quits, because Electron cannot free a session (Assumed small; not measured).
 
 **Export** (`snapshot:export`): lock; stop service workers; quiescent export of the game keys with the adapter's scope;
 the worker writes `tmp/<revisionId>.wgsnap.partial`, reads it back through the full validator, fsyncs and renames it to
