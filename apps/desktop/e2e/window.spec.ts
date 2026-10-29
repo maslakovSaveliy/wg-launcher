@@ -248,12 +248,14 @@ test("Esc ends a fullscreen the page requested, as Chromium handles it (plan ope
   // out of fullscreen after `isFullScreen()` has already changed, and input sent during the animation can be lost.
   await expect.poll(events.read, { timeout: 10_000 }).toEqual(ENTER);
   await events.take();
-  expect(await pageFullscreen()).toBe(true);
+  // The document's own fullscreen state follows the window's events: on the Linux runner `document.fullscreenElement`
+  // was still null right after both enter events (MEMORY.md), so it is polled, as below.
+  await expect.poll(pageFullscreen).toBe(true);
   await onWindow(app, gameId, { kind: "key", type: "keyDown" });
   await onWindow(app, gameId, { kind: "key", type: "keyUp" });
   await expect.poll(events.read, { timeout: 10_000 }).toEqual(LEAVE);
   await events.take();
-  expect(await pageFullscreen()).toBe(false);
+  await expect.poll(pageFullscreen).toBe(false);
   await expectFullscreen(app, gameId, false);
   // Chromium consumes the Esc that ends a page's fullscreen, as browsers do: the page does not see it. The launcher
   // took nothing (it has no Esc hold for a page's fullscreen).
@@ -266,7 +268,7 @@ test("Esc ends a fullscreen the page requested, as Chromium handles it (plan ope
   await page.waitForTimeout(1_000);
   await trustedClick(page, "#fullscreen");
   await expect.poll(events.read, { timeout: 10_000 }).toEqual(ENTER);
-  expect(await pageFullscreen()).toBe(true);
+  await expect.poll(pageFullscreen).toBe(true);
   await closeGame(app, gameId);
   await expectState(app, gameId, "exited");
   expect(await windowStateOf(app, gameId)).toMatchObject({ fullscreen: false });

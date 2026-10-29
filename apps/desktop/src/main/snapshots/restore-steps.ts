@@ -425,7 +425,10 @@ export function validateBoundMs(
   return timing.deadlineMs + (timing.deadlinePerMiBMs * readable) / MiB;
 }
 
-/** `run`, or `failure` once `ms` have passed without an answer. */
+/** The longest delay `setTimeout` keeps; a longer one fires after 1 ms (Node's `TimeoutOverflowWarning`). */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** `run`, or `failure` once `ms` (at most `MAX_TIMER_MS`, about 24.8 days) have passed without an answer. */
 async function within<T>(
   ms: number,
   failure: Failure,
@@ -436,7 +439,7 @@ async function within<T>(
     return await Promise.race([
       run(),
       new Promise<Failure>((resolve) => {
-        timer = setTimeout(() => resolve(failure), ms);
+        timer = setTimeout(() => resolve(failure), Math.min(ms, MAX_TIMER_MS));
       }),
     ]);
   } finally {

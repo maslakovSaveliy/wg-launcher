@@ -473,7 +473,9 @@ commands (`worker/source.ts`). `Assumed` unless tagged otherwise.
   data size (from its own validation, so recovery after a restart is sized the same way). That validation runs before
   any window, so no watchdog covers it: it has its own bound, the job deadline plus 1 s per MiB of the most data the
   reader accepts from a file of the backup's size (max(`ratioFloorBytes`, `maxRatio` × size), at most
-  `maxTotalBytes`, snapshot-format.md section 8; `validateBoundMs`), and running past it is a failed rollback
+  `maxTotalBytes`, snapshot-format.md section 8; `validateBoundMs`; the timer is capped at 2^31 − 1 ms, because Node
+  fires a longer `setTimeout` after 1 ms, which failed the "slow import" e2e test's rollback at once in CI run
+  40828152449), and running past it is a failed rollback
   (`IMP_RECOVERY_FAILED`, the game `needs_recovery`), never a wait without end (Verified, 2026-10-29,
   `restore-steps.test.ts`; the bound itself is Assumed). A frame sends a `working` heartbeat every 5 s while it runs a command
   (`HEARTBEAT_MS`, Assumed), and the importer yields a turn after each store file it decodes, so the worker's 30 s

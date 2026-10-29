@@ -51,6 +51,27 @@ describe("the rollback's validation of the backup (save-transfer.md section 6)",
     expect(journal.entry().state).toBe("rolling-back");
   });
 
+  it("a bound past the longest timer Node keeps waits instead of firing at once", async () => {
+    const { repos, gameId, store } = taskDb();
+    const backup = store("backup");
+    const worker = fakeWorker(validatedFile(gameId, MiB));
+    const answer = worker.validate.getMockImplementation();
+    // A validation that answers after 30 ms, under a bound of years (the e2e test's long per-MiB allowance).
+    worker.validate.mockImplementation(
+      (...args) =>
+        new Promise((resolve) => setTimeout(() => resolve(answer?.(...args) as never), 30)),
+    );
+    const { deps } = taskDeps(repos, worker, { deadlineMs: 4000, deadlinePerMiBMs: 1e9 });
+    expect(
+      validateBoundMs(backup.sizeBytes, { deadlineMs: 4000, deadlinePerMiBMs: 1e9 }),
+    ).toBeGreaterThan(2 ** 31);
+    const { hold } = fakeHold(gameId);
+    expect(await rollBack(hold, journalOf(repos, gameId), backup, deps)).toEqual({
+      ok: true,
+      data: undefined,
+    });
+  });
+
   it("a validation that answers in time rolls back with windows sized from the backup's data", async () => {
     const { repos, gameId, store } = taskDb();
     const backup = store("backup");

@@ -589,7 +589,15 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   was not hung left the session `running` for 15 s, no `render-process-gone` [V, 2026-10-28, CI run 40762490413]; why
   is [U]. Force close therefore escalates after 3 s to SIGKILL of `getOSProcessId()`, then to destroying the window
   (architecture.md section 4), and the crash e2e kills the renderer by pid; the S-7 test prints which step ended the
-  hung renderer ("S-7 force close record" in the CI log).
+  hung renderer ("S-7 force close record" in the CI log). On ubuntu-latest a hung renderer was not gone 3 s after
+  `forcefullyCrashRenderer` either, and the SIGKILL ended it (`render-process-gone` reason `killed`); on the dev Mac
+  and the macOS runner `forcefullyCrashRenderer` alone did [V, 2026-10-29, CI run 40828152449 and local runs].
+- On ubuntu-latest `document.fullscreenElement` was still null right after both `enter-full-screen` and
+  `enter-html-full-screen` had fired, so the Esc test polls the document's state [V, 2026-10-29, CI run
+  40828152449].
+- Node's `setTimeout` fires a delay above 2^31 − 1 ms after 1 ms (with a `TimeoutOverflowWarning`): the rollback's
+  validation bound under the e2e test's 10^9 ms per MiB failed at once with `IMP_RECOVERY_FAILED`. `within` in
+  `restore-steps.ts` caps its timer [V, 2026-10-29, CI run 40828152449 and `restore-steps.test.ts`, Node 24.22.1].
 - macOS refuses a fullscreen request made while the Space of a fullscreen window closed a moment ago is still
   animating away, and Electron 45 reports no event for it: `isFullScreen()` turns true with a `resize`, false again
   about 10 to 20 ms later with another `resize`, and neither `enter-full-screen` nor `leave-full-screen` comes. That was
