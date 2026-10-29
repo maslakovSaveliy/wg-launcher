@@ -135,12 +135,16 @@ test("a hung game is offered Force close, and a crash ends the session as crashe
   launched = await launchApp();
   if (!pages) throw new Error("no pages");
 
-  // Crash: render-process-gone → crashed, the window goes, the lock is free for the next launch.
+  // Crash: render-process-gone → crashed, the window goes, the lock is free for the next launch. The renderer is
+  // killed through its OS process, not `forcefullyCrashRenderer`, which on a Linux runner brought no
+  // render-process-gone within 15 s (MEMORY.md); Force close below goes through the app's own steps.
   const crashing = await addGame(launched, `${pages.origin}/navigation.html`, "crash");
   await openGame(launched, crashing);
   await launched.app.evaluate(
     ({ webContents }, cid) => {
-      if (cid !== null) webContents.fromId(cid)?.forcefullyCrashRenderer();
+      const pid = cid === null ? 0 : (webContents.fromId(cid)?.getOSProcessId() ?? 0);
+      if (pid <= 0) throw new Error("no renderer process");
+      process.kill(pid, "SIGKILL");
     },
     await contentsIdOf(crashing),
   );
@@ -190,6 +194,21 @@ test("a hung game is offered Force close, and a crash ends the session as crashe
       (await eventsNamed(launched as Launched, "game.force-close")).map((line) => line.gameId),
     )
     .toEqual([hanging]);
+  // Which step of Force close ended the hung renderer, for the CI log: `forcefullyCrashRenderer` alone (no later
+  // step), the SIGKILL, or the destroy (lifecycle.ts). Recorded, not asserted: each ends the session as crashed.
+  const named = async (event: string) =>
+    (await eventsNamed(launched as Launched, event))
+      .filter((line) => line.gameId === hanging)
+      .map((line) => ({ event, reason: line.reason ?? null }));
+  // Logged with the state change at the latest; the logger writes asynchronously.
+  await expect.poll(async () => (await named("game.crashed")).length).toBe(1);
+  console.log(
+    `S-7 force close record (${process.platform}): ${JSON.stringify([
+      ...(await named("game.crashed")),
+      ...(await named("game.force-close-kill")),
+      ...(await named("game.force-close-destroy")),
+    ])}`,
+  );
 });
 
 const alive = (pid: number) => {

@@ -11,6 +11,8 @@ class FakeWindow extends EventEmitter {
   minimized = false;
   destroyed = false;
   calls: string[] = [];
+  /** When true, `forcefullyCrashRenderer` does nothing (no `render-process-gone`), as observed on a Linux runner. */
+  crashIgnored = false;
   webContents = Object.assign(new EventEmitter(), {
     loading: true,
     load: Promise.withResolvers<void>(),
@@ -21,8 +23,10 @@ class FakeWindow extends EventEmitter {
     isLoading: () => this.webContents.loading,
     forcefullyCrashRenderer: () => {
       this.calls.push("crash");
+      if (this.crashIgnored) return;
       this.webContents.emit("render-process-gone", {}, { reason: "killed", exitCode: 9 });
     },
+    getOSProcessId: () => 4242,
   });
   show() {
     this.visible = true;
@@ -67,6 +71,8 @@ function setUp(
     answers?: boolean[];
     launchShowTimeoutMs?: number;
     recoveryNotice?: (gameId: string) => string;
+    killProcess?: (pid: number) => void;
+    forceCloseStepMs?: number;
   } = {},
 ) {
   const windows: FakeWindow[] = [];
@@ -99,6 +105,10 @@ function setUp(
     },
     closeWindow,
     ...(options.recoveryNotice ? { recoveryNotice: options.recoveryNotice } : {}),
+    ...(options.killProcess ? { killProcess: options.killProcess } : {}),
+    ...(options.forceCloseStepMs === undefined
+      ? {}
+      : { forceCloseStepMs: options.forceCloseStepMs }),
     ...(options.launchShowTimeoutMs === undefined
       ? {}
       : { launchShowTimeoutMs: options.launchShowTimeoutMs }),
@@ -275,6 +285,64 @@ describe("GameRuntime: closing, crash and hang", () => {
     await vi.waitFor(() => expect(runtime.state(GAME)).toBe("crashed"));
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: "Force close" }));
     expect(windows[0]?.calls).toContain("crash");
+  });
+
+  it("Force close kills the renderer's process when forcefullyCrashRenderer brought no render-process-gone", async () => {
+    const killed: number[] = [];
+    const { runtime, windows, log, locks } = setUp({
+      answers: [true],
+      forceCloseStepMs: 5,
+      killProcess: (pid) => {
+        killed.push(pid);
+        windows[0]?.webContents.emit("render-process-gone", {}, { reason: "killed", exitCode: 9 });
+      },
+    });
+    await runtime.launch(GAME);
+    const window = windows[0];
+    if (!window) throw new Error("no window");
+    window.crashIgnored = true;
+    window.emit("ready-to-show");
+    window.emit("unresponsive");
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("crashed"));
+    expect(window.calls).toContain("crash");
+    expect(killed).toEqual([4242]);
+    expect(log.warn).toHaveBeenCalledWith("game.force-close-kill", { gameId: GAME });
+    expect(window.destroyed).toBe(true);
+    expect(locks.holder(GAME)).toBe("none");
+  });
+
+  it("Force close ends the session as crashed when even the kill brought no render-process-gone", async () => {
+    const killed: number[] = [];
+    const { runtime, windows, log, locks } = setUp({
+      answers: [true],
+      forceCloseStepMs: 5,
+      killProcess: (pid) => {
+        killed.push(pid);
+        throw new Error("ESRCH");
+      },
+    });
+    await runtime.launch(GAME);
+    const window = windows[0];
+    if (!window) throw new Error("no window");
+    window.crashIgnored = true;
+    window.emit("ready-to-show");
+    window.emit("unresponsive");
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("crashed"));
+    expect(killed).toEqual([4242]);
+    expect(log.error).toHaveBeenCalledWith("game.force-close-destroy", { gameId: GAME });
+    expect(window.destroyed).toBe(true);
+    expect(locks.holder(GAME)).toBe("none");
+  });
+
+  it("Force close kills nothing when the crash came", async () => {
+    const killProcess = vi.fn();
+    const { runtime, windows } = setUp({ answers: [true], forceCloseStepMs: 5, killProcess });
+    await runtime.launch(GAME);
+    windows[0]?.emit("ready-to-show");
+    windows[0]?.emit("unresponsive");
+    await vi.waitFor(() => expect(runtime.state(GAME)).toBe("crashed"));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(killProcess).not.toHaveBeenCalled();
   });
 
   it("unresponsive and Wait keeps the game", async () => {

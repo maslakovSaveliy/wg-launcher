@@ -163,10 +163,20 @@ stateDiagram-v2
   over all its windows (`holdQuiescentJob`). `needs_recovery` refuses everything but `acquireForRecovery`, the lease
   of the rollback that clears it (Phase 1 Task 14; Verified 2026-10-29, `locks.test.ts`, `job.test.ts`).
 - **Crash and hang.** `render-process-gone` ends the session as `crashed` and the library shows it; `unresponsive`
-  offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. The e2e test crashes a game
-  with `forcefullyCrashRenderer` and force-closes a really hung page; it emits the window's `unresponsive` event itself,
-  because no such event came within 90 s of input to the hung page while Playwright was attached (Verified,
-  2026-10-28, same run); that Chromium suppresses it while a debugger is attached is Assumed.
+  offers "Force close", which uses `webContents.forcefullyCrashRenderer()`. `Assumed`. Force close does not rely on
+  that call alone (`games/lifecycle.ts`, `FORCE_CLOSE_STEP_MS` 3 s, Assumed): if no `render-process-gone` came 3 s
+  after it, the renderer's OS process (`getOSProcessId()`) gets SIGKILL (`game.force-close-kill`), and if still none
+  came 3 s later the session ends as `crashed` and the window is destroyed (`game.force-close-destroy`). On Linux
+  Electron 45 implements `forcefullyCrashRenderer` as a request to the renderer to crash on its IO thread instead of
+  ending the process (Verified, 2026-10-29, `shell/browser/api/electron_api_web_contents.cc` at tag `v45.0.0`), and on
+  an ubuntu-latest CI runner a `forcefullyCrashRenderer` on a game that was not hung brought no `render-process-gone`
+  within 15 s (Verified, 2026-10-28, CI run 40762490413; the cause is Unverified). Unit tests cover each step
+  (Verified, 2026-10-29, `lifecycle.test.ts`). The e2e test kills a game's renderer through its OS process to check
+  the crash path, and force-closes a really hung page; it emits the window's `unresponsive` event itself, because no
+  such event came within 90 s of input to the hung page while Playwright was attached (Verified, 2026-10-28, same
+  run); that Chromium suppresses it while a debugger is attached is Assumed. It prints which step ended the hung
+  renderer; which one does on Linux is known only from CI, and Force close is not verified on Linux until a CI run
+  passes it.
 
 ## 5. Game windows and sessions
 
@@ -506,6 +516,12 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     not fullscreen as well (Assumed: rare, and the safe side). e2e: a game closed in its own fullscreen was saved
     with `fullscreen` false (Verified, 2026-10-28, `apps/desktop/e2e/window.spec.ts`). A game window is created at `restoreBounds` of its row, and
     the saved maximized and fullscreen flags are applied on its first `show` (it is created hidden).
+  - macOS moves a window that is shown partly below the display's work area up until it fits, so such saved bounds
+    come back higher than saved (a window 32 px below came back 32 px higher; Verified, 2026-10-29, Electron 45.0.0,
+    macOS arm64, a throwaway e2e probe), while `setBounds` on a shown window leaves it there. The guard keeps them
+    (they overlap), and the window opens fully visible; the AC-18 test therefore picks bounds inside the primary work
+    area. The macOS CI runner's restore came back 32 px higher for bounds that fit the dev Mac (Verified, 2026-10-28,
+    CI run 40762490413); that its display is smaller is Assumed.
   - macOS can refuse that fullscreen request without an event: right after a fullscreen window closed, while its
     Space still animated away, `isFullScreen()` turned true and then false again with a `resize`, and neither
     `enter-full-screen` nor `leave-full-screen` came (Verified, 2026-10-28, Electron 45.0.0, macOS arm64: the

@@ -38,6 +38,7 @@ export interface GameWindow extends EventSource {
     loadURL(url: string): Promise<void>;
     isLoading(): boolean;
     forcefullyCrashRenderer(): void;
+    getOSProcessId(): number;
   };
 }
 
@@ -63,10 +64,22 @@ export interface RuntimeDeps {
   launchShowTimeoutMs?: number;
   /** Called after every state change, once per change (the `game:state` event of architecture.md section 6). */
   onState?(gameId: string, state: GameState): void;
+  /** Force close's second step; defaults to `process.kill(pid, "SIGKILL")`. */
+  killProcess?(pid: number): void;
+  /** For tests; defaults to `FORCE_CLOSE_STEP_MS`. */
+  forceCloseStepMs?: number;
 }
 
 /** A launching window is shown after this long even without `ready-to-show` (Assumed). */
 export const LAUNCH_SHOW_TIMEOUT_MS = 15_000;
+
+/**
+ * How long each step of Force close waits for `render-process-gone` before the next one (Assumed): first
+ * `forcefullyCrashRenderer`, then a SIGKILL of the renderer's OS process, then the session ends as crashed and the
+ * window is destroyed. On a Linux CI runner a `forcefullyCrashRenderer` brought no `render-process-gone` within 15 s
+ * (MEMORY.md), so the first step alone cannot be relied on.
+ */
+export const FORCE_CLOSE_STEP_MS = 3000;
 
 export type LaunchCode =
   | "INVALID_ARGUMENT"
@@ -289,7 +302,7 @@ export class GameRuntime {
           (force) => {
             if (force && !window.isDestroyed() && ACTIVE.has(entry.state)) {
               log.warn("game.force-close", { gameId });
-              window.webContents.forcefullyCrashRenderer();
+              this.#forceClose(gameId, entry, window);
             }
           },
           (error: unknown) => log.error("game.unresponsive-dialog-failed", { gameId, error }),
@@ -298,6 +311,36 @@ export class GameRuntime {
           asking = false;
         });
     });
+  }
+
+  /**
+   * Force close: each step runs only while the session is still active after the step before it (the
+   * `render-process-gone` handler ends it as crashed and destroys the window).
+   */
+  #forceClose(gameId: string, entry: Entry, window: GameWindow): void {
+    const { log } = this.#deps;
+    const stepMs = this.#deps.forceCloseStepMs ?? FORCE_CLOSE_STEP_MS;
+    const kill = this.#deps.killProcess ?? ((pid: number) => process.kill(pid, "SIGKILL"));
+    const stillOpen = () => ACTIVE.has(entry.state) && !window.isDestroyed();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    entry.done.promise.then(() => clearTimeout(timer));
+    window.webContents.forcefullyCrashRenderer();
+    timer = setTimeout(() => {
+      if (!stillOpen()) return;
+      log.warn("game.force-close-kill", { gameId });
+      try {
+        const pid = window.webContents.getOSProcessId();
+        if (pid > 0) kill(pid);
+      } catch (error) {
+        log.warn("game.force-close-kill-failed", { gameId, error });
+      }
+      timer = setTimeout(() => {
+        if (!stillOpen()) return;
+        log.error("game.force-close-destroy", { gameId });
+        this.#finish(gameId, entry, "crashed");
+        window.destroy();
+      }, stepMs);
+    }, stepMs);
   }
 
   #set(gameId: string, entry: Entry, state: GameState): void {
