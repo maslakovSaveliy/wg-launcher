@@ -1,0 +1,96 @@
+<!doctype html>
+<!-- e2e page (not a game): reports what each permission-gated call returned. The test clicks each button itself. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>permissions</title>
+    <style>
+      button { display: block; margin: 8px; width: 240px; height: 40px; }
+    </style>
+  </head>
+  <body>
+    <button id="pointer-lock" type="button">pointer lock</button>
+    <button id="fullscreen" type="button">fullscreen</button>
+    <button id="keyboard-lock" type="button">keyboard lock</button>
+    <button id="display-capture" type="button">display capture</button>
+    <output id="results">{}</output>
+    <script>
+      const results = {};
+      const report = (name, value) => {
+        results[name] = value;
+        document.getElementById("results").textContent = JSON.stringify(results);
+      };
+      const outcome = async (name, call) => {
+        try {
+          report(name, { ok: true, value: (await call()) ?? null });
+        } catch (error) {
+          report(name, { ok: false, error: `${error?.name}: ${error?.message}` });
+        }
+      };
+      const pointerLock = () =>
+        new Promise((resolve, reject) => {
+          const target = document.getElementById("pointer-lock");
+          document.addEventListener("pointerlockchange", () => resolve(document.pointerLockElement === target ? "locked" : "not locked"), { once: true });
+          document.addEventListener("pointerlockerror", () => reject(new Error("pointerlockerror")), { once: true });
+          const promise = target.requestPointerLock();
+          if (promise?.catch) promise.catch(reject);
+        });
+      // Each allowed call runs alone in its own click (pointer lock first: fullscreen consumes the activation).
+      document.getElementById("pointer-lock").addEventListener("click", () => {
+        report("focusBeforePointerLock", document.hasFocus());
+        outcome("pointerLock", pointerLock);
+      });
+      document.getElementById("fullscreen").addEventListener("click", () =>
+        outcome("fullscreen", async () => {
+          await document.documentElement.requestFullscreen();
+          return document.fullscreenElement ? "fullscreen" : "no element";
+        }),
+      );
+      document.getElementById("keyboard-lock").addEventListener("click", () =>
+        outcome("keyboardLock", async () => {
+          await navigator.keyboard.lock();
+          return "locked";
+        }),
+      );
+      document.getElementById("display-capture").addEventListener("click", () =>
+        outcome("displayCapture", async () => {
+          const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          for (const track of stream.getTracks()) track.stop();
+          return "stream";
+        }),
+      );
+      // Releases pointer lock and resolves when Chromium reports it (the test calls this before the next click).
+      window.releasePointerLock = () =>
+        new Promise((resolve) => {
+          if (!document.pointerLockElement) return resolve("not locked");
+          document.addEventListener("pointerlockchange", () => resolve(document.pointerLockElement ? "still locked" : "released"), { once: true });
+          document.exitPointerLock();
+        });
+      // Denied ones that need no gesture. No getUserMedia for audio: with macOS microphone access undecided it would
+      // stall before the permission handler (spike H12); the microphone is checked through the check handler only.
+      window.runDenied = async () => {
+        await outcome("camera", async () => {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          for (const track of stream.getTracks()) track.stop();
+          return "stream";
+        });
+        await outcome("microphoneQuery", async () => (await navigator.permissions.query({ name: "microphone" })).state);
+        await outcome("geolocation", () =>
+          new Promise((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(
+              () => resolve("position"),
+              (error) => reject(Object.assign(new Error(error.message), { name: `GeolocationPositionError(${error.code})` })),
+              { timeout: 5000 },
+            ),
+          ),
+        );
+        await outcome("notifications", () => Notification.requestPermission());
+        await outcome("windowManagement", async () => {
+          await window.getScreenDetails();
+          return "details";
+        });
+        return results;
+      };
+    </script>
+  </body>
+</html>

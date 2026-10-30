@@ -20,7 +20,7 @@ Conventions: [ADR-0000](0000-template.md#conventions).
 
 | Tool | Version and role | Tag |
 | --- | --- | --- |
-| Node | 24; `.nvmrc` pins 24.22.1 since 2026-10-28 (Ruling R22, the Node line of Electron 45); the dev machine has 24.22.1 via nvm, its nvm default stays 24.13.0 | Verified (2026-10-24 and 2026-10-28, [MEMORY.md](../../MEMORY.md) Dev machine) |
+| Node | 24; `.nvmrc` pins 24.22.1 since 2026-10-28 (the Node line of Electron 45); the dev machine has 24.22.1 via nvm, its nvm default stays 24.13.0 | Verified (2026-10-24 and 2026-10-28, [MEMORY.md](../../MEMORY.md) Dev machine) |
 | pnpm | 12.15.0 pinned by `packageManager`; workspace `fixtures/test-games/*` | Verified (2026-10-24, MEMORY.md Decisions; `pnpm-workspace.yaml`) |
 | TypeScript | 7.0.2; the gate passed with the whole toolchain, no fallback to 6.0.3 | Verified (2026-10-24, MEMORY.md Tooling versions) |
 | Biome | 2.6.2 for JS, TS, JSON and CSS only; markdownlint-cli2 0.24.0 owns Markdown | Verified (2026-10-24, MEMORY.md Tooling versions) |
@@ -76,7 +76,7 @@ Verified (2026-10-28, electron-vite 6.0.0, Vite 8.3.5, run locally; the import w
 | Path | Content | When it is created |
 | --- | --- | --- |
 | `apps/desktop` | `main` (with the snapshot worker entry), `preload` (launcher bridge and quiescent preload), `renderer` | Exists since Phase 1 Task 5 (skeleton; the worker and quiescent preload come later) |
-| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | `shared` and `snapshot` exist (Phase 1 Tasks 1 to 4); `exporters` when its first code exists |
+| `packages/shared`, `packages/snapshot`, `packages/exporters` | Types and zod schemas; the `.wgsnap` codec and golden vectors; exporters and adapters | `shared` and `snapshot` exist (Phase 1 Tasks 1 to 4), `exporters` since Phase 1 Task 12 |
 | `fixtures/` | Controlled test games (`progress-lab` now) | Exists |
 | `spikes/` | Throwaway experiments with their own lockfiles, outside the workspace | Exists |
 | `crates/` | Rust, only when an ADR-0003 trigger fires | Later |
@@ -165,8 +165,12 @@ the only native dependency the MVP would have had. Assumed
 ## Action items
 
 - [ ] Before the first Windows release, check the license of everything the installer ships (agent).
-- [ ] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
-  (security.md S-14; agent).
+- [x] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
+  (security.md S-14; agent). Done in Phase 1 Task 16: `apps/desktop/scripts/release-check.mjs`
+  (`pnpm --filter @wg-launcher/desktop release:check` after `package:mac`) also checks that app.asar holds the built
+  app, no test hooks and none of the bundled packages; `apps/desktop/electron-builder.yml` leaves React and the
+  workspace packages out, so app.asar's `node_modules` hold only `tldts`, `tldts-core` and `zod`. Verified
+  (2026-10-30, run locally on the packaged app).
 - [x] Phase 1: make the desktop package config follow the dependency declaration rule above (electron-vite
   externalization and bundling settings). Done in Phase 1 Task 5: `react` and `react-dom` (bundled into the renderer)
   are `dependencies`; main keeps electron-vite's default externalization of `dependencies`; the preload is one bundle

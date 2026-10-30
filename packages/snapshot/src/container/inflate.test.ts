@@ -4,7 +4,7 @@ import { chunks, codeOfAsync, concat, zstd } from "../../test/wgsnap.js";
 import { type Decompressor, inflate, zstdDecompressor } from "./inflate.js";
 import { resolveLimits } from "./limits.js";
 
-// Ruling R23 (snapshot-format.md section 2): the code must not depend on the zstd library. Node 24.13.0 ends a cut
+// The rule of snapshot-format.md section 2: the code must not depend on the zstd library. Node 24.13.0 ends a cut
 // frame silently, Node 24.22.1 fails it with "unexpected end of file"; a later Rust codec may fail even earlier. These
 // fakes pin both extremes, so the precedence rule is tested on any Node version.
 
@@ -86,7 +86,7 @@ async function codeOfInflate(
   });
 }
 
-describe("inflate: frame-walker verdicts win over decompressor errors (Ruling R23)", () => {
+describe("inflate: frame-walker verdicts win over decompressor errors", () => {
   const descriptor = (bits: number) => {
     const bytes = frame.slice();
     bytes[4] = (bytes[4] as number) | bits;

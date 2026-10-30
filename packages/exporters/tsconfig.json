@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The exporter runs in a browser frame (IndexedDB, localStorage); Float16Array is ES2025 as in packages/snapshot.
+    "lib": ["ES2024", "ES2025.Float16", "DOM", "DOM.Iterable"],
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.json", "browser/**/*.ts", "playwright.config.ts"]
+}

@@ -4,5 +4,10 @@
     // Functions passed to page.evaluate run in the page.
     "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
-  "include": ["e2e/**/*.ts", "playwright.config.ts", "src/main/db/raw.d.ts"]
+  "include": [
+    "e2e/**/*.ts",
+    "playwright.config.ts",
+    "src/main/db/raw.d.ts",
+    "src/renderer/env.d.ts"
+  ]
 }

@@ -1,8 +1,8 @@
-import type { LauncherBridge } from "../preload/launcher.js";
+import type { WgBridge } from "@wg-launcher/shared/bridge";
 
 declare global {
   interface Window {
     /** Exposed by the launcher preload; undefined if the preload did not run. */
-    readonly wgLauncher?: LauncherBridge;
+    readonly wg?: WgBridge;
   }
 }

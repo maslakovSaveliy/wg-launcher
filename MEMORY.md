@@ -39,7 +39,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   translation `docs/product/sources/concept-v1.0.md`; the language exception and its lint ignores are gone.
 - 2026-10-25 Owner: the Phase 1 plan [docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md)
   is approved; each task starts only on the owner's word; Phase 1 UI is functional only (design and UX later).
-  Final-review rulings M5 (a launch cancels a background storage check, user tasks still give `GAME_BUSY`), M6, M7
+  Review decisions M5 (a launch cancels a background storage check, user tasks still give `GAME_BUSY`), M6, M7
   (manifest top level not strict, IPC strict), M8, M11 and M13 are recorded there.
 - License model: `AGPL-3.0-or-later` by default, commercial use by separate agreement, CLA for outside contributors,
   future paid features only in one named source-available directory (none exists), trademark policy, core features
@@ -52,18 +52,23 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   line-length rule; secretlint on staged files; commitlint with Conventional Commits plus `spike`; lefthook (pre-commit,
   commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, `pnpm test:e2e` is the fixture's
   Playwright suite. License gate: production dependencies strict against the allowlist (SPDX `OR`/`AND` understood),
-  dev-only ones warn. Execution style: subagent-driven development, test-first where code exists.
+  dev-only ones warn. Execution style: test-first where code exists (the way tasks are run: CLAUDE.md, changed 2026-10-30).
 - 2026-10-28 Owner: "no machine-specific paths" is enforced by `scripts/check-machine-paths.mjs` (`pnpm paths:check`,
   in `pnpm check`, pre-commit on staged files, CI on all tracked text files); what it flags and the one allowed path
   `/home/web_user`: AGENTS.md "Commands" and the script header. The user-name needle is off on CI (`CI=true`), because a
   runner's generic user name would match ordinary words.
-- 2026-10-28 CI fix 1 (controller rulings, Assumed): R22 pins `.nvmrc` to `24.22.1`, the Node line of Electron 45
-  (24.22.0), so CI and local runs match what the snapshot worker runs on; R23 makes the reader's code independent of
+- 2026-10-28 CI fix (Assumed): `.nvmrc` is pinned to `24.22.1`, the Node line of Electron 45
+  (24.22.0), so CI and local runs match what the snapshot worker runs on; the reader's code is made independent of
   the zstd version (the frame walker's verdict wins over a decompressor error): snapshot-format.md section 2 and the
   "Node, zstd and the snapshot codec" gotcha below.
-- 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): rulings R10 (Node-only entry
-  `@wg-launcher/snapshot/container`), R11 (exact `compressedSize`, ratio bound), R12 (a decompressor error is always
-  `SNAP_ZSTD_INVALID`; replaced on 2026-10-28 by R23 above), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
+- 2026-10-29 CI fix 2 (Assumed unless noted): no window manager is added to the Linux CI job (the failures there were
+  an event order and Force close, neither needs one); Force close escalates (architecture.md section 4); the AC-18
+  test takes bounds from the work area (section 9); verify's windows are sized from the snapshot's data, the
+  rollback's backup validation has its own size-based bound (save-transfer.md section 6), and "Retry recovery" gives
+  its hold back whatever `onLocked` throws.
+- 2026-10-25 Phase 1 Task 3 (`.wgsnap` container, Assumed): decisions: Node-only entry
+  `@wg-launcher/snapshot/container`, exact `compressedSize` with a ratio bound, a decompressor error is always
+  `SNAP_ZSTD_INVALID` (replaced on 2026-10-28 by the walker-wins rule above), chunking-independent codes and count limits: snapshot-format.md sections 2, 4 and 8 and plan
   Task 3. The container entry is never re-exported from `src/index.ts` (`src/web-only.test.ts` walks its import graph); zod 4.6.7 (MIT)
   is a production dependency of `packages/snapshot`.
 - 2026-10-28 Phase 1 Task 4 (golden vectors, Assumed unless noted): layout, the 31 vectors plus `invalid-truncated-tar`
@@ -87,7 +92,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   files imported with Vite's `?raw`, the pre-migration copy is made with `VACUUM INTO` into `tmp/` as a `.partial` file and renamed into `backups/` (architecture.md
   section 7);
   `snapshots.revision_id` stays the primary key and `addIfAbsent` adds no row for a stored revision (M8); the 5 ms budget
-  is checked by query plans, not by time (R18); repositories take the injected clock, never `Date.now()`; `Db` is a
+  is checked by query plans, not by time; repositories take the injected clock, never `Date.now()`; `Db` is a
   union of `WritableDb` and `ReadOnlyDb`, and repositories accept only the writable one. Over 1 000 games, 5 sessions,
   2 storage targets and 3 snapshots each, one call took 1.05 ms for `games.list` (1 000 rows) and 0.002 to 0.015 ms for
   the indexed lookups [V, 2026-10-28, Node 24.13.0, mean of 200 calls, a throwaway script; not a product number].
@@ -96,6 +101,106 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   production dependency of `apps/desktop`. The settled details (raw shapes refused before parsing, literal dev hosts
   only, whole host as the site where no registrable domain exists, two launch arguments are invalid): security.md
   section 5 "Implementation", architecture.md sections 5, 8 and 12.
+- 2026-10-28 Phase 1 Task 8 (game windows, Assumed unless noted): files and rules in architecture.md sections 4 and 5
+  ("Close procedure details", "Runtime details", "Lock details", "Implementation (Phase 1 Task 8)") and security.md
+  section 5 ("Wired in Phase 1 Task 8"). In short: a cancelled background lease not released within 2 s refuses the
+  launch with `INTERNAL`; a launch while `closing` returns `{window: "closing"}`; a window not painted after 15 s is
+  shown anyway; after a Cancel of "Open in browser?" that window is not asked again for 10 s (decided 2026-10-28); the
+  unload step waits at most 2 s; a
+  `will-prevent-unload` is answered by cancelling, asking, then reloading `about:blank` with the trap ignored. The test
+  flavor records `shell.openExternal` calls (`externalOpened`) instead of opening; e2e pages are served by
+  `apps/desktop/e2e/test-pages.ts` on `127.0.0.1`.
+- 2026-10-28 Phase 1 Task 9 (IPC contract and library UI, Assumed unless noted): the settled details are in
+  architecture.md section 6 ("Implementation (Phase 1 Task 9)"), section 7 ("What the user sees") and section 12
+  ("Implementation (Phase 1 Task 9)"). In short: new result code `LIBRARY_READ_ONLY` for every channel but
+  `settings:get` while the database is read-only; a refused sender gets `INVALID_ARGUMENT` "Refused." and one
+  `IPC_FORBIDDEN_SENDER` record per call; the same URL twice is confirmed in a native dialog by main (Cancel is
+  `CANCELLED`); `games.cover_path` holds the cover's file name, not a path; settings have an empty allowlist; the
+  bridge is `window.wg` (version 2; version 4 with `onTaskProgress` since Task 13); "Export verified" needs a
+  verified snapshot of the running exporter (`generic-web-storage` 1.0.0 since Task 13), which only Task 14's verify
+  can produce; a corrupt `library.db` shows a native error dialog, then exit 1
+  (the test flavor records it in `<userData>/test-error-dialogs.jsonl`).
+- 2026-10-28 Phase 1 Task 10 (window state, fullscreen, playtime, Assumed unless noted): a saved size
+  without a position keeps its size, clamped and centered on the primary display (PRD F-7); the F-6 "UI control" is the View
+  menu item with role `togglefullscreen` (`app-menu.ts`), because section 6 has no fullscreen channel and a game window
+  has no UI; saved flags are applied on the first `show`; step 1 of the close procedure feeds playtime `hide`; details
+  in architecture.md sections 9 and 10 ("Implementation (Phase 1 Task 10)").
+- 2026-10-28 Phase 1 Task 11 (launch input and shortcuts, Assumed unless noted): `second-instance` and `open-url` are
+  registered right after the single-instance lock and queued until the runtime and the launcher page are up
+  (`launch-input.ts`); malformed, unknown and refused launches are native notices (`Dialogs.notify`) over the
+  library, no renderer event; `shortcut:create` is macOS and Windows only; `setAsDefaultProtocolClient` only in the
+  packaged prod build: architecture.md section 8 ("Implementation (Phase 1 Task 11)"). Follow-up fix (2026-10-28):
+  notices no longer block the launch queue, both are bounded, a closed launcher is opened again to show the library,
+  "Create shortcut" is hidden where unsupported, and a page's own fullscreen is saved as not fullscreen.
+- 2026-10-28 Phase 1 Task 12 (`packages/exporters`, Assumed unless noted): interfaces, frame protocol and error
+  values in save-transfer.md section 3 ("Settled in Phase 1 Task 12"), importer rules in section 4 ("Implementation"),
+  the flush observation in section 7, adapter location and limits in section 8. New result code `IMP_RECORD_INVALID`
+  (an entry the importer cannot turn into storage, a RegExp that does not compile included); the importer decodes every file and builds every
+  value before its first write. `value.ts` of the snapshot record layer is split into `value-export.ts`,
+  `value-check.ts` and `value-build.ts` (shared vocabulary stays in `value.ts`); `encodeStoreRecord` encodes one record,
+  byte-identical when concatenated. The browser tests (`pnpm test:e2e:exporters`, also in CI's fixture job) bundle
+  the exporter per worker with Vite 8.3.5 (a devDependency already in the lockfile) and run it in a CDP isolated world
+  of a `page.route` stub page at the game's origin, with `serviceWorkers: "block"`; Task 13 wires the real preload.
+  Follow-up fix (2026-10-28): no request error is prevented (one failed put aborts its chunk with a named code), the
+  reader refuses key paths IndexedDB refuses (snapshot-format.md section 7.2), unreferenced blobs and a missing view
+  constructor are refused, a blocked delete is `IMP_WIPE_FAILED`, a vanished localStorage key is
+  `EXP_QUIESCENCE_VIOLATION`, the flush timeout is strict; what the importer guarantees is in save-transfer.md section 4.
+- 2026-10-28 Phase 1 Task 13 (quiescent job runner, snapshot worker, export, Assumed unless noted): the settled
+  details are in save-transfer.md section 3 ("Chunks"), section 5 ("Implementation (Phase 1 Task 13)") and section 6
+  ("Export"), architecture.md sections 6 and 11. In short: entries travel in chunks of at most 1 MiB, cloned, never
+  transferred; one `utilityProcess` per job; the `.wgsnap` is written as `.partial`, read back through
+  `validateSnapshot` and only then renamed and recorded; `snapshot:export` answers `{taskId}` once the lock is held;
+  IPC requests may hold arrays of at most 32 dense items (`register.ts`); bridge version 4 with `onTaskProgress`;
+  `@wg-launcher/exporters/wire` is the DOM-free entry the main process and the worker use; the quiescent preload has
+  its own `tsconfig.preload.json` (DOM lib). Owner decision (2026-10-28): background work never blocks a user action,
+  so a user task cancels a storage check exactly as a launch does (2 s release wait, then `INTERNAL`), and the check
+  runs after a game window exits (2 s quiet time, not while a game window is focused, one at a time; a running check
+  is cancelled when a game window takes focus or the app starts quitting); at most two snapshot jobs run at once (a
+  third is `GAME_BUSY`, but a user task takes a storage check's slot by cancelling it, 2 s wait, then `INTERNAL`);
+  the watchdog covers the commit, and a stopped export's discard kills the worker and waits for its exit before it
+  removes the revision's files. The export's row, base revision and remembered frame choice
+  are one transaction; a failed write removes both the partial and the final file; more than 32 keys is
+  `SNAP_MANIFEST_INVALID`. The canary pins its allowlist to the calibration (architecture.md section 4 "Lock
+  details", section 11; save-transfer.md section 5).
+- 2026-10-29 Phase 1 Task 14 (restore, rollback, recovery, delete, clear cache, verify; Assumed unless noted): the
+  settled details are in save-transfer.md section 2 and section 6 ("Implementation (Phase 1 Task 14)") and
+  architecture.md sections 4, 6, 11 and 12. In short: one lease and one job slot from R3 to R8 (`holdQuiescentJob`);
+  the backup covers the whole wipe set (the mapped keys plus every known key); a mapped partitioned key's site follows
+  the mapped top-level origin, only a self-mapping keeps an unmatched frame key; an unknown adapter is refused;
+  `IMP_WIPE_FAILED` is never retried, the job rolls back; a failed rollback leaves the journal `rolling-back` and the
+  game `needs_recovery` until `snapshot:recover` (a new channel) or the next start verifies a rollback; start-up
+  recovery runs before IPC and launches; delete local saves locks before it asks; open check 4 holds (Verified,
+  2026-10-29, `e2e/delete.spec.ts`). Every restore window's deadline is sized from its data, frames send a `working`
+  heartbeat every 5 s, nothing thrown after the wipe escapes the rollback, and rollback windows ignore cancels
+  (save-transfer.md section 6, "Deadlines" and "No escape after the wipe").
+- 2026-10-30 Phase 1 Task 15 (snapshot UI and the vertical scenario, Assumed unless noted): settled in
+  architecture.md section 6 ("Implementation (Phase 1 Task 15)") and save-transfer.md sections 6, 7 and "Open
+  questions". In short: new channel `snapshot:frames` (bridge version 6) reads the frames outside the game keys in a
+  quiescent window under a `task` lease (counts and IndexedDB usage only; no per-key result is stored, no
+  migration); the mapping form is plain from/to origins shown after `IMP_STORAGE_KEY_MISMATCH`, main confirms it;
+  restore sources are this game's rows, rows of entries with the same origin and a file (no new channel); no
+  "Flush, close and export" control while no adapter declares a hook; a launch refused while a task still holds the
+  game past its wipe says a task is changing the saves instead of "interrupted". AC-6 (with the restart), AC-7 (service
+  worker, iframe) and AC-10 run through the UI [V, 2026-10-30, `apps/desktop/e2e/vertical.spec.ts`, Electron 45.0.0,
+  macOS arm64].
+- 2026-10-30 Phase 1 Task 16 (packaging, release check, manual checks; Assumed unless noted): electron-builder
+  26.18.0, `apps/desktop/electron-builder.yml`, macOS arm64 `dir` target, appId `io.github.maslakovsaveliy.wglauncher`
+  (no owned domain), fuses of security.md section 4, the `afterPack` hook `build/after-pack.mjs` removes the five
+  media and Bluetooth usage descriptions, `package:mac` signs ad hoc after packaging, `release:check` runs
+  `scripts/release-check.mjs`; app.asar's `node_modules` hold only `tldts`, `tldts-core` and `zod` [V, 2026-10-30,
+  run locally]. electron-winstaller's install script is denied in `allowBuilds` (no Squirrel target). Owner decision
+  (2026-10-30): a production build refuses internal hosts for "Open in browser?" (security.md section 5). The
+  real-input checks ran on the unpackaged test build with local pages; results in
+  `docs/compat/manual-checks/2026-10-30-macos-arm64.md`. Open checks 5 and 10 are settled (plan table).
+- 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
+  one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
+  non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an
+  implementation subagent per task; the independent reviews caught data-loss defects in Tasks 12 and 14 that the
+  implementer had missed [V, 2026-10-28 and 2026-10-29, task reviews of `packages/exporters` and the restore protocol];
+  whether the new way is faster is not measured yet [A].
+- 2026-10-29 Owner: the full test suite, desktop e2e included, runs in CI on the draft pull request for every push;
+  locally an agent runs unit tests and lint in full and only the e2e specs a change touches; one full local
+  `pnpm check` and `pnpm test:e2e` before the final pull request (plan Task 18).
 - Controlled test game `fixtures/test-games/progress-lab` (Phase 0 Task 4), not a real game: contract, storage shapes,
   hash and tests in its [README](fixtures/test-games/progress-lab/README.md); `pnpm test:e2e` and CI in AGENTS.md
   "Commands". Its server logs each request to stdout because H14 (variant b) reads a request log.
@@ -158,11 +263,30 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (value.test.ts); `Object.prototype.toString` of a class instance is `[object Object]`, so error details never name
   the class.
 - Record-layer decisions (Assumed): depth counting, keys and values at depth 1, `keyGenerator` 2^53 as `fa 5a000000`,
-  view plus buffer as `EXP_SHARED_REFERENCE`, and controller rulings R7 and R9 (RegExp source never canonicalized, flags
+  view plus buffer as `EXP_SHARED_REFERENCE`, and two record rules (RegExp source never canonicalized, flags
   checked, a non-compiling source is `SNAP_RECORD_INVALID`; File `lastModified` `-0` or above 2^53 − 1 is
   `EXP_UNSUPPORTED_VALUE`): snapshot-format.md sections 6.2, 6.3 and 7. API choices (`onBlob` once per value, caller
   deduplicates; `encodeLocalStorage` gives `null` for no items; `encode*` sort and throw `TypeError` on duplicates or a
   schema the reader would refuse) are in the comments of `src/record/value.ts` and `src/record/data-files.ts`.
+- [V, 2026-10-28, bundled Chromium 156.0.8078.4, `packages/exporters/browser/round-trip.spec.ts`] The exporter in a
+  CDP isolated world (`Page.createIsolatedWorld`) reads Date, Map, Set, typed arrays (Float16Array included),
+  DataView, partial views, ArrayBuffer, Blob, File, RegExp, boxed primitives and BigInt from IndexedDB with that world's
+  own prototypes, so the exact-prototype classifiers hold; restored by the importer, the page's main
+  world reads them back with its own classes, and a re-export gives byte-identical entries. Float16Array round-trips
+  there. [A] Electron's preload isolated world behaves the same (Task 13 runs it).
+- [V, 2026-10-28, same Chromium, `browser/key-generator.spec.ts`] Chromium reverts an `autoIncrement` key generator
+  when the transaction of the probe's `add` is aborted (open check 2 closed, no fallback); an explicit key 2^53 makes
+  the next `add` fail with `ConstraintError`. [V, same, `browser/export-errors.spec.ts`] After a Cache Storage `put`,
+  `navigator.storage.estimate().usageDetails.caches` is above zero when read from an isolated world.
+- [V, 2026-10-28, Electron 45.0.0, macOS arm64, `apps/desktop/e2e/export.spec.ts` and `quiescent.spec.ts`] In the
+  quiescent window: Chromium reverts the IndexedDB key generator on the aborted probe (two exports, same
+  `contentHash`; the game's next key 8 after 7 steps; open check 2 closed in Electron too); the preload's isolated
+  world reads Date, ArrayBuffer, Uint8Array and Blob with their exact prototypes (progress-lab exported without
+  `EXP_UNSUPPORTED_VALUE`); `navigator.storage.estimate().usageDetails` is available there (open check 8: Cache
+  Storage and the worker registration appear in `notExported`); the page-level service-worker bypass also covers a
+  cross-site iframe, and without any bypass the iframe's partitioned worker started and the canary stopped the job
+  (open check 3). A clean job parses, per document, `electron/js2c/event_emitter_dispatch`, the preload file and a
+  6-character `void 0` without a URL, all in the preload's world (save-transfer.md section 5, "Canary calibration").
 - [V, 2026-10-25, pnpm 12.15.0, scratch workspace and this repository] `pnpm licenses list --prod --recursive --json`
   lists neither our `AGPL-3.0-or-later` workspace packages nor hides their dependencies, so `pnpm licenses:check` passes;
   [A] a later pnpm may list them, so the gate exempts a member only while its license is exactly `AGPL-3.0-or-later`
@@ -173,7 +297,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - [V] Project rules are `.cursor/rules/*.mdc` with frontmatter `description`, `globs`, `alwaysApply`; Cursor reads
   `AGENTS.md` natively. <https://cursor.com/docs/context/rules>
 - [V] Dev machine: macOS 27.0.1 on arm64 (MacBook Air M3 `Mac15,12`, fanless, Metal 4, 60 Hz display); Node 24.13.0 via
-  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins (R22); Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
+  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
   lefthook 2.1.15. No Windows or Linux machine: those platforms are **unverified** until CI or a real run says otherwise.
 
 ## Gotchas
@@ -195,7 +319,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   bundling check must be `apply: "build"`. A reload of the launcher during its first `loadURL` rejects that call with
   `ERR_ABORTED`, which `start()` treats as a start-up failure (exit 1); in a CDP check, wait for the first load before
   reloading. CDP `Runtime.evaluate` defaults to `allowUnsafeEvalBlockedByCSP: true`, so an `eval` control needs it
-  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, reviewer's Vite 8.3.5 check
+  false; CSP violations arrive as `Log.entryAdded` with source `security`. [V, 2026-10-28, a Vite 8.3.5 check
   and the dev-flavor run]
 - `electron@45.0.0` has no install script, so it needs no `allowBuilds` entry (the older note that its binary download
   needs one was wrong for 45): `pnpm add -D electron@45.0.0` ran no script, and the binary is downloaded on the first
@@ -224,7 +348,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   on `PATH`, so git runs Homebrew 2.1.15 here, not 2.2.2; `min_version` is `2.1.15` (tested with both). [V, 2026-10-24]
 - lefthook `stage_fixed` re-stages whole files, so a partially staged file (`git add -p`) gets fully staged by the Biome
   fix. [U] not tested here
-- nvm reads `.nvmrc` (`nvm use`). Since 2026-10-28 it pins `24.22.1` (Ruling R22), so a machine without that version
+- nvm reads `.nvmrc` (`nvm use`). Since 2026-10-28 it pins `24.22.1`, so a machine without that version
   needs `nvm install` once; neither command changes the nvm default alias. Before, `24` resolved to the newest
   installed Node 24, and CI's `actions/setup-node` read the same `24` as the newest 24.x (24.22.1 in run 40591493314)
   while the dev machine ran 24.13.0. [V, 2026-10-28, `nvm install 24.22.1`; `gh run view 40591493314 --log`: "node: v24.22.1"]
@@ -270,8 +394,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `const z=require("node:zlib");const f=z.zstdCompressSync(Buffer.alloc(300000).map((_,i)=>i*7919%251),{params:{[z.constants.ZSTD_c_checksumFlag]:1}});try{console.log("out",z.zstdDecompressSync(f.subarray(0,f.length-6)).length)}catch(e){console.log(e.code,e.errno,e.message)}`
   printed `out 262144` on 24.13.0 and `Z_BUF_ERROR -5 unexpected end of file` on 24.22.1]. The `.wgsnap` reader therefore detects truncation itself
   (plan M6, `ZstdFrameWalker` in `packages/snapshot/src/container/zstd-frame.ts`), never ends the decompressor on a
-  frame the walker stopped, and lets the walker's verdict win over a decompressor error (Ruling R23,
-  snapshot-format.md section 2). Ending instead of flushing lost buffered output on 24.22.1, so a tar defect before the
+  frame the walker stopped, and lets the walker's verdict win over a decompressor error
+  (snapshot-format.md section 2). Ending instead of flushing lost buffered output on 24.22.1, so a tar defect before the
   cut was missed [V, 2026-10-28: with `decompressor.end()` in place of the flush in `inflate.ts`, `nvm exec 24.22.1
   pnpm exec vitest run packages/snapshot` failed "reports a defect inside the frame before a later container defect,
   for chunks of 64 bytes" while 24.13.0 passed; the fake-decompressor test in `src/container/inflate.test.ts` fails
@@ -300,13 +424,26 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   `https://:@evil.com` drop the empty user info; `https://exa%2Emple.com/` becomes host `exa.mple.com`; tabs and
   newlines inside are dropped, leading and trailing spaces trimmed; `https://example.com.` keeps the trailing dot. So
   `url-rules.ts` refuses those raw shapes before parsing. [V, 2026-10-28, Node 24.13.0, scratch script]
+- WHATWG `new URL("app://launcher/x")` has `origin` `"null"` (non-special schemes get an opaque origin) but
+  `protocol` `app:` and `host` `launcher`, so the IPC sender check builds the origin from scheme and host. [V,
+  2026-10-28, Node 24.13.0, `node -e`]
+- Electron IPC payloads are structured clones, so a `Map`, `Set`, `ArrayBuffer`, typed array, `Date` or class
+  instance reaches the handler intact; `JSON.stringify` gives `{}` for most of them and zod 4.6.7
+  `z.strictObject({})` accepts them (no own enumerable keys), so a JSON size check alone is bypassed (Task 9). A sparse array of length 2^32 − 1 kept `JSON.stringify` busy for about 54 s. `register.ts`
+  therefore refuses arrays and non-plain objects before measuring, visiting at most 4 096 values (shared references
+  survive structured clone: 7 levels of 10 keys sharing one next object took 568 ms to walk unbounded) inside a
+  try/catch. [V, 2026-10-28, Vitest 5.0.5 on Node 24.13.0,
+  `apps/desktop/src/main/ipc/register.test.ts` failing before the fix]
+- zod 4.6.7: `.refine()` on a `z.strictObject` returns the same `ZodObject` with `def.catchall` of type `never` (no
+  wrapper), so a schema walk can check strictness; `.trim()` on a string schema trims the parsed output. [V,
+  2026-10-28, `packages/shared/src/ipc.test.ts`; a mutation to `z.object` made it fail]
 - tldts 7.4.19 `parse(host, {allowPrivateDomains: true, extractHostname: false})` gives domain `com.` for
   `example.com.` (trailing dot), `null` for `co.uk`, `github.io`, `localhost`, `intranet` and IP literals (`isIp`
   true, also for `[::1]`), `a.github.io` for `a.github.io`, and falls back to the last label for an unknown TLD
   (`domain.unknown`, `sub.localhost`). `siteOf` handles the trailing dot itself. [V, 2026-10-28, same script]
 - tldts 7.4.19 gives domain `.com` for `example..com`, `.co.uk` for `a..co.uk`, `.github.io` for `x.a..github.io` and
   `example.com` for `.example.com`, while `new URL` keeps those hosts as they are; so `url-rules.ts` refuses hosts with
-  an empty label and `siteOf` uses the whole host for them (Task 7a fix round 1). [V, 2026-10-28, Node 24.13.0,
+  an empty label and `siteOf` uses the whole host for them (Task 7a). [V, 2026-10-28, Node 24.13.0,
   `node -e` with `parse(host, {allowPrivateDomains: true, extractHostname: false})`]
 - tldts 7.4.19 does not list `itch.io` as a private suffix: `a.itch.io` gives domain `itch.io`, suffix `io`,
   `isPrivate` false, so `a.itch.io` and `b.itch.io` are one site for our policy. [V, 2026-10-28, same `node -e`
@@ -382,11 +519,165 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   behavior]. The handover e2e test hides the window on Linux instead and keeps minimize on macOS and Windows;
   `focusLauncher` restores and shows, and the hide path fails without its `show()` [V, 2026-10-28, mutation run on
   macOS arm64 with the hide path forced].
+- AC-13 holds on Electron 45 with the close procedure: `ServiceWorker.enable` + `ServiceWorker.stopAllWorkers` over
+  `webContents.debugger` (attached to the game's `webContents` after it loaded `about:blank`) stopped progress-lab's
+  worker; the session had no running worker and the game's renderer was gone 107 to 110 ms after the close (two runs), nothing of the game
+  was left 5 s after the close, nothing of the bundle 5 s after a quit with the game open. Mutation control (step 3
+  removed): 1 worker running and the renderer alive 5 s after the close (H16). So open check 1 needs no fallback. [V,
+  2026-10-28, `e2e/game-lifecycle.spec.ts`, Electron 45.0.0, macOS arm64]
+- Chromium canonicalizes a renderer-initiated URL before `will-navigate`: spaces in the query and fragment arrive as
+  `%20`, a backslash there arrives raw (`?q=a\b%20c#x\y%20z`). [V, 2026-10-28, `e2e/game-isolation.spec.ts`] Decided
+  2026-10-28: raw shapes in a main-frame target are refused in its scheme and authority only (security.md
+  section 5); entry URLs and `isExternalUrlAllowed` stay strict.
+- With the game session's check handler denying `media`, a camera `getUserMedia` failed with `NotFoundError`, not
+  `NotAllowedError` as in the spike ([A] the cause: Chromium offered no device because the check denies `media`); `permissions.query({name: "microphone"})` reaches the check
+  handler (`denied`) without touching a device. `requestFullscreen()` also triggers a check for `automatic-fullscreen`.
+  [V, 2026-10-28, `e2e/game-isolation.spec.ts`, screen locked]
+- Under Playwright, a hung game page produced no `unresponsive` event within 90 s of input ([A] Chromium skips the
+  hang report while a debugger is attached), so the e2e test emits the event itself against a really hung renderer;
+  `forcefullyCrashRenderer` then ends it with `render-process-gone`. [V, 2026-10-28, `e2e/game-lifecycle.spec.ts`]
+- Electron 45 does not stop a `window.open` without a user gesture before the window-open handler (it reached the
+  handler and was offered), and `HandlerDetails` has no activation flag. [V, 2026-10-28, `e2e/game-isolation.spec.ts`;
+  `electron.d.ts`]
+- `webContents.sendInputEvent({type: "keyDown", keyCode: "Escape"})` reaches `before-input-event` and the page
+  (`keydown`, not `defaultPrevented`), so the Esc-hold e2e test uses it (whether Playwright's CDP keyboard reaches
+  `before-input-event` was not checked). Esc ends a
+  fullscreen the page requested, and Chromium does not deliver that Esc to the page. An Esc sent at once after
+  `isFullScreen()` turned true, while macOS still animated into fullscreen, had no effect in one run [U as a rule].
+  [V, 2026-10-28, `e2e/window.spec.ts`, Electron 45.0.0, macOS arm64]
+- The e2e harness's `launched.hooks()` is a JSON copy of `globalThis.__wgTest`, so hook functions are dropped: call them
+  through `app.evaluate((_electron, id) => globalThis.__wgTest?.fn(id), id)`. [V, 2026-10-28, `e2e/window.spec.ts`]
+- Playwright `page.click` and locators wait for "scheduled navigations" to finish, and a navigation the app prevented
+  never does (30 s timeout): click through `page.mouse.click` at coordinates read with `page.evaluate`. [V, 2026-10-28,
+  Playwright 1.64.1, `e2e/game-isolation.spec.ts` `trustedClick`]
+- Pointer lock fails with `WrongDocumentError` while the macOS screen is locked (`ioreg -n Root -d1 -a` shows
+  `CGSSessionScreenIsLocked` true; the key is absent when unlocked); the permissions e2e test checks that outcome then
+  and annotates "pointer lock not verified". [V, 2026-10-28, run with the owner away] With the screen unlocked pointer
+  lock, fullscreen and keyboard lock all SUCCEED in a game window (each after its own injected click, window focused).
+  A held pointer lock makes Playwright's next `page.click` fail ("#pointer-lock intercepts pointer events", 30 s
+  timeout), so the test releases it (`document.exitPointerLock()`, wait for `pointerlockchange`) before the next
+  click; removing that step reproduced the failure. [V, 2026-10-28, `e2e/game-isolation.spec.ts` "permissions", 3 runs
+  and the full desktop suite unlocked, Electron 45.0.0, macOS arm64]
+- The main log is written asynchronously (queue), so an e2e test must poll for a record (`expect.poll` over
+  `eventsNamed`), never read `main.log` once right after a state change: the force-close test did and was flaky. [A,
+  2026-10-28, from `logger.ts`; the flake itself was not reproduced, 3 runs of the fixed spec passed]
+- CDP `Page.createIsolatedWorld` then `Runtime.evaluate` with its `contextId` runs code in an isolated world of a
+  Playwright page without `Page.enable` or `Runtime.enable`; a global the evaluated bundle defines (`var wgExporters`)
+  stays out of the main world. Biome's `noEmptyPattern` flags Playwright's `async ({}, use)` worker fixtures, which
+  need the empty pattern: `biome-ignore` with the reason. [V, 2026-10-28, Playwright 1.64.1, Biome 2.6.2,
+  `packages/exporters/browser/harness.ts`]
+- IndexedDB: `event.preventDefault()` on a request's error (directly or in a bubbling `transaction.onerror`) cancels the
+  transaction's abort, so the rest commits without the failed record; the exporters never prevent a request error.
+  With the old `done()` that prevented it, a unique-index `ConstraintError` import returned success with records
+  missing. [V, 2026-10-28, bundled Chromium 156.0.8078.4, mutation run of `browser/import-errors.spec.ts`] CDP
+  `Storage.overrideQuotaForOrigin` makes an 8 MiB put fail with `QuotaExceededError`, and `deleteDatabase` fires
+  `blocked` while another world of the page holds a connection that ignores `versionchange`. [V, same spec]
+- A message posted from a sandboxed preload's `MessagePort` with its `ArrayBuffer` in the transfer list reached a
+  `utilityProcess`'s `MessagePortMain` as `null`; the same message without the transfer list (cloned) arrived whole,
+  and a `Uint8Array` arrives as a `Uint8Array`. So the frame protocol never transfers. [V, 2026-10-28, a throwaway
+  probe app on Electron 45.0.0, macOS arm64]
+- zod 4.6.7 builds an object schema's fast parser with `new Function` and probes `new Function("")` when the schema is
+  created (`util.allowsEval`, read in the `$ZodObject` constructor), so in the quiescent preload the canary saw a
+  28-character script without a URL. `z.config({jitless: true})` before any schema is created removes both
+  (`apps/desktop/src/preload/zod-jitless.ts`, imported first). [V, 2026-10-28, zod `v4/core/schemas.js` and `util.js`
+  of 4.6.7; e2e RED before, GREEN after]
+- Playwright 1.64.1 `_electron` attaches to every `webContents` of the app, a hidden quiescent window included, and
+  evaluates an empty script in its own isolated world `__playwright_utility_world_page@<id>` there; the canary names
+  that world as the harness in the test flavor only. Electron 45 names the preload's world "Electron Isolated
+  Context" in a top-level frame but leaves it unnamed in a cross-site iframe's own CDP target. [V, 2026-10-28,
+  `Runtime.executionContextCreated` logged in the desktop e2e]
+- When a service worker starts during a job, `ses.serviceWorkers.getInfoFromVersionID` and `getAllRunning()` did not
+  know its version yet at the `starting` status, and the job is stopped before `running`; the `ServiceWorker` CDP
+  domain (enabled in step 5) names it first: `workerVersionUpdated` maps the version to its registration and
+  `workerRegistrationUpdated` the registration to its scope (`quiescent/worker-scopes.ts`). [V, 2026-10-28, the
+  no-bypass iframe control in `apps/desktop/e2e/quiescent.spec.ts`]
+- `webContents.debugger`'s `message` event gives the page's own session as `sessionId` `""`, but `sendCommand`
+  refuses `""` ("Empty session id is not allowed"): pass `undefined` for the page. [V, 2026-10-28, Electron 45.0.0]
+- Vitest 5 `toEqual` over two 2 MiB `Uint8Array`s took several seconds (a 5 s timeout); compare bytes in a loop. [V,
+  2026-10-28, `packages/exporters/src/frame-server.test.ts`]
+- `e2e/window.spec.ts` "Esc ends a fullscreen the page requested" waits for the window's own fullscreen events
+  (`enter-full-screen` and `leave-full-screen`, the end of macOS's transition) instead of fixed sleeps. The order
+  inside a pair differs by platform: enter-html, enter, leave-html, leave on the dev Mac [V, 2026-10-28, runs on the
+  dev machine], `enter-full-screen` before `enter-html-full-screen` on ubuntu-latest under bare Xvfb [V, 2026-10-28,
+  CI run 40762490413], so the test compares each pair as a set. The app reads the page flag only when it saves
+  (debounced 500 ms, or at close), so the order does not change what it saves [A, from `window-state.ts`]. A second
+  page request at once after `leave-full-screen` was refused by macOS (the window never entered) in 3 of 6 runs on
+  the dev Mac, the same Space animation as below; the test waits 1 s first [V, 2026-10-29, `--repeat-each` runs].
+- macOS moves a window shown partly below the work area up until it fits: saved bounds 32 px below came back 32 px
+  higher at the next launch, while `setBounds` on the shown window had left them there [V, 2026-10-29, Electron
+  45.0.0, macOS arm64, a throwaway e2e probe]. The macOS CI runner restored y 140 as 108 for a 900 x 600 window that
+  fits the dev Mac [V, 2026-10-28, CI run 40762490413], so its work area ends at about 708 px [A]; the AC-18 test
+  now picks bounds inside the primary work area.
+- On Linux Electron 45's `forcefullyCrashRenderer` asks the renderer to crash on its IO thread
+  (`CrashHungProcess`) instead of ending the process as on macOS and Windows [V, 2026-10-29,
+  `shell/browser/api/electron_api_web_contents.cc` at `v45.0.0` via `gh api`]; on ubuntu-latest a call on a game that
+  was not hung left the session `running` for 15 s, no `render-process-gone` [V, 2026-10-28, CI run 40762490413]; why
+  is [U]. Force close therefore escalates after 3 s to SIGKILL of `getOSProcessId()`, then to destroying the window
+  (architecture.md section 4), and the crash e2e kills the renderer by pid; the S-7 test prints which step ended the
+  hung renderer ("S-7 force close record" in the CI log). On ubuntu-latest a hung renderer was not gone 3 s after
+  `forcefullyCrashRenderer` either, and the SIGKILL ended it (`render-process-gone` reason `killed`); on the dev Mac
+  and the macOS runner `forcefullyCrashRenderer` alone did [V, 2026-10-29, CI run 40828152449 and local runs].
+- On ubuntu-latest `document.fullscreenElement` was still null right after both `enter-full-screen` and
+  `enter-html-full-screen` had fired, so the Esc test polls the document's state [V, 2026-10-29, CI run
+  40828152449].
+- Node's `setTimeout` fires a delay above 2^31 − 1 ms after 1 ms (with a `TimeoutOverflowWarning`): the rollback's
+  validation bound under the e2e test's 10^9 ms per MiB failed at once with `IMP_RECOVERY_FAILED`. `within` in
+  `restore-steps.ts` caps its timer [V, 2026-10-29, CI run 40828152449 and `restore-steps.test.ts`, Node 24.22.1].
+- macOS refuses a fullscreen request made while the Space of a fullscreen window closed a moment ago is still
+  animating away, and Electron 45 reports no event for it: `isFullScreen()` turns true with a `resize`, false again
+  about 10 to 20 ms later with another `resize`, and neither `enter-full-screen` nor `leave-full-screen` comes. That was
+  the intermittent AC-18 failure (`e2e/window.spec.ts`, a game closed in the launcher's fullscreen and launched again
+  at once): in the 9 failing instrumented runs the restored `setFullScreen(true)` came 317 to 366 ms after the previous
+  window's `closed`, in the 6 passing ones 568 to 589 ms after it; a probe that closed a fullscreen window and 300 ms later created one
+  with `fullscreen: true` failed 16 of 16, the same with `setFullScreen` on `show` 600 ms later passed 16 of 16.
+  `applySavedFlags` therefore asks again after 250 ms when a restore is refused (at most 8 requests, then
+  `game.fullscreen-restore-failed`); with it, every refused restore entered on the second request (8 of 8 instrumented
+  runs, 7 retried) and `window.spec.ts` passed 5 runs in a row. [V, 2026-10-28, Electron 45.0.0, macOS arm64,
+  instrumented copies of the AC-18 test and a throwaway probe app run through `_electron.launch`; the cause inside
+  AppKit is [A]]
+- An iframe at an IPv6 literal host (`http://[::1]:<port>`) cannot be read by the quiescent window: the job ends
+  with `EXP_TIMEOUT` "A frame of the job window is missing". [V, 2026-10-29, a first draft of
+  `apps/desktop/e2e/keys.spec.ts`, Electron 45.0.0, macOS arm64] [A] the cause: the stub's CSP `frame-src` lists the
+  iframe origin, and the CSP host-source grammar has no IPv6 literals, so Chromium blocks the frame.
+- CDP `Storage.clearDataForStorageKey` with `indexeddb` closes an open connection of that key (its `close` event
+  fires), so a `deleteDatabase` that the connection blocked does not land after a later write. [V, 2026-10-29,
+  `packages/exporters/browser/import-errors.spec.ts`, bundled Chromium 156.0.8078.4] [A] the same in Electron 45.
+- A restore e2e test that kills the app (`crash-after:<step>`, SIGKILL) and starts it again needs the same
+  progress-lab port, because the game's URL and storage keys carry it: `launchApp({userData, progressLab})` reuses a
+  server the test started and stops. [V, 2026-10-29, `apps/desktop/e2e/restore.spec.ts`]
 - `@playwright/test` `webServer.port` is deprecated, use `url`; `pnpm test:e2e --project=chromium` forwards arguments to
   Playwright; `node:http` sends `..` paths byte for byte while `fetch` and `new URL` collapse them, so traversal tests
   use `node:http`. [V, 2026-10-24]
 - zsh: `log` is a builtin, call the macOS unified log as `/usr/bin/log`; an unmatched glob aborts the whole command
   (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
+
+- Vitest 5.0.5 runs `*.test.tsx` with React's automatic JSX runtime without any config once `include` lists the
+  pattern, and `react-dom/server` `renderToStaticMarkup` works in its `node` environment; effects do not run there, so
+  components that call the bridge only in effects or handlers render without `window.wg`. The UI text test
+  (`apps/desktop/src/renderer/ui-text.test.tsx`) relies on this. Biome 2.6 flags `innerText` in Playwright
+  (`useDomNodeTextContent`); `textContent` also reads hidden text, which suits a forbidden-wording scan. [V, 2026-10-30,
+  `pnpm exec vitest run apps/desktop/src/renderer`, `pnpm lint`]
+
+- macOS 27.0.1 opens a `.webloc` only for web links: Finder said "the document could not be opened" and `open` gave
+  LaunchServices error -10400 for a `wglauncher:` and a `mailto:` `.webloc`, while an `https:` one opened; an
+  `.inetloc` with the same plist handed the `wglauncher:` link to the packaged app, running or not, so "Create
+  shortcut" writes `.inetloc`. [V, 2026-10-30, scratch files and the packaged app]
+- Electron 45.0.0's fuse wire has nine fuses (`getCurrentFuseWire` of `@electron/fuses` 1.8.0 returns positions 0 to
+  8; position 8, `wasmTrapHandlers`, is on), one more than that package's `FuseV1Options` names. Only the app's own
+  `Info.plist` carries the usage descriptions, the helpers' carry none. electron-builder with `identity: null` skips
+  signing and leaves the fused app with a broken signature ("code has no resources but signature indicates they must
+  be present"), so `package:mac` runs `codesign --force --deep --sign -` after it. [V, 2026-10-30, run locally]
+- A packaged prod app started with `--user-data-dir=<temp>` leaves the real `WGLauncher` profile uncreated (smoke
+  start, 2026-10-30); a deep link or shortcut that LaunchServices starts gets no argument and uses the real profile.
+  `LSHandlers` entries were removed with `PlistBuddy -c "Delete :LSHandlers:<index>"` on
+  `com.apple.launchservices.secure.plist`, and `lsregister -u` unregistered the `dist` app. [V, 2026-10-30, run
+  locally]
+- The e2e pages render default black text on the game window's dark background (dark mode), so a person reads their
+  output through a selection (Cmd+A). [V, 2026-10-30, manual checks]
+- An e2e test that reads `main.log` across two launches of one userData sees the first launch's records only
+  sometimes, so it counts from the records present after the first close [V, 2026-10-30, `e2e/shortcut.spec.ts`
+  failed 2 of 3 repeats before the fix]. The cause is [A]: the log is written asynchronously and `before-quit` flushes
+  it only when game windows are open, so records can be lost at a quit with none.
 
 - Plain Node 24.13 prints "SQLite is an experimental feature" when `node:sqlite` loads. `scripts/vitest-setup.ts` (a
   Vitest `setupFiles` entry, logic in `scripts/warning-filter.ts`) wraps `process.emitWarning` and drops only that message;

@@ -1,0 +1,12 @@
+{
+  "adapterFormat": 1,
+  "id": "progress-lab",
+  "version": "1.0.0",
+  "match": { "origins": ["http://localhost:4317"] },
+  "storage": {
+    "frameKeys": [],
+    "localStorage": { "include": ["progress-lab:"], "exclude": [] },
+    "indexedDB": { "include": ["progress-lab", "/home/web_user"], "exclude": [] }
+  },
+  "flush": { "hook": "none" }
+}

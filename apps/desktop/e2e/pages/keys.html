@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- e2e page (not a game): records every Escape keydown and keyup the page receives, and can request fullscreen
+     itself (a click on the button). The test reads window.keys and document.fullscreenElement. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>keys</title>
+    <style>
+      button { display: block; margin: 8px; width: 240px; height: 40px; }
+    </style>
+  </head>
+  <body>
+    <button id="fullscreen" type="button">page fullscreen</button>
+    <output id="keys">[]</output>
+    <script>
+      window.keys = [];
+      const record = (event) => {
+        if (event.key !== "Escape") return;
+        window.keys.push({ type: event.type, repeat: event.repeat, prevented: event.defaultPrevented });
+        document.getElementById("keys").textContent = JSON.stringify(window.keys);
+      };
+      window.addEventListener("keydown", record);
+      window.addEventListener("keyup", record);
+      document.getElementById("fullscreen").addEventListener("click", () => {
+        document.documentElement.requestFullscreen().catch(() => undefined);
+      });
+    </script>
+  </body>
+</html>

@@ -46,6 +46,9 @@ export function createPlaySessionsRepo(db: WritableDb) {
   const end = db.raw.prepare(
     "UPDATE play_sessions SET active_ms = ?, checkpoint_at = ?, ended_at = ? WHERE id = ?",
   );
+  const endAtCheckpoint = db.raw.prepare(
+    "UPDATE play_sessions SET ended_at = checkpoint_at WHERE id = ? AND ended_at IS NULL",
+  );
   const del = db.raw.prepare("DELETE FROM play_sessions WHERE id = ?");
   const listForGame = db.raw.prepare(PLAY_SESSIONS_SQL.listForGame);
   const total = db.raw.prepare(PLAY_SESSIONS_SQL.totalActiveMs);
@@ -68,6 +71,10 @@ export function createPlaySessionsRepo(db: WritableDb) {
     end(id: number, activeMs: number): void {
       const at = db.now();
       end.run(activeMs, at, at, id);
+    },
+    /** A session a crash left unfinished ends at its last checkpoint (start-up, architecture.md section 10). */
+    endAtCheckpoint(id: number): void {
+      endAtCheckpoint.run(id);
     },
     delete(id: number): void {
       del.run(id);

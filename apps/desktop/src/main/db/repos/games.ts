@@ -66,6 +66,7 @@ export function createGamesRepo(db: WritableDb) {
   );
   const getStmt = db.raw.prepare(GAMES_SQL.get);
   const listStmt = db.raw.prepare(GAMES_SQL.list);
+  const launchedStmt = db.raw.prepare("UPDATE games SET last_launched_at = ? WHERE id = ?");
   const get = (id: string): Game | null => {
     const row = getStmt.get(id) as GameRow | undefined;
     return row ? toGame(row) : null;
@@ -99,6 +100,10 @@ export function createGamesRepo(db: WritableDb) {
         { updated_at: db.now() },
       );
       return get(id);
+    },
+    /** Records a launch: `last_launched_at` becomes the database clock's now (a launch is not an edit). */
+    markLaunched(id: string): void {
+      launchedStmt.run(db.now(), id);
     },
     /**
      * "Remove from library" (architecture.md section 12), in one transaction: deletes the game row (the foreign

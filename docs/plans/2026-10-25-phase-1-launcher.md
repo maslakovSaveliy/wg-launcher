@@ -199,10 +199,10 @@ string; sizeBytes: number}>` (`limits` for tests only; refused input writes noth
   some suites passed at once and were mutation-checked after the fact; see the Task 3 report.)
 - [x] MEMORY.md: Node zstd truncation gotcha [V, 2026-10-25]; snapshot-format §2 and §8 state that truncation is detected
   by the frame walker (M6).
-- [x] 2026-10-28 CI fix 1: R12 ("a decompressor error is always `SNAP_ZSTD_INVALID`") rested on Node 24.13.0 never
-  failing a prefix; Node 24.22.1 fails a cut frame ("unexpected end of file"). Ruling R23 replaces it: the walker reads
+- [x] 2026-10-28 CI fix: the first rule ("a decompressor error is always `SNAP_ZSTD_INVALID`") rested on Node 24.13.0
+  never failing a prefix; Node 24.22.1 fails a cut frame ("unexpected end of file"). A new rule replaces it: the walker reads
   the rest of the input after a decompressor error and its verdict wins; the decompressor is flushed, not ended, on a
-  frame the walker stopped (snapshot-format §2, `src/container/inflate.test.ts`). Ruling R22 pins `.nvmrc` to 24.22.1.
+  frame the walker stopped (snapshot-format §2, `src/container/inflate.test.ts`). `.nvmrc` is pinned to 24.22.1.
 - [x] Commit `feat(snapshot): add the wgsnap container reader and writer`.
 
 ### Task 4: Golden vectors: generator, committed files, runner (M)
@@ -253,7 +253,7 @@ React; `prodDepsGuard` on all three; electron-builder `files` excludes packages 
   downloaded on first use; CI runs `install-electron`). `fixPartitioningSwitch` takes `app.commandLine`, since
   Playwright appends its switches there. The electron-builder `files` exclusion moves to Task 16, which adds
   electron-builder. Open check 6 is settled: React 19 runs under `trusted-types 'none'` (security.md section 6).
-  Fix round 1 (2026-10-28): the guard is `apply: "build"` (it broke the dev server); the test flavor never reads
+  Follow-up fix (2026-10-28): the guard is `apply: "build"` (it broke the dev server); the test flavor never reads
   Electron's default userData (reading it created an empty real `WGLauncher` directory), guarded by the e2e harness;
   the dev flavor was run once and verified (security.md section 6).
 
@@ -317,19 +317,25 @@ progress-lab cannot serve the case (permissions, popups, downloads).
 `closeGameWindow(win, deps)` = the 4-step close procedure (about:blank, debugger `ServiceWorker.enable` +
 `stopAllWorkers`, wait `getAllRunning()` empty ≤ 2 s, `stopWorker` per version, `SW_STOP_FAILED`, destroy);
 `recordFrames(webContents, repo)` (`did-frame-navigate` → `storage_targets`).
-- [ ] Unit: `gameWebPreferences` asserts every value (S-1); `LockManager` matrix incl. M5 (background cancelled with
+- [x] Unit: `gameWebPreferences` asserts every value (S-1); `LockManager` matrix incl. M5 (background cancelled with
   `CANCELLED`, no `GAME_BUSY`; task holds → `GAME_BUSY`; recovery → `NEEDS_RECOVERY`).
-- [ ] e2e: AC-2/S-3 (two entries with the same URL: localStorage, IndexedDB and cookie markers not shared; launcher
+- [x] e2e: AC-2/S-3 (two entries with the same URL: localStorage, IndexedDB and cookie markers not shared; launcher
   session distinct); AC-3/S-2 (`typeof require`, `typeof process`, bridge `undefined`); AC-4/S-4 (five denied and logged,
   three allowed, each after its own injected click, pointer lock first, focus checked); AC-5/S-5 (off-site navigation,
   `window.open` → deny + confirm dialog queued, download cancelled); Review Focus 1 and 3 (double Play, deep link during
   `launching` → one window); S-7 (a `beforeunload` trap asks through the queued dialog and cannot block closing;
   `unresponsive` → "Force close" via `forcefullyCrashRenderer`; `render-process-gone` → `crashed`); AC-13/S-9 (process list before, with the game open, 5 s after close, 5 s after quit; with
-  progress-lab's service worker registered).
-- [ ] Run failing, implement, run passing. If `stopAllWorkers` through `webContents.debugger` does not stop the worker
-  (open check 1), stop, record the evidence, and ask the owner which fallback to take.
-- [ ] MEMORY.md and architecture §4: the AC-13 outcome [V].
-- [ ] Commit `feat(desktop): add isolated game windows and their lifecycle`.
+  progress-lab's service worker registered). Limits of the 2026-10-28 run: pointer lock success was not verified
+  (the macOS screen was locked, so it failed with `WrongDocumentError`, which the test then expects); `unresponsive`
+  is emitted by the test against a really hung page (Chromium sent none while Playwright was attached); www ↔ apex is
+  covered by the unit tests, the e2e redirects use development origins (`127.0.0.1` same-site, `localhost` cross-site).
+  Note (2026-10-29, CI fix 2): Force close now escalates when `forcefullyCrashRenderer` brings no
+  `render-process-gone` (SIGKILL of the renderer's process, then destroy), and the crash e2e kills the renderer by its
+  pid; see architecture.md section 4 "Crash and hang".
+- [x] Run failing, implement, run passing. If `stopAllWorkers` through `webContents.debugger` does not stop the worker
+  (open check 1), stop, record the evidence, and ask the owner which fallback to take. (It does.)
+- [x] MEMORY.md and architecture §4: the AC-13 outcome [V].
+- [x] Commit `feat(desktop): add isolated game windows and their lifecycle`.
 
 ### Task 9: IPC contract, launcher bridge, library UI (L; UI functional only, no design work)
 **Files:** `packages/shared/src/ipc.ts` (channel table of architecture §6 as zod schemas + types), `src/main/ipc/{register.ts,
@@ -339,38 +345,46 @@ sender-check.ts,handlers/library.ts,handlers/game.ts,handlers/settings.ts}`, `sr
 **Interfaces (Produces):** `IpcContract` (channel → `{request: ZodType; response: ZodType}`), `window.wg` with one typed
 function per channel plus `onGameState(cb)` and `onTaskProgress(cb)`; `checkSender(event, launcherWc): boolean`;
 `setCover(gameId, path): Promise<Result<string>>` (PNG/JPEG/WebP magic bytes, ≤ 10 MiB, `covers/<gameId>-<random>.<ext>`).
-- [ ] Unit (S-10): wrong sender, subframe, wrong origin, unknown key, oversize payload, upper-case id → rejected,
-  `IPC_FORBIDDEN_SENDER` logged once; every schema is a `z.strictObject`.
-- [ ] e2e: AC-17 (edit title and cover keeps `gameId` and partition; `ftp:`/`http://example.com` rejected; dev origins
+- [x] Unit (S-10): wrong sender, subframe, wrong origin, unknown key, oversize payload, upper-case id → rejected,
+  `IPC_FORBIDDEN_SENDER` logged once; every schema is a `z.strictObject`. Also covers (magic bytes, 10 MiB, symlink,
+  name pattern, old file removed), handlers over a real database, and `game:state` transitions.
+- [x] e2e: AC-17 (edit title and cover keeps `gameId` and partition; `ftp:`/`http://example.com` rejected; dev origins
   only in the test flavor); add the same URL twice → warning, then a second entry; AC-1 part (restart → same title, URL,
   cover, `gameId`; Play opens it); remove from library → card gone, row in "Data of removed games" (settings), snapshots
-  kept; a title `<img src=x onerror=…>` renders as text (S-15).
-- [ ] Run failing, implement, run passing.
-- [ ] Commit `feat(desktop): add the library UI and IPC contract`.
+  kept; a title `<img src=x onerror=…>` renders as text (S-15). Also the read-only database (persistent notice,
+  writes refused with `LIBRARY_READ_ONLY`) and a corrupt `library.db` (native error dialog, exit 1).
+- [x] Run failing, implement, run passing. `onTaskProgress` is not in the bridge yet: no channel reports progress
+  before Task 13, which adds it with `task:progress`.
+- [x] Commit `feat(desktop): add the library UI and IPC contract`.
 
 ### Task 10: Window state, fullscreen, playtime and badges wired (M)
-**Files:** `src/main/games/{window-state.ts,fullscreen.ts,playtime-recorder.ts}`, `src/main/library/badges-view.ts`, e2e
-`e2e/window.spec.ts`.
-- [ ] Window state saved on close and debounced 500 ms on move/resize; restored through `restoreBounds`; menu item role
-  `togglefullscreen` and a UI control; launcher-set fullscreen exits with toggle, UI or Esc held 1.5 s (`before-input-event`
-  observes, never `preventDefault`s Esc; short Esc reaches the page: e2e asserts the page saw keydown Esc).
-- [ ] Playtime: checkpoints every 60 s, `last_launched_at` on launch, < 10 s deleted at close and at start-up.
-- [ ] e2e: AC-18 automated part (bounds and fullscreen restored; toggle; short Esc reaches the game); card shows playtime
-  and badges from DB state only (AC-14 automated part).
-- [ ] Run failing, implement, run passing. Manual AC-18 real-input check goes to Task 16's checklist.
-- [ ] Commit `feat(desktop): remember windows, add fullscreen and playtime`.
+**Files:** `src/main/games/{window-state.ts,fullscreen.ts,playtime-recorder.ts}`, `src/main/app-menu.ts`, e2e
+`e2e/window.spec.ts`. (`src/main/library/badges-view.ts` was not needed: Task 9's `cardOf` in
+`src/main/ipc/handlers/library.ts` already maps the rows to `badgesFor`, playtime and last launch.)
+- [x] Window state saved on close and debounced 500 ms on move/resize; restored through `restoreBounds` (a
+  saved size without a position keeps its size, centered); menu item role `togglefullscreen`, which is also the UI
+  control (no launcher channel exists for it, architecture §9); launcher-set fullscreen exits with toggle, UI or Esc
+  held 1.5 s (`before-input-event` observes, never `preventDefault`s Esc; short Esc reaches the page: e2e asserts the
+  page saw keydown Esc).
+- [x] Playtime: checkpoints every 60 s, `last_launched_at` on launch, < 10 s deleted at close and at start-up.
+- [x] e2e: AC-18 automated part (bounds and fullscreen restored; the toggle's window method; short Esc reaches the
+  game; Esc held ends the launcher's fullscreen); card shows playtime and badges from DB state only (AC-14 automated
+  part); open check 9 settled (Esc ends a page-requested fullscreen; Chromium does not deliver that Esc).
+- [x] Run failing, implement, run passing. Manual AC-18 real-input check goes to Task 16's checklist.
+- [x] Commit `feat(desktop): remember windows, add fullscreen and playtime`.
 
 ### Task 11: Shortcuts and deep links (S)
 **Files:** `src/main/{launch-input.ts,shortcuts.ts}`, e2e `e2e/shortcut.spec.ts`.
-- [ ] `open-url` registered before `ready`, queued until the window manager is up; `second-instance` argv parsed with
+- [x] `open-url` registered before `ready`, queued until the window manager is up; `second-instance` argv parsed with
   `parseLaunchInput`; valid known id → focus or open; unknown → library with "not in the library"; malformed → library
-  with an error, nothing navigated.
-- [ ] `shortcut:create`: macOS `.webloc` (only the id varies); Windows `shell.writeShortcutLink` with the options of
+  with an error, nothing navigated. (`second-instance` is registered right after the lock too, and the error is a
+  native notice over the library: architecture §8.)
+- [x] `shortcut:create`: macOS `.webloc` (only the id varies); Windows `shell.writeShortcutLink` with the options of
   architecture §8 (unit-tested args, labeled not tested on Windows). Dev and test builds never call
   `setAsDefaultProtocolClient`.
-- [ ] e2e (M13): launching with `--launch-game=<id>` opens that game; a second instance with the argument focuses the
+- [x] e2e (M13): launching with `--launch-game=<id>` opens that game; a second instance with the argument focuses the
   existing window; malformed and unknown ids (AC-19 automated part). Scheme handling → Task 16 manual.
-- [ ] Commit `feat(desktop): add shortcuts and launch arguments`.
+- [x] Commit `feat(desktop): add shortcuts and launch arguments`.
 
 ### Task 12: `packages/exporters`: generic frame exporter and importer, adapters, flush decision (L)
 **Files:** `packages/exporters/{package.json,tsconfig.json,playwright.config.ts}`, `src/{frame-exporter.ts,frame-importer.ts,
@@ -382,16 +396,16 @@ the partitioning override of its config).
 `EntrySink {write(path: string, bytes: Uint8Array): Promise<void>}`, `EntrySource` (async iterator of `{path, bytes}`);
 `FrameCommand` / `FrameReply` zod schemas (`inventory`, `export`, `import`, `wipe-selected`, with 128-bit request nonces);
 `decideFlushState(o: FlushObservation): "confirmed" | "unconfirmed"`; `parseAdapter(json): Adapter` (closed schema of §8).
-- [ ] Browser tests: export progress-lab after 7 steps, import into a fresh context, progress-lab's own `#progress-hash`
+- [x] Browser tests: export progress-lab after 7 steps, import into a fresh context, progress-lab's own `#progress-hash`
   equal; Date/ArrayBuffer/Uint8Array/Blob preserved (AC-7 value part); key-generator probe twice → same `keyGenerator`
   and same `contentHash` (open check 2: Chromium reverting on abort); after import the next `add` key equals the
   exported generator; `IMP_TARGET_NOT_EMPTY`; a quota error maps to `IMP_QUOTA_EXCEEDED` (lowered quota via a fake
   `localStorage`); exporter never touches `document.cookie`/`cookieStore` (spy).
-- [ ] Unit: AC-12 `decideFlushState` (none, success, error, timeout, non-`true`, input after start, late close);
+- [x] Unit: AC-12 `decideFlushState` (none, success, error, timeout, non-`true`, input after start, late close);
   adapter schema rejects unknown members, regex-like strings are plain prefixes, `module` pattern.
-- [ ] Run failing, implement, run passing. If the probe is unstable, apply the save-transfer fallback (highest key + 1)
-  and record it.
-- [ ] Commit `feat(exporters): add the generic web storage exporter`.
+- [x] Run failing, implement, run passing. If the probe is unstable, apply the save-transfer fallback (highest key + 1)
+  and record it. (The probe is stable in bundled Chromium 156: no fallback; save-transfer §4.)
+- [x] Commit `feat(exporters): add the generic web storage exporter`.
 
 ### Task 13: Quiescent job runner, snapshot worker, export (L)
 **Files:** `src/main/snapshots/quiescent/{job.ts,interceptor.ts,stub.ts,canary.ts,handshake.ts}`,
@@ -402,16 +416,20 @@ Promise<Result<JobOutcome>>` implementing save-transfer §5 steps 1–12 exactly
 Promise<Result<SnapshotRow>>`; `runStorageCheck(gameId, signal): Promise<Result<StorageCheck>>` (holds a `background`
 lease, M5); worker message protocol `WorkerCommand` / `WorkerEvent` (zod) over `MessagePort`; worker fault hook
 `fail-write` (test flavor).
-- [ ] Unit: interceptor answers only the job's exact stub URLs, 403 empty body otherwise, no passthrough (QW-1); each
+- [x] Unit: interceptor answers only the job's exact stub URLs, 403 empty body otherwise, no passthrough (QW-1); each
   step throws once → nothing stays registered (QW-3); handshake rejects wrong `webContents`, wrong frame URL, wrong or
   short nonce (QW-4); stub headers and CSP (QW-10); log lines contain no values or key names (QW-9).
-- [ ] e2e/integration: export progress-lab plain, with service worker, cross-site iframe; canary flags an injected
+- [x] e2e/integration: export progress-lab plain, with service worker, cross-site iframe; canary flags an injected
   main-world script and a started worker; **the no-bypass iframe control** (open check 3); AC-11 (export refused while the
   window is open); AC-20/S-17 (snapshot of a session with cookies, Cache Storage and a worker contains none);
   Review Focus 4 and 5; manifest `flushState` `unconfirmed`; M5 (launch during a running storage check cancels it).
-- [ ] Run failing, implement, run passing.
-- [ ] MEMORY.md, save-transfer §5: outcome of the iframe bypass control and of `usageDetails` in an isolated world [V].
-- [ ] Commit `feat(desktop): export snapshots through the quiescent window`.
+  Also the key-generator probe in Electron 45 (open check 2), the canary's calibration and `snapshot:export` over IPC
+  with its `task:progress` events, `snapshot:list` and `snapshot:saveAs`.
+- [x] Run failing, implement, run passing.
+- [x] MEMORY.md, save-transfer §5: outcome of the iframe bypass control and of `usageDetails` in an isolated world [V].
+- [x] Commit `feat(desktop): export snapshots through the quiescent window`. (Preceded by
+  `refactor(desktop): move launch wiring out of the main entry` and the building blocks; the storage check runs on
+  demand only: wiring it to a game's exit waits for a decision, see the task report.)
 
 ### Task 14: Restore R1–R8, rollback, recovery, storage-key mapping, delete local saves, clear cache, verify (L)
 **Files:** `src/main/snapshots/{restore.ts,journal.ts,key-check.ts,recovery.ts,delete-saves.ts,clear-cache.ts,verify.ts,
@@ -423,9 +441,9 @@ each step, `deps.faults?: (step: RestoreStep) => void` (test flavor; also `crash
 `checkStorageKeys(manifestKeys, target: TargetKeys, mapping?: KeyMapping[]): Result<CheckedKeys, "IMP_STORAGE_KEY_MISMATCH">
 & {unchecked: StorageKey[]}`; `recoverAtStartup(deps)` before any launch; `deleteLocalSaves`, `clearCache`,
 `verifySnapshot(gameId, revisionId)` (into `wg-verify-<nonce>`, sets `verified_at` and `verified_exporter_version`).
-- [ ] Unit: key-check table of save-transfer §2 (top, partitioned, frame, unchecked, mapping incl. self-mapping); expected
+- [x] Unit: key-check table of save-transfer §2 (top, partitioned, frame, unchecked, mapping incl. self-mapping); expected
   hash after a mapping (snapshot-format §5) renumbers `data/<k>/`.
-- [ ] Integration: AC-8 (fault at validate, lock, backup, wipe, import, verify → progress hash and inventory equal the
+- [x] Integration: AC-8 (fault at validate, lock, backup, wipe, import, verify → progress hash and inventory equal the
   pre-import state, backup validates); failed rollback → `needs_recovery`, launch refused naming the backup, "Retry
   recovery" works; Review Focus 2 (crash after wipe → recovered at next start); AC-24/S-16 (progress-lab on `localhost`
   with a `127.0.0.1` iframe restored under changed keys → refused naming both, nothing written; with a confirmed mapping
@@ -433,38 +451,55 @@ each step, `deps.faults?: (step: RestoreStep) => void` (test flavor; also `crash
   without consent); `IMP_REVISION_CONFLICT`; M8 (restore revision of entry A into entry B adds no row, B's base moves);
   AC-16 (delete local saves makes and verifies a backup, then wipes; clear cache leaves data, and open check 4 —
   `clearStorageData` without origin reaches partitioned cache keys — is asserted here); verify sets "Export verified".
-- [ ] Run failing, implement, run passing.
-- [ ] Commit `feat(desktop): restore snapshots with backup and rollback`.
+- [x] Run failing, implement, run passing.
+- [x] Commit `feat(desktop): restore snapshots with backup and rollback`. (Preceded by
+  `refactor(exporters): move the import write pass into its own module` and the building blocks; the shared window
+  steps live in `snapshots/restore-steps.ts`, the worker's restore source in `worker/source.ts`. The moved-iframe case
+  uses another port: an iframe at an IPv6 literal host cannot be read by the quiescent window, see the task report.)
 
 ### Task 15: Snapshot UI and the vertical scenario (M)
 **Files:** `src/renderer/snapshots/*.tsx`, `src/renderer/library/GameMenu.tsx` (three delete actions, export, import,
-verify, save as, shortcut), `src/renderer/recovery/*.tsx`, e2e `e2e/vertical.spec.ts`.
-- [ ] UI (functional only, no design work; see "Scope of the UI"): snapshot list with "flush unconfirmed" on every `unconfirmed` row (never "save point", "guaranteed",
+verify, save as, shortcut), `src/renderer/recovery/*.tsx`, e2e `e2e/vertical.spec.ts`. Also `src/renderer/tasks.ts`
+(task progress), `src/main/snapshots/frames.ts` and the channel `snapshot:frames` (the export dialog's frame list).
+- [x] UI (functional only, no design work; see "Scope of the UI"): snapshot list with "flush unconfirmed" on every `unconfirmed` row (never "save point", "guaranteed",
   "complete"); export dialog lists cross-site frame origins with data, unticked; import source = this game's snapshots,
   snapshots of entries with the same origin, or a file; mapping confirmation in a native dialog written by main; task
   progress from real steps and bytes only; `needs_recovery` banner.
-- [ ] e2e AC-6: add `http://localhost:<port>/` → Play → 7 × `#play-step` → hash H → close → reopen → H → close → export
+- [x] e2e AC-6: add `http://localhost:<port>/` → Play → 7 × `#play-step` → hash H → close → reopen → H → close → export
   → add the same URL again (entry B, clean session) → import A's snapshot into B → launch B → H; then restart the app and
   launch B → H (AC-1 part). AC-7 e2e: the same through the UI for the service-worker and iframe variants.
-- [ ] UI text test: no element anywhere shows install, sync, FPS, download, completion or achievement wording (AC-14).
-- [ ] Run failing, implement, run passing; `pnpm check` and `pnpm test:e2e` green.
-- [ ] Commit `feat(desktop): add the snapshot UI and the vertical scenario`.
+- [x] UI text test: no element anywhere shows install, sync, FPS, download, completion or achievement wording (AC-14).
+- [x] Run failing, implement, run passing. Locally only the touched unit files, lint, typecheck and the touched e2e
+  specs (owner decision 2026-10-29); CI on the draft pull request runs the full suite.
+- [x] Commits `fix(desktop): name a running task when a launch is refused`, `feat(desktop): list a game's frames with
+  what they hold for the export dialog`, `feat(desktop): describe task progress from real steps and bytes`,
+  `feat(desktop): add the snapshot UI`, `test(desktop): run the vertical scenario through the launcher UI`, and the
+  docs.
 
 ### Task 16: Packaging, release check, manual check of the packaged app on macOS arm64 (M, owner at the machine)
 **Files:** `apps/desktop/electron-builder.yml`, `apps/desktop/build/after-pack.mjs` (removes `NSCameraUsageDescription`,
 `NSMicrophoneUsageDescription`, `NSAudioCaptureUsageDescription` and the Bluetooth descriptions), `apps/desktop/scripts/
 release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat/manual-checks/<date>-macos-arm64.md`.
-- [ ] `electronFuses` exactly security §4; `protocols: [{name: "WGLauncher", schemes: ["wglauncher"]}]`; ad-hoc signing
+- [x] `electronFuses` exactly security §4; `protocols: [{name: "WGLauncher", schemes: ["wglauncher"]}]`; ad-hoc signing
   (`identity: null`, then `codesign --force --deep --sign -`), no notarization.
-- [ ] `release-check.mjs` (S-14): reads fuses (`@electron/fuses` read API), `Info.plist` (no media/Bluetooth usage
+- [x] `release-check.mjs` (S-14): reads fuses (`@electron/fuses` read API), `Info.plist` (no media/Bluetooth usage
   descriptions, `CFBundleURLTypes` has `wglauncher`), no `__wgTest` in the bundle, renderer deps not duplicated.
-- [ ] **Warn the owner first** (windows open, macOS prompts may appear, ~30–45 min, owner needed at the keyboard).
+- [x] **Warn the owner first** (windows open, macOS prompts may appear, ~30–45 min, owner needed at the keyboard).
   Manual checklist, each result recorded with date, versions, machine: deep link not running / running / second
-  instance (AC-19); `.webloc` shortcut opens the game; media with the macOS microphone and camera permission undecided,
+  instance (AC-19), the `wglauncher://` scheme registered by the packaged app (`Info.plist` and the prod-only
+  `setAsDefaultProtocolClient`); a `.webloc` made by "Create shortcut" opens the game, not running and running
+  (open check 10); a malformed and an unknown deep link show the notice over the library; with only a game window
+  open, a Dock click and a shortcut bring the launcher window back; media with the macOS microphone and camera permission undecided,
   denied, granted → `NotAllowedError`, no OS prompt, app keeps running (security §5 item 3; open check 5); real-input
-  fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual); process list after close and quit (AC-13 manual).
-- [ ] If removing the usage descriptions makes macOS kill the process, stop and ask the owner (security open question).
-- [ ] Commit `build(desktop): package the app and add the release check`.
+  fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual): View → Toggle Full Screen clicked and
+  Ctrl+Cmd+F pressed in a game window, a short real Esc reaches the game, Esc held 1.5 s ends the launcher's
+  fullscreen, a page's own fullscreen ends on Esc, and size, position and fullscreen come back on the next launch; process list after close and quit (AC-13 manual).
+- [x] If removing the usage descriptions makes macOS kill the process, stop and ask the owner (security open question). It did not (manual check 13).
+- [x] Commit `build(desktop): package the app and add the release check`. Also `fix(desktop): write macOS shortcuts as
+  .inetloc` (macOS 27.0.1 opens a `.webloc` for web links only) and, on the owner's decision of 2026-10-30,
+  `feat(desktop): refuse internal hosts for Open in browser in production`. The real-input checks ran on the
+  unpackaged test build with local pages (the prod build accepts https entries only; same Electron binary). Results:
+  `docs/compat/manual-checks/2026-10-30-macos-arm64.md`.
 
 ### Task 17: H7 on the launcher against Chrome (with H8 Chrome side, H9, demo frame samples) — hands-off
 **Files:** `spikes/runtime-compat/run-timing.mjs` (add runtime `launcher`: drives the packaged test-flavor app with
@@ -492,16 +527,16 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 
 | # | Check (where it is settled) | Fallback if it fails |
 | --- | --- | --- |
-| 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window |
-| 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference |
-| 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION` |
-| 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types |
-| 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides) |
+| 1 | `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (Task 8, AC-13) | Owner decides: unregister the game's workers on close (offline games re-download) or accept a longer AC-13 window. **Settled in Task 8: it works** (worker and renderer gone about 110 ms after the close; architecture.md section 4) |
+| 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference. **Settled in Task 12: it reverts** in bundled Chromium 156 (two exports equal, the game's next key unchanged; save-transfer.md section 4); **and in Electron 45 (Task 13):** two exports in a row have the same `contentHash` and the game's next step gets key 8 (`apps/desktop/e2e/export.spec.ts`) |
+| 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION`. **Settled in Task 13: it does** (without any bypass the iframe's partitioned worker started and the canary stopped the job; with the page-level bypass alone, and with the full bypass, the job was clean; `apps/desktop/e2e/quiescent.spec.ts`, save-transfer.md section 5) |
+| 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types. **Settled in Task 14: it does** (a `127.0.0.1` iframe's partitioned Cache Storage and worker registration under `localhost` were gone after "Clear cache", its data kept; `apps/desktop/e2e/delete.spec.ts`, architecture.md section 12) |
+| 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides). **Settled in Task 16: it holds** for the reachable state (undecided: `NotAllowedError` for the camera, a denial without a visible error name for the microphone, no prompt, the app kept running); denied and granted cannot be reached, because macOS never lists an app that does not ask (security.md section 5) |
 | 6 | React 19 runs under `trusted-types 'none'` (Task 5): settled 2026-10-28, it does (security.md section 6) | Allow one named policy, keep `require-trusted-types-for 'script'` |
 | 7 | `node:sqlite` runs without a warning in Electron 45 main (Task 6) | better-sqlite3 13.0.3 per ADR-0004 revisit trigger |
-| 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data) |
-| 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc |
-| 10 | `.webloc` with `wglauncher://` opens the packaged app (Task 16) | Offer "copy launch link" instead of a macOS shortcut file |
+| 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data). **Settled in Task 13: it is** (the preload's world saw Cache Storage and the worker registration, so the manifest lists them in `notExported`; `apps/desktop/e2e/export.spec.ts`) |
+| 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc. **Settled in Task 10: it does** (e2e with `sendInputEvent`; Chromium does not deliver that Esc to the page; architecture.md section 9) |
+| 10 | `.webloc` with `wglauncher://` opens the packaged app (Task 16) | Offer "copy launch link" instead of a macOS shortcut file. **Settled in Task 16:** the `.webloc` failed (macOS 27.0.1 opens it for web links only); an `.inetloc` with the same plist works, app running or not, so the shortcut is an `.inetloc` and the fallback is not needed (architecture.md section 8) |
 | 11 | Windows shortcut and deep link (no machine) | Code and unit tests only, labeled not tested |
 
 ## Estimates (honest, rough)

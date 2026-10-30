@@ -14,7 +14,7 @@
 
 - **Date:** 2026-10-24. **Command:** `node run.mjs --runtime=electron` (all groups), then twice `node run.mjs
   --runtime=electron --only=memory --load=512` for H9, then once `node run.mjs --runtime=electron --only=permissions`
-  for H12 (review fix round, file `electron-45.0.0-20261024T154218.995Z.json`, "H12 rerun").
+  for H12 (a rerun after the first permissions run, file `electron-45.0.0-20261024T154218.995Z.json`, "H12 rerun").
 - **Machine:** MacBook Air with Apple M3 (model `Mac15,12`, fanless), 10-core GPU (Metal 4), built-in Retina display at
   1470 x 956 points, scale factor 2, 60 Hz (Electron `displayFrequency` 60.0024), one display, on AC power, screen
   unlocked. macOS 27.0.1 (26A434).
@@ -176,7 +176,7 @@ value of a switch wins) restored partitioning under Playwright. Only the normal 
   request in a separate script; `systemPreferences.getMediaAccessStatus` then reported `not-determined` for microphone
   and camera; and a macOS `UserNotificationCenter` process started at the moment of the first microphone request.
 - Owner-reported (2026-10-24): the macOS microphone prompt that appeared during the first permissions run was answered
-  "Allow". A TCC log read during the review fix round (not in the committed files) shows a microphone record created for
+  "Allow". A TCC log read afterwards (not in the committed files) shows a microphone record created for
   `com.anthropic.claude-code`, the app that launched the runner, at 15:14:11 UTC, after the full run's permissions group
   had finished.
 - H12 rerun (`…154218.995Z`, the runner now records `getMediaAccessStatus` before, between and after the requests, and a
@@ -434,7 +434,7 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
     that transient process is the mechanism the method tests, not a second instance that stays.
 12. **H12 rerun.** The method has no OS-permission precondition. The full run's FAIL stands as measured; the rerun after
     the owner answered the macOS prompt is reported next to it, and H12 is marked environment-dependent.
-13. **Changes after the measurements.** In the review fix round the result transport was hardened (the spike server
+13. **Changes after the measurements.** After the first runs the result transport was hardened (the spike server
     now requires a per-run token and checks the Origin, see `README.md`) and the permissions mode gained the
     media-access status and TCC log. The measuring code is unchanged; only the H12 rerun used the new transport. In the
     H12 rerun file, paths outside the repository in the captured TCC lines (another app's install location) were

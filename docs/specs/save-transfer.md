@@ -62,7 +62,12 @@ data-safety invariant 3).
   an unmatched frame key deliberately. Every record then lands under the mapped
   key, which the restore check proves (expected hash per [snapshot-format.md](snapshot-format.md#5-content-hash)). No
   case ends in a silent no-op or a silent partial restore. `Owner` for the rule (PRD section 10), `Assumed` for the
-  details.
+  details. Verified (2026-10-29, `apps/desktop/e2e/keys.spec.ts`, Electron 45.0.0, macOS arm64): progress-lab exported
+  on `localhost` with its `127.0.0.1` iframe and restored into an entry running the other way round was refused naming
+  both origins, with no question, no backup and the storage unchanged; with the two origins mapped onto each other the
+  unchecked iframe key was listed in the confirmation, Cancel wrote nothing, and after consent the game in the
+  `localhost` iframe under `127.0.0.1` showed the exported progress hash; an iframe moved to another port was refused
+  naming both origins and restored once mapped to the new one. The table is unit-tested in `key-check.test.ts`.
 
 ## 3. Exporter interface and versioning
 
@@ -97,6 +102,32 @@ interface FrameInventory {
   and 6. Because a throwing script in an isolated world resolves to `undefined` (Verified (2026-10-24,
   <https://www.electronjs.org/docs/latest/api/web-frame>)), every command catches its own errors and returns an
   explicit error message; a missing reply is `EXP_TIMEOUT`.
+- **Settled in Phase 1 Task 12** (`packages/exporters/src/types.ts`, `protocol.ts`; `Assumed`):
+  `createFrameExporter(env)` takes the frame's Web APIs (`{localStorage, indexedDB, crypto, storage?}`), so a test can
+  replace one. `exportFrame({keyIndex, storageKey, scope}, sink)` and `importFrame(source, {keyIndex, storageKey,
+  scope})` take the manifest index `k` of the frame's key (for the `data/<k>/` paths) and the key itself (for error
+  details); `wipeSelected(scope)` serves R5 of a selective restore. Each returns `{ok: true, data}` or `{ok: false,
+  error: {code, message, detail?}}` and never throws; `code` is an `EXP_*` or `IMP_*` code or `INTERNAL` for an
+  unexpected failure, and `detail` names the storage key, database, store, record key, property path and entry path
+  where they apply, never a value. A sink receives each entry whole, once (`write(path, bytes)`), and the frame
+  server sends it in chunks; a source yields the frame's entries, assembled, in any order. A `Selection` is `"all"` or `{include, exclude}`, per storage kind.
+- The frame protocol (zod, strict objects, both directions): commands `inventory`, `export`, `import` (followed by
+  `entry` messages and one `end`) and `wipe-selected`; replies `entry` (the export's entries), `inventory`, `summary`,
+  `wiped` and `error`. Every message carries its command's request nonce, 32 lowercase hex digits (128 bits, QW-4), and
+  entry bytes are `ArrayBuffer`s, never a string (QW-7). `Assumed`
+- **Chunks (Phase 1 Task 13, `packages/exporters/src/protocol.ts`, `frame-server.ts`).** An `entry` message carries one
+  chunk of an entry: its `path`, the entry's whole `size`, the chunk's `offset` and at most `MAX_ENTRY_CHUNK_BYTES`
+  (1 MiB) of bytes. The chunks of an entry come back to back in order, an empty entry is one empty chunk, and a
+  chunk past the entry's size is refused by the schema, so no message between a frame and the snapshot worker is
+  larger than 1 MiB plus a few names; the receiver checks the declared `size` against `maxEntryBytes` before it keeps
+  a byte. `Assumed` for the size. The buffers are cloned, never put in the transfer list: a message whose
+  `ArrayBuffer` was transferred from a sandboxed preload's port reached a `utilityProcess`'s `MessagePortMain` as
+  `null`, while the same message cloned arrived whole. Verified (2026-10-28, a throwaway probe app on Electron 45.0.0,
+  macOS arm64). `serveFrame` is the frame's end: one command at a time; an invalid message, a command while another
+  runs, import chunks out of order or with another nonce close the port, which the worker treats as a failed command.
+  Verified (2026-10-28, `packages/exporters/src/frame-server.test.ts`, Vitest on Node 24.22.1). While a command runs,
+  the frame replies `working` every `HEARTBEAT_MS` (5 s, Assumed), which the worker counts as activity (Phase 1 Task
+  14, section 6 "Deadlines").
 
 ## 4. Generic exporter
 
@@ -110,9 +141,15 @@ Export, inside one stub frame:
 3. For each `autoIncrement` store, probe the key generator: a separate read-write transaction on that store calls
    `add(placeholder)` (`null` without a key path, `{}` with one, so the key is injected), reads the generated key and
    aborts the transaction. That key is `keyGenerator`. A `ConstraintError` is `EXP_KEY_GENERATOR_EXHAUSTED`. The W3C
-   draft says an abort reverts the generator (Verified (2026-10-25, <https://www.w3.org/TR/IndexedDB/>)); that Chromium
-   does so is Unverified, and a Phase 1 test MUST show that two exports in a row give the same `keyGenerator` and an
-   unchanged `contentHash`. This aborted write is the only write an export makes. `Assumed`
+   draft says an abort reverts the generator (Verified (2026-10-25, <https://www.w3.org/TR/IndexedDB/>)). Chromium does
+   so: two exports in a row gave the same `keyGenerator` (8 after 7 progress-lab steps) and the same `contentHash`, and
+   the game's next step still got key 8; a store whose generator is above its highest key plus 1 exported that
+   generator, not the highest key plus 1; an explicit key 2^53 made the probe fail with `ConstraintError`. Verified
+   (2026-10-28, `packages/exporters/browser/key-generator.spec.ts`, bundled Chromium 156.0.8078.4). Electron 45 does the
+   same through the quiescent window: two exports of progress-lab after 7 steps had the same `contentHash` (which
+   covers each store's `keyGenerator`) and the game's next step got key 8. Verified (2026-10-28,
+   `apps/desktop/e2e/export.spec.ts`, Electron 45.0.0, macOS arm64). So the fallback (highest numeric key plus 1) is
+   not needed. This aborted write is the only write an export makes. `Assumed`
 4. Encode with the codec ([snapshot-format.md](snapshot-format.md#6-record-encoding)); hash Blob and File bytes with
    `crypto.subtle.digest("SHA-256")` and send each distinct blob once. Unsupported values fail the whole export with
    `EXP_UNSUPPORTED_VALUE`, `EXP_SHARED_REFERENCE` or `EXP_TOO_DEEP` and the record path (AC-10).
@@ -135,6 +172,36 @@ Import, inside one stub frame, after the wipe (section 6):
    one) and delete it in the same transaction. Explicit numeric keys move the generator up and deletes never move it
    down. Verified (2026-10-25, <https://www.w3.org/TR/IndexedDB/>, key generators); in Chromium, Verified for explicit
    keys (2026-10-24, RESULTS.md H14a). The restore check covers the rest.
+
+Implementation (Phase 1 Task 12, `packages/exporters`). `Assumed` unless tagged otherwise:
+
+- **Check pass, nothing written.** The importer receives the frame's entries (its `data/<k>/…` files and the blobs
+  they reference) in any order, then checks the target is empty, decodes every file and builds every value once
+  before its first write. A failure in this pass fails the import with nothing written: `IMP_RECORD_INVALID`, with the
+  entry path and, for a record, the database, store and record key. It covers a RegExp source that does not compile in
+  this engine (the worker's validator already refused it in restore step R1), a value whose view type this engine has no
+  constructor for, a schema IndexedDB would refuse to create (invalid key path, `autoIncrement` with an empty or array
+  key path; the reader refuses these too, snapshot-format.md section 7.2), a blob whose bytes do not match its name, a
+  blob entry no record references, a missing or duplicated entry, a record count that differs from the schema and, for
+  a selective restore, a localStorage key or database outside the selection. Verified for the RegExp, schema,
+  unreferenced-blob and selection cases (2026-10-28, `packages/exporters/browser/import-errors.spec.ts`, bundled
+  Chromium 156.0.8078.4).
+- **Write pass, failures named, partial writes left to the rollback.** localStorage first, then each database. A
+  database that already exists (an `upgradeneeded` with `oldVersion` above 0, no `upgradeneeded`, or a `VersionError`)
+  is `IMP_TARGET_NOT_EMPTY`. Puts go in transactions of 256 records; no request error is ever prevented, so one failed
+  request aborts its whole transaction, and the import fails with a named code: a `ConstraintError` (a unique index) is
+  `IMP_RECORD_INVALID` with the record key, a `QuotaExceededError` is `IMP_QUOTA_EXCEEDED` (localStorage or IndexedDB),
+  a key that compares unequal or a value without a key at the key path (`DataError`) is `IMP_KEY_MISMATCH`, anything
+  else `INTERNAL` with the error's type name. The summary counts the records IndexedDB acknowledged. A failure in this
+  pass can leave earlier localStorage items, databases and committed chunks behind: the importer does not undo them;
+  the R5 to R7 rollback of the restore protocol (section 6, Task 14) does. Verified for the unique-index, raise and
+  quota cases (2026-10-28, same spec and Chromium).
+- **Wipe.** `wipe-selected` deletes the selected databases; a delete blocked by another open connection is
+  `IMP_WIPE_FAILED` (Verified, same spec). The blocked request stays queued in IndexedDB and completes when that
+  connection closes, so the job treats the failure as fatal; QW-2 keeps the partition exclusive.
+- **Export.** A localStorage key listed but gone when read is `EXP_QUIESCENCE_VIOLATION`, never exported as an empty
+  value (Verified, 2026-10-28, `browser/export-errors.spec.ts`). Any other failure inside a frame is `INTERNAL` with the
+  error's type name only, never a value; a snapshot format error is an `IMP_` code on the import path only.
 
 ## 5. Quiescent window
 
@@ -161,8 +228,14 @@ the spike code. All steps run in the main process unless stated.
    `Target.setAutoAttach {autoAttach: true, waitForDebuggerOnStart: true, flatten: true}` and, for each attached child
    target, the same two commands before `Runtime.runIfWaitingForDebugger`; `Debugger` and `Runtime` enabled everywhere
    for the canary. Only then navigate. Without the bypass the registered worker controlled the stub; with it, it did
-   not. Verified (2026-10-24, RESULTS.md H14b). That the bypass also covers iframes is Assumed (no no-bypass iframe
-   control ran), so Phase 1 MUST add that control.
+   not. Verified (2026-10-24, RESULTS.md H14b). The page-level bypass also covers a cross-site iframe: with no bypass
+   at all, a worker of the session started when the iframe stub loaded and the canary stopped the job
+   (`service-worker-started`); the worker's scope origin, read from the `ServiceWorker` CDP domain, was the
+   `127.0.0.1` iframe's, so it was progress-lab's own partitioned worker under `localhost` (the host page registers
+   none); with the page-level bypass alone (none sent
+   to the iframe's own target), and with the full bypass, the job was clean. Verified (2026-10-28, the no-bypass iframe
+   control in `apps/desktop/e2e/quiescent.spec.ts`, Electron 45.0.0, macOS arm64; open check 3). The per-child bypass
+   stays: it costs one command per target.
 7. **Stub navigations.** Keys are grouped by top-level stub origin `T`, taken from the job's `top` keys first. One
    navigation to `<T>/__wg_quiescent__?job=<nonce>` resolves `T`'s own key in the top frame (only if it is part of the
    job) and, as iframes pointing to the same path, every partitioned key whose `topLevelSite` is the site of `T` and
@@ -212,6 +285,81 @@ the spike code. All steps run in the main process unless stated.
   job's iframe stub origins>`; its body holds only those iframes. The spike's subframe preload worked under a stub with
   `script-src 'none'`. Verified (2026-10-24, RESULTS.md H14c). That no page CSP can restrict a preload is Assumed.
 
+**Implementation (Phase 1 Task 13).** `apps/desktop/src/main/snapshots/` (`quiescent/{job,interceptor,stub,layout,
+handshake,canary,channels}.ts`, `export.ts`, `storage-check.ts`, `keys.ts`, `jobs.ts`), the snapshot worker
+`apps/desktop/src/main/worker/` and the preload `apps/desktop/src/preload/quiescent.ts`. `Assumed` unless tagged
+otherwise.
+
+- **Steps.** `runQuiescentJob(gameId, plan, deps, signal)` runs steps 1 to 12 in order; a plan names its lease kind
+  (`task` for what the user asked, `background` for a storage check), its keys, `runFrames` (once per navigation, with
+  that navigation's connected frames) and `commit` or `discard`. `commit` runs after the canary's clean verdict and
+  the window's teardown, still under the lease, which is released last. A launch that cancels a `background` lease
+  (plan M5), the caller's signal, the canary and the watchdog all stop every wait at once; the cancelled job returns
+  `CANCELLED` and lets go of the lease. Verified (2026-10-28, `apps/desktop/e2e/quiescent.spec.ts`: a launch during a
+  held storage check opened the game in under 2.5 s and the check was cancelled; an export right after a close
+  cancelled the running check the same way). An aborted job's signal carries why it stopped, so a commit returns
+  that code (the watchdog's `EXP_TIMEOUT`, a cancellation's `CANCELLED`); a commit that has not settled when the
+  job is stopped is left to the plan's `discard`, which must end its work (the export kills its worker and waits for
+  the exit before it removes the revision's files). At most two jobs run at once in the process, and a user task
+  takes a storage check's slot by cancelling it (security.md section 8, architecture.md section 4 "Lock details"). A job's worker is started once and killed when the job ends, also when the job
+  was stopped while the worker was still starting (`worker/slot.ts`); the kill resolves once the process has exited,
+  and the worker's pending requests fail then, not before. A commit that has recorded its row (`JobContext.committed`,
+  called right after the export's transaction) stands even when the job is stopped before the commit returns: the job
+  waits for it and never discards it. If the killed worker's exit is not seen within 2 s (logged
+  `snapshot.worker-kill-timeout`), the discard removes the revision's files anyway, and a process still alive could
+  then rename its partial into `snapshots/<gameId>/<revisionId>.wgsnap`: an orphan file with no row, which nothing
+  removes until a later cleanup of unreferenced snapshot files exists (none does in Phase 1). `Assumed`
+  Each step throwing once leaves no protocol handler, `webRequest` listener, debugger listener, handshake listener, worker listener or window
+  behind and releases the lease (QW-3, `job.test.ts`). QW-2 counts the `webContents` on the game's session before
+  the first stub navigation.
+- **Stub URLs.** `<origin>/__wg_quiescent__?job=<nonce>&key=<k>` for a frame that resolves manifest key `k`, without
+  `key` for a top page that only hosts iframes (the preload stays inert there, QW-6). The interceptor serves exactly
+  the job's stub URLs for `GET` on both `http` and `https`, whatever the build (fail closed), and the `webRequest`
+  layer cancels everything else; the job logs the refused origins. Navigations follow step 7 (`layout.ts`).
+- **Handshake.** The preload sends `{job}` on `wg:quiescent:hello`; the job listens on its own window's
+  `webContents.ipc`, so concurrent jobs never see each other's hellos; it checks the sender, the frame URL and the
+  nonce (`timingSafeEqual`), once per frame, then sends one end of a `MessageChannelMain` on `wg:quiescent:port` with
+  `WebFrameMain.postMessage`; the other end goes to the snapshot worker with the frame command. The worker sends the
+  typed commands with a fresh nonce each (`randomBytes(16)`), validates every reply with `FrameReply` and closes the
+  port on anything unexpected; a frame silent for 30 s is `EXP_TIMEOUT`.
+- **Canary calibration.** In a clean job Electron 45 parses, per document of the window (`about:blank`, each stub and
+  each cross-site iframe), exactly three scripts in the preload's isolated world: `electron/js2c/event_emitter_dispatch`,
+  the preload file (its path is the script URL) and a 6-character `void 0` without a URL. Electron names that world
+  "Electron Isolated Context" in a top-level frame and leaves it unnamed in a cross-site iframe's own target. Every
+  other script, a script in the default world, any worker target or a session worker `starting` or `running` stops
+  the job. The allowlist is pinned to exactly that: the one Electron module, the preload's world as named in the
+  page's own session or unnamed only in a child target, and a context the canary saw announced
+  (`Runtime.executionContextCreated`; any other is a violation). Verified (2026-10-28,
+  `apps/desktop/e2e/quiescent.spec.ts` "calibration": 2 of each for a plain job, 3 for the iframe job, nothing
+  refused; an injected main-world script and a worker started during the job were each flagged, S-13). Two findings shaped it: zod 4.6.7 builds object parsers with `new Function` and probes
+  `new Function("")` when a schema is created, which the canary saw as a 28-character script without a URL, so the
+  preload sets `z.config({jitless: true})` before any schema exists (`zod-jitless.ts`); and Playwright's `_electron`
+  attaches to every page, the quiescent window included, and evaluates an empty script in its own
+  `__playwright_utility_world_*` world, which the test flavor alone names as the harness's world (counted apart,
+  never in the default world). Verified (2026-10-28, e2e runs before and after each change).
+- **Isolated world.** The preload's world reads IndexedDB values with that world's own prototypes: progress-lab's
+  Date, ArrayBuffer, Uint8Array and Blob values were exported without `EXP_UNSUPPORTED_VALUE` (the exporter's
+  classifiers accept exact prototypes only), with the Blob as one blob entry. `navigator.storage.estimate()` has
+  `usageDetails` there: a session with Cache Storage and a registered worker gave `notExported` `cacheStorage` and
+  `serviceWorkers` (open check 8). Verified (2026-10-28, `apps/desktop/e2e/export.spec.ts`).
+- **Worker.** One `utilityProcess` per job (`out/main/snapshot-worker.js`, a second main entry), killed when the job
+  ends. Main and the worker exchange only `WorkerCommand`/`WorkerEvent` (zod, bounded strings and lists, no data
+  bytes). The worker assembles each frame's chunks under the job's limits (`maxEntryBytes` on the declared size before
+  a byte is kept, `maxEntries`, and `maxTotalBytes` over the data from the declared size before an entry's buffer is
+  allocated and again as entries complete), refuses a file outside the
+  frame's own `data/<k>/` or a blob not named by its SHA-256, and reports measured bytes (`received`). `write` runs
+  the writer into `tmp/<revisionId>.wgsnap.partial` (`wx`, flushed with `fsync`), reads that file back through
+  `validateSnapshot` with its `stat` size and the same limits, renames it to `snapshots/<gameId>/<revisionId>.wgsnap`
+  only when it validates and no file of that revision exists, and flushes that directory (skipped on Windows,
+  Assumed); any failure removes the partial file. So save data
+  above a limit fails with its `SNAP_*` code (`SNAP_TOTAL_TOO_LARGE` from the collector or writer,
+  `SNAP_RATIO_EXCEEDED` and `SNAP_FILE_TOO_LARGE` from the read-back) and a disk error is `INTERNAL` with the error
+  code in the message ("The snapshot file could not be written (EIO).", the test-flavor fault `fail-write`); in both
+  cases nothing is left in `tmp/` or `snapshots/` and no row is written (Review Focus 4 and 5). Verified (2026-10-28,
+  `apps/desktop/src/main/worker/write.test.ts` and `apps/desktop/e2e/export.spec.ts`). The worker keeps a job's
+  entries in memory until `write` (the writer takes whole files), so its memory follows the save data, up to
+  `maxTotalBytes`.
+
 ## 6. Restore protocol
 
 Each step is written to `restore_journal` ([architecture.md](architecture.md#7-sqlite-schema-v1)) before it starts.
@@ -233,6 +381,9 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
 - **Failed rollback:** `IMP_RECOVERY_FAILED`. The game stays locked in `needs_recovery`: launching it is refused with an
   explicit message naming the backup, and the UI offers "Retry recovery". The backup is never deleted, by this or any
   other action (PRD section 9). `Assumed`
+- **A launch while a task works on the saves:** while a restore, a delete or a rollback still holds the game's lease
+  past its wipe, a refused launch says that a task is changing the saves and the game can start when it ends, and
+  names no backup yet (Phase 1 Task 15, `recoveryNotice` in `snapshots/recovery.ts`, unit-tested). `Assumed`
 - **Crash or power loss:** at start-up the main process reads unfinished journal entries before any game can launch. A
   job that stopped in R1 to R4 changed nothing: its temporary files under `tmp/` are removed and the entry closed. A job
   that reached R5 or later runs the rollback first. `Assumed`
@@ -247,10 +398,134 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
   <https://www.electronjs.org/docs/latest/api/session>). Passing it sets "Export verified" for that exporter version
   ([architecture.md](architecture.md#11-badges)).
 
+**Implementation (Phase 1 Task 14).** `apps/desktop/src/main/snapshots/` (`restore.ts`, `restore-steps.ts`, `journal.ts`,
+`key-check.ts`, `recovery.ts`, `delete-saves.ts`, `clear-cache.ts`, `verify.ts`, `faults.ts`) and the worker's restore
+commands (`worker/source.ts`). `Assumed` unless tagged otherwise.
+
+- **One lock from R3 to R8.** `holdQuiescentJob` takes the game's `task` lease and one job slot and runs several
+  quiescent windows under them (R4 backup, R5 wipe, R6 import, R7 verify, and the rollback's three), so no other job
+  takes the slot between two windows; each window is one command per frame. A frame's whole key is cleared through
+  `JobContext.clearStorage`, CDP `Storage.clearDataForStorageKey` with the Chromium key that step 8 read for that
+  frame, used at run time only and never stored or logged.
+- **R1.** A stored row's file is validated in place (snapshot files are immutable); an external file, chosen in the
+  native dialog main opens, is first copied to `tmp/<journalId>.wgsnap.import` (a regular file only, opened with
+  `O_NOFOLLOW`, never more than `maxFileBytes`: `SNAP_FILE_TOO_LARGE`). The worker validates it fully, then reads the
+  store files once more to learn which blobs each key's records reference, because the importer refuses a blob no
+  record of its frame references. A revision already stored with another `contentHash`, or a stored row whose file
+  says otherwise, is `IMP_REVISION_CONFLICT`. Verified (2026-10-29, `apps/desktop/e2e/restore.spec.ts`: a file with
+  the stored revision id and no data was refused with nothing written; the same data under a new revision was restored
+  and adopted as the game's `imported` row in `snapshots/<gameId>/`; the stored file itself, chosen as a file, was
+  restored without a second row, and its private copy left `tmp/` empty).
+- **R2.** `checkStorageKeys` (section 2) applies the mapping and checks every key; a mapping of an origin the
+  snapshot lacks, a repeated `from`, or a non-origin is `INVALID_ARGUMENT`, and two keys mapped onto one storage key
+  are `IMP_STORAGE_KEY_MISMATCH`. A first-party `frame` key needs a top-level origin of its own site in the target, as a
+  partitioned key needs one of its `topLevelSite`. The wipe set is the mapped keys plus every known key, numbered as a
+  manifest; **the backup covers the whole wipe set**, not only the known keys, so a mapped key the target never
+  observed is backed up before it is wiped too (more than 32 keys: `IMP_BACKUP_FAILED`, nothing changed). The
+  expected hash comes from the worker (`worker/source.ts`, snapshot-format.md section 5). A snapshot made with an
+  adapter this build does not have is refused (`INVALID_ARGUMENT`), because its selection is unknown. One native
+  confirmation ("Restore snapshot?") states what is replaced, that a backup is made first, a selective restore, the
+  mapping and the unchecked keys; Cancel is `CANCELLED` with nothing written. A game whose window is open is refused
+  with `GAME_RUNNING` before any question (AC-11); R3 checks again under the lock.
+- **R3 to R8.** R3 runs R2 again under the lock and compares the checked keys, their order, the unchecked list and the
+  wipe set (`IMP_PLAN_CHANGED`). R4 is `writeBackup`: the generic exporter with no filter over the wipe set, the
+  worker's `.partial`, read-back and rename into `backups/<gameId>/<backupRevisionId>.wgsnap`, a row of kind `backup`
+  whose parent is the game's base revision; any failure is `IMP_BACKUP_FAILED` with nothing wiped and both files
+  removed. R5 wipes with `local_storage,indexeddb` and then requires an inventory with no item and no database (or runs
+  `wipe-selected` for a selective restore); any other failure there is `IMP_WIPE_FAILED`. R6 streams the file a second
+  time per frame (`readEntries`, every entry re-checked), renumbered `data/<from>/` to `data/<to>/`. R7 re-exports into
+  the same worker and hashes the entries without writing a file (`digest`). R8 is one database transaction: the
+  `imported` row of an external file (renamed into `snapshots/<gameId>/` just before), the game's base revision and the
+  journal's `done`; a failure there rolls back as well.
+- **Journal.** An entry is begun at `validate` (`lock` for a delete) and each step is written before it starts; the
+  rollback writes `rollback-wipe`, `rollback-import` and `rollback-verify` with the state `rolling-back`. It ends `done`,
+  or `failed` once nothing changed (R1 to R4) or a rollback verified; it stays `rolling-back` while a rollback has not
+  verified.
+- **Rollback and recovery.** The rollback validates the backup again (its `contentHash` must equal its row's), wipes its
+  keys whole, imports it and compares a re-export with its `contentHash`. A failed rollback marks the game
+  `needs_recovery` in the lock manager and in `games.needs_recovery`: a launch is refused with a message naming the
+  backup (its date and revision), every task gets `NEEDS_RECOVERY`, and `snapshot:recover` ("Retry recovery") runs the
+  rollback again under a recovery lease (`LockManager.acquireForRecovery`, the only lease granted under the mark), which
+  clears the mark once it verified. At start-up `recoverAtStartup` runs before the IPC handlers, the launch queue and
+  the launcher page: entries that never reached R5 are closed `failed` (`tmp/` is emptied at start-up), the games of
+  the others are marked at once and their rollbacks then run one at a time. Verified (2026-10-29,
+  `apps/desktop/e2e/restore.spec.ts` on Electron 45.0.0, macOS arm64): a fault at the start of each of validate, plan,
+  lock, backup, wipe, import and verify left the stored data's digest and the progress hash as before, and from wipe on
+  the backup validated with the pre-import `contentHash` (AC-8); a fault in the import and again in the rollback's
+  import gave `IMP_RECOVERY_FAILED`, a launch refused naming the backup, and "Retry recovery" restored the pre-import
+  data; `crash-after:wipe` killed the app (SIGKILL) and the next start rolled back before any launch, with the
+  pre-import hash and a valid backup (Review Focus 2). Mutation runs: without `recoverAtStartup` the crash test failed,
+  without the rollback the fault test failed.
+- **Faults (test flavor).** `fail:<step>` fails a step when it starts, after its journal write; `throw:<step>` throws a
+  plain `Error` there; `slow:<step>:<ms>` waits inside the step's window; `crash-after:<step>` kills the process once
+  the step finished; steps are R1 to R8 and the three rollback steps (`faults.ts`). Production passes no hook.
+- **Delete local saves** takes the lock first and asks while holding it (as "Remove from library" does), so an open
+  window refuses before any question; it works for a removed game's data too (`library:deleteOrphanData`), whose orphan
+  row is deleted at R8 (its confirmation says that its backup is kept on disk but cannot be restored from the app once
+  the entry is gone). A failure at its wipe or commit puts the saves back from its backup (Verified, 2026-10-29,
+  `delete.spec.ts`). **Clear cache** holds a `task` lease and asks first. **Verify** holds the game's `task` lease,
+  validates the stored file (its `contentHash` must equal the row's) and runs R6 and R7 in a fresh
+  `wg-verify-<128-bit hex>` partition with the game policy installed, then clears that partition's data; a file that
+  is not the recorded one is `IMP_VERIFY_MISMATCH` and sets nothing. Verified (2026-10-29,
+  `apps/desktop/e2e/restore.spec.ts` and `delete.spec.ts`).
+- **Deadlines.** The watchdog of each window allows 60 s plus 1 s per MiB of the data it handles (section 5), so every
+  window is sized before it starts or as it reads: the backup by the bytes the worker measured, the wipe by the
+  backup's data size, the import and the verify by the snapshot's (the sum of its entry sizes, reported by the
+  worker's `validate`; verify's two windows too, since 2026-10-29: before, they had the flat 60 s, so a large snapshot
+  failed to verify with `INTERNAL`; Verified, 2026-10-29, `verify.test.ts`), and each rollback window by the backup's
+  data size (from its own validation, so recovery after a restart is sized the same way). That validation runs before
+  any window, so no watchdog covers it: it has its own bound, the job deadline plus 1 s per MiB of the most data the
+  reader accepts from a file of the backup's size (max(`ratioFloorBytes`, `maxRatio` × size), at most
+  `maxTotalBytes`, snapshot-format.md section 8; `validateBoundMs`; the timer is capped at 2^31 − 1 ms, because Node
+  fires a longer `setTimeout` after 1 ms, which failed the "slow import" e2e test's rollback at once in CI run
+  40828152449), and running past it is a failed rollback
+  (`IMP_RECOVERY_FAILED`, the game `needs_recovery`), never a wait without end (Verified, 2026-10-29,
+  `restore-steps.test.ts`; the bound itself is Assumed). A frame sends a `working` heartbeat every 5 s while it runs a command
+  (`HEARTBEAT_MS`, Assumed), and the importer yields a turn after each store file it decodes, so the worker's 30 s
+  silence bound only ends a frame that stopped working. Before this, every window but an export's had a flat 60 s
+  whatever its size: a slow import failed, and a rollback import of the same size failed the same way, leaving the
+  saves only in a backup. Verified (2026-10-29, `apps/desktop/e2e/restore.spec.ts` "a slow import…": with a 4 s base
+  deadline, a 6 s import and a 6 s rollback import both finished and the data equalled the pre-import state, and
+  "Retry recovery" with a 6 s rollback import succeeded; with the sizes set to zero, the same test ended
+  `IMP_RECOVERY_FAILED`; `frame-server.test.ts`, `frame-client.test.ts` for the heartbeat).
+- **No escape after the wipe.** From R5 on the game is marked in the lock manager until the change committed or a
+  rollback verified, `runStep` turns any error into its step's INTERNAL failure, the change is wrapped once more, and
+  the rollback never throws (an error inside it is a failed rollback). So an unexpected error after the wipe still
+  rolls back, and one inside the rollback leaves the game `needs_recovery`. Rollback and recovery windows run on a
+  signal no cancel aborts; the watchdog and the canary still stop them. Verified (2026-10-29, `restore.spec.ts` "an
+  unexpected error…" with `throw:commit` and `throw:rollback-import`; with both catches removed the error escaped the
+  restore; `job.test.ts` for the signal).
+- **A blocked `wipe-selected` cannot land later.** After `IMP_WIPE_FAILED` the job rolls back, and the rollback wipes
+  with CDP `Storage.clearDataForStorageKey`, which closed the blocking connection (its `close` event fired); a
+  database written after that clear survived the blocker's close, so the queued delete did not land after the
+  rollback. Verified (2026-10-29, `packages/exporters/browser/import-errors.spec.ts`, bundled Chromium 156.0.8078.4);
+  the same in Electron 45 is Assumed, and the rollback's verify would catch a late delete before it reports success.
+- **Known limits.** A single store file that takes longer than 30 s to decode blocks the frame's heartbeat and fails
+  the command (Assumed to need saves far above progress-lab's; then the restore rolls back, sized as above). The worker
+  posts an import's chunks without backpressure, so a frame holds that frame's entries in memory, as the export side
+  does. An iframe at an IPv6 literal host (`http://[::1]:<port>`) could not be read by the quiescent window
+  (`EXP_TIMEOUT`, "A frame of the job window is missing"); the cause is Assumed to be the stub's CSP `frame-src`, whose
+  host-source grammar has no IPv6 literals (seen 2026-10-29 in a first draft of `apps/desktop/e2e/keys.spec.ts`,
+  which now moves the iframe to another port instead). Each verify leaves one empty in-memory `Session` object until
+  the app quits, because Electron cannot free a session (Assumed small; not measured).
+
 **Export** (`snapshot:export`): lock; stop service workers; quiescent export of the game keys with the adapter's scope;
 the worker writes `tmp/<revisionId>.wgsnap.partial`, reads it back through the full validator, fsyncs and renames it to
 `snapshots/<gameId>/<revisionId>.wgsnap`; the database row records the manifest fields and `base_revision_id` moves to
 the new revision (below). Export never changes the game's storage apart from the aborted probe of section 4. `Assumed`
+In Phase 1 Task 13 (`apps/desktop/src/main/snapshots/export.ts`, `Assumed`): the game keys are every top-level origin
+(the entry URL's and those observed in `storage_targets`), the frame keys an adapter declares that were observed, and
+the frame keys the user chose in `snapshot:export {frameKeys}`; without a choice, the remembered one (`in_export`).
+A chosen key that is not a frame of the game is `INVALID_ARGUMENT`; more keys than a manifest holds
+(`maxStorageKeys`, 32) is `SNAP_MANIFEST_INVALID`, the code snapshot-format.md section 4 gives such a manifest. The
+choice is remembered (`in_export`) only when the export commits, in the same database transaction as the row and the
+game's base revision; any failed write removes the revision's partial and final file, so neither a row without its
+file nor a file without its row is left (`export.test.ts`). A frame of the same site as its top-level page is
+first-party storage, a cross-site frame is partitioned under its top-level site (`keys.ts`). The adapter is the one
+whose `match.origins` holds the entry URL's origin. The row's `path` is relative to userData, and the export commit
+sets `base_revision_id` to the new revision, so a second export's parent is the first. Verified (2026-10-28,
+`apps/desktop/e2e/export.spec.ts`: plain, service-worker running at the start, cross-site iframe with and without the
+frame chosen, the choice remembered, an unknown frame refused, AC-11 while the window is open).
 
 **Revision parents.** `games.base_revision_id` names the revision the partition's data descends from, and every new
 snapshot's `parentRevisionId` is its current value. It moves in exactly three places: an export commit sets it to the
@@ -276,11 +551,26 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
   game page and it returned exactly `true` before its timeout; no user input reached the game window between the start
   of the hook and the close; and the launcher closed the window itself within 2 s after the hook finished. `Assumed`
   (the numbers and the input rule)
-- The generic exporter has no hook, so every MVP snapshot without such an adapter is `unconfirmed`. `Assumed`
+- Settled in Phase 1 Task 12 (`packages/exporters/src/flush.ts`, `Assumed`): the observation carries the declared
+  hook, the hook's `timeoutMs`, whether the flush flow requested the export, the hook run (`not-run`, `returned` with its
+  value, `threw`, `timed-out`, with start and finish times), the times of user input and the time the launcher closed
+  the window (`null` if it did not). "Before its timeout" means strictly less than `timeoutMs` after the start; input
+  at the hook's start or at the close counts; the close must come at or after the hook's finish; a time that is not a
+  finite number gives `unconfirmed`.
+- The generic exporter has no hook, so every MVP snapshot without such an adapter is `unconfirmed`. `Assumed`. Phase 1
+  Task 13 takes the manifest's and the row's `flushState` from `decideFlushState` with no hook run, so every export is
+  `unconfirmed`, and `snapshot:list` carries it to the UI. Verified (2026-10-28, `apps/desktop/e2e/export.spec.ts`).
 - The decision is one pure function, `decideFlushState(observation)`. Its unit test (AC-12) uses a fake hook: none,
   success, error, timeout, a value other than `true`, input after the hook started, and a late close; only the success
   case without input and with a prompt close gives `confirmed`. A UI test checks that every place showing an
-  `unconfirmed` snapshot shows "flush unconfirmed" and never "save point", "guaranteed" or "complete".
+  `unconfirmed` snapshot shows "flush unconfirmed" and never "save point", "guaranteed" or "complete". Verified
+  (2026-10-30, `apps/desktop/src/renderer/ui-text.test.tsx`, which renders every launcher component to static
+  markup in the states it can show without the bridge, and the pure parts of the export and snapshot panels in the
+  states the bridge leads to; replacing the label with "save point" made it fail). Text that main writes (refusal
+  messages, the read-only reason) is not covered there; `apps/desktop/e2e/vertical.spec.ts` scans the live launcher
+  page after the scenario. The only list is the card's
+  snapshot panel; no "Flush, close and export" control exists while no bundled adapter declares a hook (Phase 1
+  Task 15).
 - The hook runs in the game page's main world through `webContents.executeJavaScript` from a fixed template. Its only
   parameter, the adapter's `module`, MUST match `^[A-Za-z_$][A-Za-z0-9_$]{0,63}$` and is inserted only as a JSON string
   literal for a property lookup on `globalThis` (`globalThis["Module"]`), never as code. Adapters are bundled with the
@@ -290,8 +580,8 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
 ## 8. Declarative adapters
 
 Adapters are JSON data, never code (AGENTS.md security invariant 7). In v1 they ship inside the app
-(`packages/exporters/adapters/*.json`), are validated at build time and at load, and user-supplied adapters are not
-loaded. `Assumed`
+(`packages/exporters/src/adapters/*.json`), are validated by the unit tests and when `src/adapters/index.ts` loads, and
+user-supplied adapters are not loaded. `Assumed`
 
 ```json
 {
@@ -310,14 +600,14 @@ loaded. `Assumed`
 
 - The schema is closed: unknown members, a wrong type or an over-long value make the adapter invalid. `id` matches
   `^[a-z0-9-]{1,64}$`; `version` is SemVer; at most 64 items per list and 256 characters per string. `Assumed`
-- `match.origins` are exact origins compared with the game's top-level origin. `frameKeys` lists partitioned keys
+- `match.origins` are exact origins compared with the game's top-level origin, at least one per adapter (`Assumed`). `frameKeys` lists partitioned keys
   (`{origin, topLevelSite}`) that belong to the game, which the user then need not confirm.
 - localStorage selectors are key prefixes; IndexedDB selectors are whole database names, matched exactly. No regular
   expressions or globs (no ReDoS, predictable scope). Store-level filtering is not offered, because a database restored
   at its version without some of its stores would break the game's upgrade logic. `Assumed`
 - `flush.hook` is `none` or `emscripten-idbfs` with `module` (matching the identifier pattern of section 7, default
   `Module`) and `timeoutMs`
-  (at most 30 000). The `emscripten-idbfs` hook calls `FS.syncfs(false, callback)` on that module object. `Assumed`
+  (an integer from 1 to 30 000). The `emscripten-idbfs` hook calls `FS.syncfs(false, callback)` on that module object. `Assumed`
 - Filtering is a declared choice: the manifest names the adapter and its version, so a snapshot's scope can always be
   explained. A selective restore never wipes data outside the selection (section 6, R5).
 
@@ -357,13 +647,13 @@ QW-3); sender and nonce checks (QW-4); canary flags a deliberately injected main
 
 ## Open questions
 
-- Which frame keys are part of a game when no adapter says so? Default: the export dialog lists the cross-site frame
-  origins that hold data, with their sizes, unticked, and remembers the choice. Ads in iframes can keep tracking ids in
-  storage, so they are never included silently. `Assumed`
+- Which frame keys are part of a game when no adapter says so? Decided in Phase 1 Task 15 as the default proposed:
+  the export panel lists the frames of other sites (and first-party frames at other origins) that hold data, with
+  their counts and IndexedDB usage from `snapshot:frames`, unticked unless chosen before, and the choice is remembered
+  at the export's commit. Ads in iframes can keep tracking ids in storage, so they are never included silently.
+  `Assumed`
 - The generic exporter can capture tokens a site keeps in localStorage (cookies are never read). Default: no heuristic
   filtering, because it would drop data silently; the export dialog shows the origins and counts, and snapshots stay
   local unless the user moves them. Recorded as a residual risk in [security.md](security.md). `Assumed`
-- If Chromium does not revert the generator on abort (section 4), the fallback is to record the highest numeric key
-  plus 1 and accept the documented difference. `Assumed`
 - Game-native "download save" buttons do not work in the MVP: downloads and the File System Access API are denied
   ([security.md](security.md#5-permission-and-navigation-policy)). `Assumed`

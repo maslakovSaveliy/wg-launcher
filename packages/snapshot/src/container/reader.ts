@@ -11,7 +11,8 @@ import {
   decodeSchema,
   decodeStoreRecords,
 } from "../record/data-files.js";
-import { type BlobRefs, stringOf } from "../record/value.js";
+import { stringOf } from "../record/value.js";
+import type { BlobRefs } from "../record/value-check.js";
 import { type Counters, inflate } from "./inflate.js";
 import { type Limits, resolveLimits } from "./limits.js";
 import { type Manifest, parseManifest } from "./manifest.js";
@@ -61,7 +62,7 @@ const recordInvalid = (message: string, path: string): never => {
   throw new SnapError("SNAP_RECORD_INVALID", message, path);
 };
 
-/** Ruling R7: every RegExp source must compile in this engine before anything is written. */
+/** Every RegExp source must compile in this engine before anything is written. */
 function compileRegExps(item: CborItem): void {
   if (item.k === "array") {
     item.v.forEach(compileRegExps);
