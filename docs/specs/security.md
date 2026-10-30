@@ -84,7 +84,7 @@ research. Verified (2026-10-24, [runtime-and-storage.md](../research/runtime-and
 | `loadBrowserProcessSpecificV8Snapshot` | Default (off) | Not needed. `Assumed` |
 | `wasmTrapHandlers` | Default (on) | Turning it off adds bounds checks and slows WebAssembly games. `Assumed` |
 
-A release check reads the fuses of the packaged app and fails on any difference (S-14). `Assumed`
+A release check reads the fuses of the packaged app and fails on any difference, a missing fuse or one at an unknown position (S-14): `apps/desktop/scripts/release-check.mjs`. Verified (2026-10-30, run locally on the packaged app; unit-tested on fixtures).
 
 ## 5. Permission and navigation policy
 
@@ -124,12 +124,12 @@ A release check reads the fuses of the packaged app and fails on any difference 
   Settled in Phase 1 Task 16: `apps/desktop/build/after-pack.mjs` removes the five descriptions (only the app's own
   `Info.plist` has them; the helpers' do not) and `scripts/release-check.mjs` fails if any remains (a build without
   the hook failed it naming all five). On the packaged app with both permissions reset with `tccutil` (undecided),
-  the WebRTC samples page got `NotAllowedError` for the camera and no stream for the microphone, the log recorded
+  the WebRTC samples page got `NotAllowedError` for the camera and no stream for the microphone (that page shows no error, so the microphone's error name was not observed), the log recorded
   `game.permission-denied` (`media`) for both, macOS showed no prompt and the app kept running. Denied and granted
   cannot be reached: an app that never asks macOS for these devices is not listed under Camera or Microphone in
   System Settings, so there is nothing to deny or grant. Verified (2026-10-30, [manual
-  checks](../compat/manual-checks/2026-10-30-macos-arm64.md) 8 and 13, macOS 27.0.1 arm64). Open check 5 holds; the
-  fallback (keeping the descriptions) is not needed.
+  checks](../compat/manual-checks/2026-10-30-macos-arm64.md) 8 and 13, macOS 27.0.1 arm64). Open check 5 holds for what
+  could be observed (no prompt, a denial, the app kept running); the fallback (keeping the descriptions) is not needed.
 
 **Navigation and windows (AC-5).** URL decisions are pure functions on WHATWG `URL` objects, never string prefixes.
 
@@ -146,8 +146,8 @@ A release check reads the fuses of the packaged app and fails on any difference 
 - **`shell.openExternal`** receives only a URL that passes `isExternalUrlAllowed`: it parses, the scheme is `https:` or
   `http:`, there is a host and no user info, and it is at most 2048 characters. A production build also refuses a host
   on this computer or the local network (`isInternalHost` in `policy/url-rules.ts`): `localhost` and its subdomains,
-  `.local` names, single-label names, and loopback, private, CGNAT, link-local and unspecified IPv4 and IPv6 addresses
-  (IPv4-mapped forms included), so a game cannot send the user's own browser, with its cookies, to a router or a local
+  `.local`, `.internal` and `.home.arpa` names, single-label names, and loopback, private, CGNAT, link-local, site-local
+  and unspecified IPv4 and IPv6 addresses (IPv4-mapped forms included; NAT64 and multicast forms are not covered), so a game cannot send the user's own browser, with its cookies, to a router or a local
   service; development and test builds serve games on loopback and keep allowing it. `Owner` (decided 2026-10-30),
   `Assumed` for the list of ranges; unit-tested in `url-rules.test.ts` and `window-factory.test.ts`. The confirmation is a native dialog that
   shows the host in its punycode form, so a lookalike name is visible. One confirmation per window at a time; others

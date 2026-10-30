@@ -37,6 +37,12 @@ describe("fuses of the packaged app (security.md section 4, S-14)", () => {
     expect(checkFuses({ ...good(), 9: OFF })).toEqual(["unknown fuse at position 9"]);
   });
 
+  it("names a fuse in a state other than on or off", () => {
+    expect(checkFuses({ ...good(), 2: 114 })).toEqual([
+      "fuse nodeOptions is state 114, expected off",
+    ]);
+  });
+
   it("refuses a wire of another version", () => {
     expect(checkFuses({ ...good(), version: "2" })).toEqual(["fuse wire version 2, expected 1"]);
   });
@@ -82,20 +88,30 @@ describe("Info.plist of the packaged app (security.md section 5)", () => {
 });
 
 describe("files inside app.asar", () => {
+  type Kind = "file" | "directory" | "link";
   const files: Record<string, string> = {
     "/package.json": "{}",
     "/out/main/index.js": "main();",
     "/out/preload/launcher.cjs": "bridge();",
     "/out/renderer/index.html": "<!doctype html>",
-    "/node_modules/tldts/dist/index.js": "parse();",
+    "/node_modules/tldts/package.json": "{}",
+    "/node_modules/tldts-core/package.json": "{}",
+    "/node_modules/zod/package.json": "{}",
   };
-  const check = (extra: Record<string, string> = {}) => {
+  const entries = (all: Record<string, string>, kinds: Record<string, Kind> = {}) =>
+    Object.keys(all).map((path) => ({ path, kind: kinds[path] ?? ("file" as Kind) }));
+  const check = (extra: Record<string, string> = {}, kinds: Record<string, Kind> = {}) => {
     const all = { ...files, ...extra };
-    return checkPackagedFiles(Object.keys(all), (path) => all[path] ?? "");
+    return checkPackagedFiles(entries(all, kinds), (path) => all[path] ?? "");
   };
 
   it("accepts the built app with its runtime dependencies", () => {
-    expect(check()).toEqual([]);
+    expect(
+      check(
+        { "/node_modules": "", "/out": "" },
+        { "/node_modules": "directory", "/out": "directory" },
+      ),
+    ).toEqual([]);
   });
 
   it("refuses the test hooks in any built file", () => {
@@ -104,24 +120,40 @@ describe("files inside app.asar", () => {
     ]);
   });
 
-  it("refuses packages that are bundled already: React and the workspace packages", () => {
+  it("refuses packages that are bundled already, at any depth", () => {
     expect(
       check({
         "/node_modules/react/index.js": "",
         "/node_modules/react-dom/index.js": "",
         "/node_modules/scheduler/index.js": "",
         "/node_modules/@wg-launcher/shared/package.json": "{}",
+        "/node_modules/zod/node_modules/react/index.js": "",
       }),
     ).toEqual([
       "/node_modules/react/index.js is packaged, but the build bundles it",
       "/node_modules/react-dom/index.js is packaged, but the build bundles it",
       "/node_modules/scheduler/index.js is packaged, but the build bundles it",
       "/node_modules/@wg-launcher/shared/package.json is packaged, but the build bundles it",
+      "/node_modules/zod/node_modules/react/index.js is packaged, but the build bundles it",
+    ]);
+  });
+
+  it("refuses a link, which could point outside the archive", () => {
+    expect(
+      check({ "/node_modules/tldts-core": "" }, { "/node_modules/tldts-core": "link" }),
+    ).toEqual(["/node_modules/tldts-core is a link"]);
+  });
+
+  it("requires the packages main loads at run time", () => {
+    const all = { ...files };
+    delete all["/node_modules/tldts-core/package.json"];
+    expect(checkPackagedFiles(entries(all), (path) => all[path] ?? "")).toEqual([
+      "app.asar lacks /node_modules/tldts-core/package.json",
     ]);
   });
 
   it("refuses an archive without the main entry, so the check cannot pass on an empty build", () => {
-    const empty = checkPackagedFiles(["/package.json"], () => "{}");
+    const empty = checkPackagedFiles([{ path: "/package.json", kind: "file" }], () => "{}");
     expect(empty).toEqual(["app.asar has no /out/main/index.js"]);
   });
 });

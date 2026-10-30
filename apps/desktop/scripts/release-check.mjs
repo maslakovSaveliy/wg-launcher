@@ -38,8 +38,10 @@ const FORBIDDEN_USAGE_KEYS = [
 const SCHEME = "wglauncher";
 const MARKER = "__wgTest";
 const MAIN_ENTRY = "/out/main/index.js";
-/** Bundled by the build, so a packaged copy would ship twice. */
-const BUNDLED = /^\/node_modules\/(?:react|react-dom|scheduler|@wg-launcher\/[^/]+)\//;
+/** Bundled by the build, so a packaged copy, at any depth, would ship twice. */
+const BUNDLED = /\/node_modules\/(?:react|react-dom|scheduler|@wg-launcher\/[^/]+)(?:\/|$)/;
+/** Loaded by main at run time (electron-vite keeps `dependencies` external), so they must be packaged. */
+const REQUIRED = ["tldts", "tldts-core", "zod"].map((name) => `/node_modules/${name}/package.json`);
 
 /** @param {number} state */
 const word = (state) => (state === ON ? "on" : state === OFF ? "off" : `state ${state}`);
@@ -87,18 +89,29 @@ export function checkInfoPlist(plist) {
 }
 
 /**
- * @param {readonly string[]} paths the archive's files, each starting with "/"
+ * @param {readonly { path: string, kind: "file" | "directory" | "link" }[]} entries every entry of the archive, each
+ *   path starting with "/", its kind from the archive's header
  * @param {(path: string) => string} contentOf
  * @returns {string[]} problems
  */
-export function checkPackagedFiles(paths, contentOf) {
+export function checkPackagedFiles(entries, contentOf) {
+  const paths = entries.map((entry) => entry.path);
   if (!paths.includes(MAIN_ENTRY)) return [`app.asar has no ${MAIN_ENTRY}`];
   const problems = [];
-  for (const path of paths) {
-    if (BUNDLED.test(path)) problems.push(`${path} is packaged, but the build bundles it`);
-    else if (/^\/out\/.*\.(?:js|cjs|mjs|html)$/.test(path) && contentOf(path).includes(MARKER)) {
+  for (const { path, kind } of entries) {
+    // Fail closed: a link could point outside the archive, past every check here.
+    if (kind === "link") problems.push(`${path} is a link`);
+    else if (BUNDLED.test(path)) problems.push(`${path} is packaged, but the build bundles it`);
+    else if (
+      kind === "file" &&
+      /^\/out\/.*\.(?:js|cjs|mjs|html)$/.test(path) &&
+      contentOf(path).includes(MARKER)
+    ) {
       problems.push(`${path} contains ${MARKER}`);
     }
+  }
+  for (const required of REQUIRED) {
+    if (!paths.includes(required)) problems.push(`app.asar lacks ${required}`);
   }
   return problems;
 }
@@ -106,7 +119,7 @@ export function checkPackagedFiles(paths, contentOf) {
 /** @param {string} appPath */
 async function main(appPath) {
   const { getCurrentFuseWire } = await import("@electron/fuses");
-  const { extractFile, listPackage } = await import("@electron/asar");
+  const { extractFile, listPackage, statFile } = await import("@electron/asar");
   const archive = join(appPath, "Contents", "Resources", "app.asar");
   const plist = JSON.parse(
     execFileSync(
@@ -115,13 +128,11 @@ async function main(appPath) {
       { encoding: "utf8" },
     ),
   );
-  const paths = listPackage(archive, { isPack: false }).filter((path) => {
-    try {
-      extractFile(archive, path.slice(1));
-      return true;
-    } catch {
-      return false; // a directory
-    }
+  const entries = listPackage(archive, { isPack: false }).map((path) => {
+    const entry = statFile(archive, path.slice(1), false);
+    /** @type {"file" | "directory" | "link"} */
+    const kind = "files" in entry ? "directory" : "link" in entry ? "link" : "file";
+    return { path, kind };
   });
   const problems = [
     ...checkFuses(
@@ -130,11 +141,12 @@ async function main(appPath) {
       ),
     ),
     ...checkInfoPlist(plist),
-    ...checkPackagedFiles(paths, (path) => extractFile(archive, path.slice(1)).toString("utf8")),
+    ...checkPackagedFiles(entries, (path) => extractFile(archive, path.slice(1)).toString("utf8")),
   ];
   for (const problem of problems) console.error(`FAIL: ${problem}`);
   if (problems.length > 0) process.exit(1);
-  console.log(`OK: fuses, Info.plist and app.asar (${paths.length} files) pass the release check.`);
+  const files = entries.filter((entry) => entry.kind === "file").length;
+  console.log(`OK: fuses, Info.plist and app.asar (${files} files) pass the release check.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

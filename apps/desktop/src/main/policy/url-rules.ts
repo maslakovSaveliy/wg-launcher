@@ -131,6 +131,9 @@ export function decideFrameNavigation(target: string): FrameNavigationDecision {
   return url.protocol === "about:" && FRAME_ABOUT_PAGES.has(url.pathname) ? "allow" : "block";
 }
 
+/** Names reserved for this computer or a private network: RFC 6761, mDNS, ICANN's `.internal`, RFC 8375. */
+const PRIVATE_SUFFIXES = [".localhost", ".local", ".internal", ".home.arpa"];
+
 /** IPv4 ranges that are not the public internet: unspecified, private, CGNAT, loopback, link-local. */
 const INTERNAL_V4: readonly [number, number][] = [
   [0x00000000, 8],
@@ -167,9 +170,9 @@ function v6Groups(host: string): number[] | null {
 }
 
 /**
- * Whether a parsed host names this computer or the local network: `localhost` and its subdomains, `.local` (mDNS)
- * names, single-label names (intranet hosts), and loopback, private, CGNAT, link-local and unspecified addresses,
- * IPv4 and IPv6 (unique-local, link-local, and IPv4-mapped forms included). A public name that resolves to such an
+ * Whether a parsed host names this computer or the local network: `localhost` and its subdomains, `.local` (mDNS),
+ * `.internal` and `.home.arpa` names, single-label names (intranet hosts), and loopback, private, CGNAT, link-local
+ * and unspecified addresses, IPv4 and IPv6 (unique-local, link-local, site-local and IPv4-mapped forms included). A public name that resolves to such an
  * address is not caught: that would need DNS here (security.md section 12, residual risks).
  */
 export function isInternalHost(hostname: string): boolean {
@@ -178,7 +181,8 @@ export function isInternalHost(hostname: string): boolean {
   if (v6) {
     const [a = 0, , , , , f = 0, g = 0, h = 0] = v6;
     if (v6.slice(0, 7).every((x) => x === 0) && h <= 1) return true; // :: and ::1
-    if ((a & 0xfe00) === 0xfc00 || (a & 0xffc0) === 0xfe80) return true; // fc00::/7, fe80::/10
+    // fc00::/7 unique-local, fe80::/10 link-local, fec0::/10 the deprecated site-local range
+    if ((a & 0xfe00) === 0xfc00 || (a & 0xffc0) === 0xfe80 || (a & 0xffc0) === 0xfec0) return true;
     if (v6.slice(0, 5).every((x) => x === 0) && f === 0xffff) return v4Internal(g * 65536 + h);
     return false;
   }
@@ -186,8 +190,7 @@ export function isInternalHost(hostname: string): boolean {
   if (v4 !== null) return v4Internal(v4);
   return (
     host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host.endsWith(".local") ||
+    PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix)) ||
     !host.includes(".")
   );
 }

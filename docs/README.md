@@ -57,6 +57,7 @@ Real runs only. A platform without a row is not tested.
 | --- | --- |
 | [matrix.md](compat/matrix.md) | Generated from the spike's result files; do not edit by hand |
 | [methodology.md](compat/methodology.md) | How the runs are made and what the numbers do not mean |
+| [manual-checks/2026-10-30-macos-arm64.md](compat/manual-checks/2026-10-30-macos-arm64.md) | Manual checks of the packaged app on macOS arm64 (deep links, shortcut, media, real input) |
 
 ## Plans (`docs/plans/`)
 

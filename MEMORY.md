@@ -675,8 +675,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - The e2e pages render default black text on the game window's dark background (dark mode), so a person reads their
   output through a selection (Cmd+A). [V, 2026-10-30, manual checks]
 - An e2e test that reads `main.log` across two launches of one userData sees the first launch's records only
-  sometimes, because the log is written asynchronously and may not flush before the app closes; count from the
-  records present after the first close. [V, 2026-10-30, `e2e/shortcut.spec.ts` failed 2 of 3 repeats before the fix]
+  sometimes, so it counts from the records present after the first close [V, 2026-10-30, `e2e/shortcut.spec.ts`
+  failed 2 of 3 repeats before the fix]. The cause is [A]: the log is written asynchronously and `before-quit` flushes
+  it only when game windows are open, so records can be lost at a quit with none.
 
 - Plain Node 24.13 prints "SQLite is an experimental feature" when `node:sqlite` loads. `scripts/vitest-setup.ts` (a
   Vitest `setupFiles` entry, logic in `scripts/warning-filter.ts`) wraps `process.emitWarning` and drops only that message;

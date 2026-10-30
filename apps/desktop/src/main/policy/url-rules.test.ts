@@ -425,6 +425,9 @@ describe("isExternalUrlAllowed", () => {
     "http://[::ffff:127.0.0.1]/",
     "http://router/",
     "http://printer.local/",
+    "http://nas.internal/",
+    "http://printer.home.arpa/",
+    "http://[fec0::1]/",
   ];
 
   it("refuses loopback, private, link-local and local names in production", () => {
