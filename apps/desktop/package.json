@@ -12,7 +12,9 @@
     "build": "electron-vite build",
     "build:test": "electron-vite build --mode test",
     "test:e2e": "electron-vite build --mode test && playwright test",
-    "check:bundle": "node scripts/check-prod-bundle.mjs"
+    "check:bundle": "node scripts/check-prod-bundle.mjs",
+    "package:mac": "electron-vite build && electron-builder --mac dir --config electron-builder.yml && codesign --force --deep --sign - dist/mac-arm64/WGLauncher.app",
+    "release:check": "node scripts/release-check.mjs dist/mac-arm64/WGLauncher.app"
   },
   "dependencies": {
     "@wg-launcher/exporters": "workspace:*",
@@ -24,11 +26,14 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@electron/asar": "3.4.1",
+    "@electron/fuses": "1.8.0",
     "@playwright/test": "1.64.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "electron": "45.0.0",
+    "electron-builder": "26.18.0",
     "electron-vite": "6.0.0",
     "vite": "8.3.5"
   }
