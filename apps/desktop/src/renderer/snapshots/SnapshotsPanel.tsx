@@ -20,11 +20,14 @@ export interface Listed {
 /** The rows and the sources of a restore, or the loading line before the first answer. */
 export function SnapshotSources({
   listed,
+  failed = false,
   actions,
   onFile,
   onClose,
 }: {
   listed: Listed | null;
+  /** The list could not be read (its error is shown beside): then nothing claims to be loading. */
+  failed?: boolean;
   /** `onRestoreOther` restores a row of another entry into this game. */
   actions: SnapshotActions & { onRestoreOther?(row: SnapshotRow): void };
   onFile(): void;
@@ -33,7 +36,7 @@ export function SnapshotSources({
   const { onRestoreOther, ...own } = actions;
   return (
     <>
-      {listed === null && <p>Loading the snapshots.</p>}
+      {listed === null && !failed && <p>Loading the snapshots.</p>}
       {listed && (
         <>
           <SnapshotList label="Snapshots of this game" rows={listed.own} actions={own} />
@@ -75,6 +78,7 @@ export function SnapshotsPanel({
   const [listed, setListed] = useState<Listed | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [mapping, setMapping] = useState<Source | null>(null);
+  const [listFailed, setListFailed] = useState(false);
   const cards = useRef(sameOrigin);
   cards.current = sameOrigin;
   const latest = useRef(0);
@@ -87,7 +91,10 @@ export function SnapshotsPanel({
     void (async () => {
       const own = await bridge().listSnapshots({ gameId });
       if (!own.ok) {
-        if (request === latest.current) setMessage(`${own.code}: ${own.message}`);
+        if (request === latest.current) {
+          setListFailed(true);
+          setMessage(`${own.code}: ${own.message}`);
+        }
         return;
       }
       const others: Listed["others"] = [];
@@ -95,7 +102,10 @@ export function SnapshotsPanel({
         const result = await bridge().listSnapshots({ gameId: card.gameId });
         if (result.ok) others.push({ card, rows: result.data.snapshots });
       }
-      if (request === latest.current) setListed({ own: own.data.snapshots, others });
+      if (request === latest.current) {
+        setListFailed(false);
+        setListed({ own: own.data.snapshots, others });
+      }
     })();
   }, [gameId, refreshKey, sameOriginKey]);
 
@@ -125,6 +135,7 @@ export function SnapshotsPanel({
       <h3>Snapshots</h3>
       <SnapshotSources
         listed={listed}
+        failed={listFailed}
         actions={{
           onRestore: (row) => void restore({ revisionId: row.revisionId }),
           onVerify: (row) =>

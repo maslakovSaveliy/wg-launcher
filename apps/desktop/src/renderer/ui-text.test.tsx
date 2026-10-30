@@ -37,10 +37,12 @@ const FORBIDDEN =
 
 const text = (element: ReactElement) => renderToStaticMarkup(element);
 
-/** What a person meets in markup: the text between tags and the accessible labels, not attribute names or values. */
+/** What a person meets in markup: the text between tags and the attributes shown or read out, not other attributes. */
 const wording = (markup: string) =>
   [
-    ...[...markup.matchAll(/aria-label="([^"]*)"/g)].map((match) => match[1]),
+    ...[...markup.matchAll(/(?:aria-label|placeholder|title|alt)="([^"]*)"/g)].map(
+      (match) => match[1],
+    ),
     markup.replace(/<[^>]*>/g, " "),
   ].join(" ");
 
@@ -269,6 +271,19 @@ describe("the export panel (save-transfer.md section 6, Export)", () => {
     );
     expect(view).toContain("at most 32");
     expect(view).toMatch(/<button[^>]*disabled=""[^>]*>Start export<\/button>/);
+  });
+});
+
+describe("the snapshot panel shows only real state", () => {
+  it("says it is loading only while no answer has come, not after the list failed", () => {
+    const loading = text(
+      <SnapshotSources listed={null} actions={{}} onFile={none} onClose={none} />,
+    );
+    expect(loading).toContain("Loading the snapshots.");
+    const failed = text(
+      <SnapshotSources listed={null} failed actions={{}} onFile={none} onClose={none} />,
+    );
+    expect(failed).not.toContain("Loading");
   });
 });
 
