@@ -91,8 +91,10 @@ export function createGames(
       });
       return window;
     },
-    // A refused launch of a game that needs recovery names the backup (save-transfer.md section 6).
-    recoveryNotice: (gameId) => recoveryNotice(repos, gameId),
+    // A refused launch of a game that needs recovery names the backup (save-transfer.md section 6), or the task
+    // still working on its saves.
+    recoveryNotice: (gameId) =>
+      recoveryNotice(repos, gameId, { taskRunning: locks.isLeased(gameId) }),
     // Step 1 of the close procedure stops playtime, so the procedure's time is not counted (architecture.md 4).
     closeWindow: (window, gameId) =>
       closeGameWindow(window as BrowserWindow, {

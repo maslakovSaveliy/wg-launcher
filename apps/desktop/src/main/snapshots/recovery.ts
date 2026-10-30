@@ -13,11 +13,19 @@ import { reachedWipe, resumeJournal } from "./journal.js";
 import { holdQuiescentJob } from "./quiescent/job.js";
 import { backupName, fail, markNeedsRecovery, rollBack, type TaskDeps } from "./restore-steps.js";
 
-/** The text a refused launch shows while a game needs recovery: it names the backup that holds its saves. */
+/**
+ * The text a refused launch shows while a game needs recovery: it names the backup that holds its saves. While a task
+ * holds the game (a restore or delete past its wipe, or a rollback running), the mark only keeps launches out until
+ * that task ends, so the text says so instead of calling it interrupted.
+ */
 export function recoveryNotice(
   repos: Pick<Repos, "restoreJournal" | "snapshots">,
   gameId: string,
+  { taskRunning }: { taskRunning: boolean },
 ): string {
+  if (taskRunning) {
+    return "A task is changing this game's saves right now (an import, a delete, or putting back the saves from before). The game can start when it ends.";
+  }
   const entry = pendingEntry(repos, gameId);
   const backup =
     entry?.backupRevisionId == null ? null : repos.snapshots.findByRevision(entry.backupRevisionId);

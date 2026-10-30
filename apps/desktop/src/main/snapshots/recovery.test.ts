@@ -2,7 +2,7 @@ import { uuidv7 } from "@wg-launcher/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { beginJournal } from "./journal.js";
 import { holdQuiescentJob } from "./quiescent/job.js";
-import { retryRecovery } from "./recovery.js";
+import { recoveryNotice, retryRecovery } from "./recovery.js";
 import { fakeHold, fakeWorker, taskDb, taskDeps, validatedFile } from "./testing.js";
 
 vi.mock("./quiescent/job.js", async (original) => ({
@@ -52,5 +52,22 @@ describe("Retry recovery (save-transfer.md section 6, Failed rollback)", () => {
     expect(release).toHaveBeenCalledOnce();
     expect(recovery.clear).toHaveBeenCalledWith(gameId);
     expect(journal.entry().state).toBe("failed");
+  });
+});
+
+describe("the notice of a refused launch (save-transfer.md section 6)", () => {
+  it("names the backup and Retry recovery while no task holds the game", () => {
+    const { repos, gameId } = pendingRecovery();
+    const notice = recoveryNotice(repos, gameId, { taskRunning: false });
+    expect(notice).toContain("was interrupted");
+    expect(notice).toContain("Retry recovery");
+  });
+
+  it("says a task is changing the saves while one holds the game past the wipe", () => {
+    const { repos, gameId } = pendingRecovery();
+    const notice = recoveryNotice(repos, gameId, { taskRunning: true });
+    expect(notice).toBe(
+      "A task is changing this game's saves right now (an import, a delete, or putting back the saves from before). The game can start when it ends.",
+    );
   });
 });

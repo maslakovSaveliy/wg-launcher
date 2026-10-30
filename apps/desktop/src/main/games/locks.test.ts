@@ -168,6 +168,16 @@ describe("LockManager: a launch or a user task cancels a background lease (M5)",
 });
 
 describe("LockManager: recovery (save-transfer.md section 6, failed rollback)", () => {
+  it("tells whether a lease is held, also while the game is marked", async () => {
+    const { locks } = manager();
+    expect(locks.isLeased(GAME)).toBe(false);
+    const task = await lease(locks, "task");
+    locks.markNeedsRecovery(GAME);
+    expect(locks.isLeased(GAME)).toBe(true);
+    task.release();
+    expect(locks.isLeased(GAME)).toBe(false);
+  });
+
   it("refuses every request while a game needs recovery, but grants the recovery lease", async () => {
     const { locks } = manager();
     locks.markNeedsRecovery(GAME);

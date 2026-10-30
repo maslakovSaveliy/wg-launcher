@@ -84,6 +84,11 @@ export class LockManager {
     return this.#held.get(gameId)?.lease.kind ?? "none";
   }
 
+  /** Whether a lease is held now, whatever the mark says: a marked game with a lease has a task working on it. */
+  isLeased(gameId: string): boolean {
+    return this.#held.has(gameId);
+  }
+
   markNeedsRecovery(gameId: string): void {
     this.#recovery.add(gameId);
   }
