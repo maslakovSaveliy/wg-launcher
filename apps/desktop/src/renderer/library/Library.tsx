@@ -1,9 +1,11 @@
-// The library view: the read-only notice or the add form and the cards. Reloaded after every action and on every
-// game state change, so it shows what main recorded, never a guess.
+// The library view: the read-only notice or the add form and the cards. Reloaded after every action, on every
+// game state change and when a task ends, so it shows what main recorded, never a guess.
 
 import type { Card } from "@wg-launcher/shared";
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "../api.js";
+import { latestTask } from "../tasks.js";
+import { useTaskBook } from "../use-tasks.js";
 import { AddGame } from "./AddGame.js";
 import { GameCard } from "./GameCard.js";
 
@@ -32,6 +34,9 @@ export function Library() {
     return bridge().onGameState(() => void load());
   }, [load]);
 
+  const reload = useCallback(() => void load(), [load]);
+  const tasks = useTaskBook(reload);
+
   switch (view.kind) {
     case "loading":
       return <p>Loading the library.</p>;
@@ -58,6 +63,11 @@ export function Library() {
                   key={card.gameId}
                   card={card}
                   canCreateShortcuts={view.canCreateShortcuts}
+                  task={latestTask(tasks, card.gameId)}
+                  sameOrigin={view.cards.filter(
+                    (other) =>
+                      other.gameId !== card.gameId && originOf(other.url) === originOf(card.url),
+                  )}
                   onChanged={load}
                 />
               ))}
@@ -65,5 +75,14 @@ export function Library() {
           )}
         </section>
       );
+  }
+}
+
+/** The origin of a card's URL, compared only (never opened); null for a URL the parser refuses. */
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
   }
 }

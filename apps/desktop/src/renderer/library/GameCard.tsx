@@ -1,32 +1,43 @@
 // One library card: recorded state only (badges, last launch and playtime when recorded, the window state from the
-// game runtime). Title and URL are text; the URL is never a link and the cover is the app:// copy, never the game's.
+// game runtime, the latest task's real steps). Title and URL are text; the URL is never a link and the cover is the
+// app:// copy, never the game's.
 
-import type { Card, ErrorCode } from "@wg-launcher/shared";
+import type { Card, ErrorCode, TaskProgressEvent } from "@wg-launcher/shared";
 import { type FormEvent, useState } from "react";
 import { badgeLabel, bridge, formatPlaytime, formatTime, stateLabel } from "../api.js";
+import { RecoveryBanner } from "../recovery/RecoveryBanner.js";
+import { ExportPanel } from "../snapshots/ExportPanel.js";
+import { SnapshotsPanel } from "../snapshots/SnapshotsPanel.js";
+import { TaskStatus } from "../snapshots/TaskStatus.js";
+import { GameMenu, type Panel } from "./GameMenu.js";
 
 type Outcome = { ok: true } | { ok: false; code: ErrorCode; message: string };
 
 export function GameCard({
   card,
   canCreateShortcuts,
+  task,
+  sameOrigin,
   onChanged,
 }: {
   card: Card;
-  /** False where main cannot make shortcuts (Linux): the button is not shown (AGENTS.md honesty rule 1). */
   canCreateShortcuts: boolean;
+  /** The game's latest task, from `task:progress`. */
+  task: TaskProgressEvent | null;
+  /** Other library entries with this game's origin: restore sources (plan M8). */
+  sameOrigin: readonly Card[];
   onChanged: () => Promise<void>;
 }) {
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [panel, setPanel] = useState<Panel>("none");
   const [title, setTitle] = useState(card.title);
   const state = stateLabel(card.state);
   const open = card.state === "launching" || card.state === "running";
 
   const run = async (action: () => Promise<Outcome>) => {
     const result = await action();
-    // Cancelling a native dialog is not an error.
-    setError(result.ok || result.code === "CANCELLED" ? null : result.message);
+    // Cancelling a native dialog is not an error; a refusal shows its code with its message.
+    setError(result.ok || result.code === "CANCELLED" ? null : `${result.code}: ${result.message}`);
     await onChanged();
     return result.ok;
   };
@@ -34,7 +45,7 @@ export function GameCard({
 
   const saveTitle = async (event: FormEvent) => {
     event.preventDefault();
-    if (await run(() => bridge().updateGame({ gameId, title }))) setEditing(false);
+    if (await run(() => bridge().updateGame({ gameId, title }))) setPanel("none");
   };
 
   return (
@@ -51,46 +62,27 @@ export function GameCard({
       {card.playtimeMs > 0 && <p>Playtime {formatPlaytime(card.playtimeMs)}</p>}
       {state && <p className="state">{state}</p>}
       {card.needsRecovery && (
-        <p role="alert">The game's saves need recovery before it can start.</p>
+        <RecoveryBanner onRetry={() => void run(() => bridge().retryRecovery({ gameId }))} />
       )}
-      <div className="actions">
-        <button type="button" onClick={() => void run(() => bridge().launchGame({ gameId }))}>
-          {open ? "Show game" : "Play"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTitle(card.title);
-            setEditing(!editing);
-          }}
-          aria-expanded={editing}
-        >
-          Edit title
-        </button>
-        <button
-          type="button"
-          onClick={() => void run(() => bridge().updateGame({ gameId, cover: "pick" }))}
-        >
-          Choose cover
-        </button>
-        {card.coverUrl && (
-          <button
-            type="button"
-            onClick={() => void run(() => bridge().updateGame({ gameId, cover: "remove" }))}
-          >
-            Remove cover
-          </button>
-        )}
-        {canCreateShortcuts && (
-          <button type="button" onClick={() => void run(() => bridge().createShortcut({ gameId }))}>
-            Create shortcut
-          </button>
-        )}
-        <button type="button" onClick={() => void run(() => bridge().removeGame({ gameId }))}>
-          Remove from library
-        </button>
-      </div>
-      {editing && (
+      <TaskStatus task={task} />
+      <GameMenu
+        open={open}
+        hasCover={card.coverUrl !== null}
+        canCreateShortcuts={canCreateShortcuts}
+        panel={panel}
+        onPanel={(next) => {
+          if (next === "title") setTitle(card.title);
+          setPanel(next);
+        }}
+        onPlay={() => void run(() => bridge().launchGame({ gameId }))}
+        onClearCache={() => void run(() => bridge().clearCache({ gameId }))}
+        onDeleteSaves={() => void run(() => bridge().deleteSaves({ gameId }))}
+        onPickCover={() => void run(() => bridge().updateGame({ gameId, cover: "pick" }))}
+        onRemoveCover={() => void run(() => bridge().updateGame({ gameId, cover: "remove" }))}
+        onShortcut={() => void run(() => bridge().createShortcut({ gameId }))}
+        onRemove={() => void run(() => bridge().removeGame({ gameId }))}
+      />
+      {panel === "title" && (
         <form onSubmit={saveTitle} aria-label="Edit title">
           <label>
             Title
@@ -103,6 +95,21 @@ export function GameCard({
           </label>
           <button type="submit">Save title</button>
         </form>
+      )}
+      {panel === "export" && (
+        <ExportPanel
+          gameId={gameId}
+          onStarted={() => setPanel("none")}
+          onClose={() => setPanel("none")}
+        />
+      )}
+      {panel === "snapshots" && (
+        <SnapshotsPanel
+          gameId={gameId}
+          sameOrigin={sameOrigin}
+          refreshKey={task ? `${task.taskId} ${task.status}` : ""}
+          onClose={() => setPanel("none")}
+        />
       )}
       {error && <p role="alert">{error}</p>}
     </li>

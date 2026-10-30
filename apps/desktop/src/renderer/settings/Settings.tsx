@@ -1,15 +1,19 @@
-// Settings: "Data of removed games" (architecture.md section 12, PRD OQ-2). No setting is allowlisted yet, so there
-// is nothing else to show. Deleting a removed game's data comes with a later task and is not offered here.
+// Settings: "Data of removed games" (architecture.md section 12, PRD OQ-2) with "Delete local saves" for each, which
+// main confirms in a native dialog and runs with a backup first. No setting is allowlisted yet, so there is nothing
+// else to show.
 
 import type { OrphanEntry } from "@wg-launcher/shared";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { bridge, formatTime } from "../api.js";
+import { TaskStatus } from "../snapshots/TaskStatus.js";
+import { latestTask } from "../tasks.js";
+import { useTaskBook } from "../use-tasks.js";
 
 export function Settings() {
   const [orphans, setOrphans] = useState<OrphanEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     void bridge()
       .listOrphans({})
       .then((result) => {
@@ -17,6 +21,13 @@ export function Settings() {
         else setError(result.message);
       });
   }, []);
+  useEffect(load, [load]);
+  const tasks = useTaskBook(load);
+
+  const deleteData = async (gameId: string) => {
+    const result = await bridge().deleteOrphanData({ gameId });
+    setError(result.ok || result.code === "CANCELLED" ? null : `${result.code}: ${result.message}`);
+  };
 
   return (
     <section aria-label="Settings">
@@ -25,7 +36,7 @@ export function Settings() {
         <h3 id="orphans-heading">Data of removed games</h3>
         <p>
           These games were removed from the library. Whatever they saved on this computer stays
-          there. Deleting it is not available in this version yet.
+          there until you delete it here; a backup is made first.
         </p>
         {error && <p role="alert">{error}</p>}
         {orphans?.length === 0 && <p>No data of removed games.</p>}
@@ -35,7 +46,11 @@ export function Settings() {
               <li key={orphan.gameId} data-game-id={orphan.gameId}>
                 <span className="title">{orphan.title}</span>{" "}
                 <span className="url">{orphan.url}</span>{" "}
-                <span>removed {formatTime(orphan.removedAt)}</span>
+                <span>removed {formatTime(orphan.removedAt)}</span>{" "}
+                <button type="button" onClick={() => void deleteData(orphan.gameId)}>
+                  Delete local saves
+                </button>
+                <TaskStatus task={latestTask(tasks, orphan.gameId)} />
               </li>
             ))}
           </ul>
