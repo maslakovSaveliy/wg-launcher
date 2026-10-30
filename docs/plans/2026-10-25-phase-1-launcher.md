@@ -459,17 +459,22 @@ each step, `deps.faults?: (step: RestoreStep) => void` (test flavor; also `crash
 
 ### Task 15: Snapshot UI and the vertical scenario (M)
 **Files:** `src/renderer/snapshots/*.tsx`, `src/renderer/library/GameMenu.tsx` (three delete actions, export, import,
-verify, save as, shortcut), `src/renderer/recovery/*.tsx`, e2e `e2e/vertical.spec.ts`.
-- [ ] UI (functional only, no design work; see "Scope of the UI"): snapshot list with "flush unconfirmed" on every `unconfirmed` row (never "save point", "guaranteed",
+verify, save as, shortcut), `src/renderer/recovery/*.tsx`, e2e `e2e/vertical.spec.ts`. Also `src/renderer/tasks.ts`
+(task progress), `src/main/snapshots/frames.ts` and the channel `snapshot:frames` (the export dialog's frame list).
+- [x] UI (functional only, no design work; see "Scope of the UI"): snapshot list with "flush unconfirmed" on every `unconfirmed` row (never "save point", "guaranteed",
   "complete"); export dialog lists cross-site frame origins with data, unticked; import source = this game's snapshots,
   snapshots of entries with the same origin, or a file; mapping confirmation in a native dialog written by main; task
   progress from real steps and bytes only; `needs_recovery` banner.
-- [ ] e2e AC-6: add `http://localhost:<port>/` → Play → 7 × `#play-step` → hash H → close → reopen → H → close → export
+- [x] e2e AC-6: add `http://localhost:<port>/` → Play → 7 × `#play-step` → hash H → close → reopen → H → close → export
   → add the same URL again (entry B, clean session) → import A's snapshot into B → launch B → H; then restart the app and
   launch B → H (AC-1 part). AC-7 e2e: the same through the UI for the service-worker and iframe variants.
-- [ ] UI text test: no element anywhere shows install, sync, FPS, download, completion or achievement wording (AC-14).
-- [ ] Run failing, implement, run passing; `pnpm check` and `pnpm test:e2e` green.
-- [ ] Commit `feat(desktop): add the snapshot UI and the vertical scenario`.
+- [x] UI text test: no element anywhere shows install, sync, FPS, download, completion or achievement wording (AC-14).
+- [x] Run failing, implement, run passing. Locally only the touched unit files, lint, typecheck and the touched e2e
+  specs (owner decision 2026-10-29); CI on the draft pull request runs the full suite.
+- [x] Commits `fix(desktop): name a running task when a launch is refused`, `feat(desktop): list a game's frames with
+  what they hold for the export dialog`, `feat(desktop): describe task progress from real steps and bytes`,
+  `feat(desktop): add the snapshot UI`, `test(desktop): run the vertical scenario through the launcher UI`, and the
+  docs.
 
 ### Task 16: Packaging, release check, manual check of the packaged app on macOS arm64 (M, owner at the machine)
 **Files:** `apps/desktop/electron-builder.yml`, `apps/desktop/build/after-pack.mjs` (removes `NSCameraUsageDescription`,

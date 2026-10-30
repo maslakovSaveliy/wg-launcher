@@ -173,6 +173,16 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   2026-10-29, `e2e/delete.spec.ts`). Every restore window's deadline is sized from its data, frames send a `working`
   heartbeat every 5 s, nothing thrown after the wipe escapes the rollback, and rollback windows ignore cancels
   (save-transfer.md section 6, "Deadlines" and "No escape after the wipe").
+- 2026-10-30 Phase 1 Task 15 (snapshot UI and the vertical scenario, Assumed unless noted): settled in
+  architecture.md section 6 ("Implementation (Phase 1 Task 15)") and save-transfer.md sections 6, 7 and "Open
+  questions". In short: new channel `snapshot:frames` (bridge version 6) reads the frames outside the game keys in a
+  quiescent window under a `task` lease (counts and IndexedDB usage only; no per-key result is stored, no
+  migration); the mapping form is plain from/to origins shown after `IMP_STORAGE_KEY_MISMATCH`, main confirms it;
+  restore sources are this game's rows, rows of entries with the same origin and a file (no new channel); no
+  "Flush, close and export" control while no adapter declares a hook; a launch refused while a task still holds the
+  game past its wipe says a task is changing the saves instead of "interrupted". AC-6 (with the restart), AC-7 (service
+  worker, iframe) and AC-10 run through the UI [V, 2026-10-30, `apps/desktop/e2e/vertical.spec.ts`, Electron 45.0.0,
+  macOS arm64].
 - 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
   one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
   non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an
@@ -631,6 +641,13 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   use `node:http`. [V, 2026-10-24]
 - zsh: `log` is a builtin, call the macOS unified log as `/usr/bin/log`; an unmatched glob aborts the whole command
   (`rm -f a-* b-*` removed nothing when `b-*` matched nothing). [V, 2026-10-24]
+
+- Vitest 5.0.5 runs `*.test.tsx` with React's automatic JSX runtime without any config once `include` lists the
+  pattern, and `react-dom/server` `renderToStaticMarkup` works in its `node` environment; effects do not run there, so
+  components that call the bridge only in effects or handlers render without `window.wg`. The UI text test
+  (`apps/desktop/src/renderer/ui-text.test.tsx`) relies on this. Biome 2.6 flags `innerText` in Playwright
+  (`useDomNodeTextContent`); `textContent` also reads hidden text, which suits a forbidden-wording scan. [V, 2026-10-30,
+  `pnpm exec vitest run apps/desktop/src/renderer`, `pnpm lint`]
 
 - Plain Node 24.13 prints "SQLite is an experimental feature" when `node:sqlite` loads. `scripts/vitest-setup.ts` (a
   Vitest `setupFiles` entry, logic in `scripts/warning-filter.ts`) wraps `process.emitWarning` and drops only that message;

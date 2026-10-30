@@ -237,6 +237,7 @@ no longer have `Buffer`, `events`, `timers` or `url`, so the bridge uses none of
 | `library:orphans`, `library:deleteOrphanData` | `{}`, `{gameId}` | Orphan list; `{taskId}` |
 | `game:launch`, `game:focus` | `{gameId}` | `{window: "opened" \| "focused" \| "closing", state}`, `{}` |
 | `game:clearCache`, `game:deleteSaves` | `{gameId}` | `{}`, `{taskId}` |
+| `snapshot:frames` | `{gameId}` | `{frames}`: each frame key outside the game keys with `inExport` and counts and usage only (save-transfer.md section 6, "Export") |
 | `snapshot:export` | `{gameId, frameKeys?}` | `{taskId}` |
 | `snapshot:import` | `{gameId, source: {revisionId} \| "file", mapping?: [{from, to}]}` | `{taskId}`; `"file"` opens the file dialog in main |
 | `snapshot:list` | `{gameId}` | Snapshot rows (section 7) |
@@ -326,6 +327,27 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
     step of save-transfer.md section 6 as it starts (`validate` to `commit`, and `rollback-wipe`, `rollback-import`,
     `rollback-verify`). The bridge is version 5 (`importSnapshot`, `verifySnapshot`, `retryRecovery`, `deleteSaves`,
     `deleteOrphanData`, `clearCache`).
+- **Implementation (Phase 1 Task 15).** `Assumed` unless noted.
+  - `snapshot:frames {gameId}` (`snapshots/frames.ts`) lists the frame keys outside the top-level keys that the
+    game's adapter does not declare, each with the remembered choice (`inExport`), its localStorage item count, its
+    IndexedDB database count and `indexedDbBytes` (Chromium's `usageDetails.indexedDB`, null where not reported); no
+    key name, database name or value. No per-key result is recorded, so it reads them in a quiescent window under a
+    `task` lease, as the storage check does: an open window refuses it with `GAME_RUNNING`, and a game without frames
+    answers at once. The bridge is version 6 (`listFrames`). Verified (2026-10-30,
+    `apps/desktop/e2e/export.spec.ts`: progress-lab's `127.0.0.1` iframe under `localhost` listed with 2 items, 2
+    databases and its usage, unticked, then ticked after an export that chose it).
+  - The launcher page subscribes to `task:progress` once and keeps each task's last event by task id
+    (`src/renderer/tasks.ts`), so an event that arrived before the page learned the task id is not lost; an outcome
+    is never undone by a late event; the text names the real step and the measured bytes, a percentage only with
+    `bytesTotal`, and a failure's code and message (AC-10).
+  - The card's actions (`src/renderer/library/GameMenu.tsx`), the export panel with the frame list, the snapshot
+    panel (this game's rows with restore, verify and save as; rows of other entries with the same origin; a file),
+    the storage-key mapping form shown after `IMP_STORAGE_KEY_MISMATCH` (main checks it and confirms it in its own
+    dialog; for a file the file dialog opens again) and the `needs_recovery` banner with "Retry recovery" are in
+    `src/renderer/{library,snapshots,recovery}/`. Settings offers "Delete local saves" for a removed game's data.
+    No "Flush, close and export" control exists, because no bundled adapter declares a flush hook (save-transfer.md
+    section 7). Verified (2026-10-30, `apps/desktop/e2e/vertical.spec.ts`: AC-6 with the restart, AC-7 for the
+    service-worker and iframe variants, AC-10 in the card, all through the UI).
 - Game windows have no IPC at all; quiescent windows use only the handshake of
   [save-transfer.md](save-transfer.md#5-quiescent-window). Bulk data never travels as JSON IPC (AGENTS.md data-safety
   invariant 9).
