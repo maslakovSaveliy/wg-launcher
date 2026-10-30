@@ -120,8 +120,16 @@ A release check reads the fuses of the packaged app and fails on any difference 
      unless an ADR adds a feature that needs one; the packaging step removes them and the release check asserts their
      absence;
   3. on the packaged app, with the macOS microphone and camera permissions undecided, denied and granted, a game's
-     `getUserMedia` MUST reject with `NotAllowedError`, MUST NOT show an OS prompt, and the app MUST keep running. What
-     macOS does when a process without a usage description touches the device is Unverified (see Open questions).
+     `getUserMedia` MUST reject with `NotAllowedError`, MUST NOT show an OS prompt, and the app MUST keep running.
+  Settled in Phase 1 Task 16: `apps/desktop/build/after-pack.mjs` removes the five descriptions (only the app's own
+  `Info.plist` has them; the helpers' do not) and `scripts/release-check.mjs` fails if any remains (a build without
+  the hook failed it naming all five). On the packaged app with both permissions reset with `tccutil` (undecided),
+  the WebRTC samples page got `NotAllowedError` for the camera and no stream for the microphone, the log recorded
+  `game.permission-denied` (`media`) for both, macOS showed no prompt and the app kept running. Denied and granted
+  cannot be reached: an app that never asks macOS for these devices is not listed under Camera or Microphone in
+  System Settings, so there is nothing to deny or grant. Verified (2026-10-30, [manual
+  checks](../compat/manual-checks/2026-10-30-macos-arm64.md) 8 and 13, macOS 27.0.1 arm64). Open check 5 holds; the
+  fallback (keeping the descriptions) is not needed.
 
 **Navigation and windows (AC-5).** URL decisions are pure functions on WHATWG `URL` objects, never string prefixes.
 
@@ -353,9 +361,6 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
 
 ## Open questions
 
-- If removing the macOS usage descriptions makes the system terminate a process that touches the camera or microphone,
-  the fallback is to keep the descriptions and rely on the handlers, accepting a possible OS prompt; the owner decides
-  after the packaged test. `Assumed`
 - Should `persistent-storage` be allowed? It protects a game's data from eviction under disk pressure and exposes
   nothing, but the owner's allowlist has only three permissions. Default: denied. Whether Electron evicts best-effort
   storage at all is Unverified.

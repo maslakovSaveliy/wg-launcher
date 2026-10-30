@@ -165,8 +165,12 @@ the only native dependency the MVP would have had. Assumed
 ## Action items
 
 - [ ] Before the first Windows release, check the license of everything the installer ships (agent).
-- [ ] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
-  (security.md S-14; agent).
+- [x] Phase 1 release check: fuses, `Info.plist` usage descriptions and `CFBundleURLTypes` of the packaged app
+  (security.md S-14; agent). Done in Phase 1 Task 16: `apps/desktop/scripts/release-check.mjs`
+  (`pnpm --filter @wg-launcher/desktop release:check` after `package:mac`) also checks that app.asar holds the built
+  app, no test hooks and none of the bundled packages; `apps/desktop/electron-builder.yml` leaves React and the
+  workspace packages out, so app.asar's `node_modules` hold only `tldts`, `tldts-core` and `zod`. Verified
+  (2026-10-30, run locally on the packaged app).
 - [x] Phase 1: make the desktop package config follow the dependency declaration rule above (electron-vite
   externalization and bundling settings). Done in Phase 1 Task 5: `react` and `react-dom` (bundled into the renderer)
   are `dependencies`; main keeps electron-vite's default externalization of `dependencies`; the preload is one bundle

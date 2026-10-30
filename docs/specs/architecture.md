@@ -458,7 +458,8 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
   does is Unverified (no Windows machine).
 - **macOS:** the scheme is declared in `Info.plist` (`CFBundleURLTypes`), because `setAsDefaultProtocolClient` works on
   macOS only for schemes declared at build time. Verified (2026-10-24, <https://www.electronjs.org/docs/latest/api/app>).
-  The shortcut is a `.webloc` file whose only variable part is the validated id. A `.command` file is not offered,
+  The shortcut is an `.inetloc` file (a `.webloc` until 2026-10-30, see below) whose only variable part is the
+  validated id. A `.command` file is not offered,
   because it runs a shell script. Development builds do not register the scheme: `setAsDefaultProtocolClient` leaves a
   LaunchServices preference that outlives the app. Verified (2026-10-24, RESULTS.md H15). `Assumed` for the choices.
 - **Implementation (Phase 1 Task 11).** `Assumed` unless noted.
@@ -490,12 +491,12 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     `app.getPath("desktop")` and a file name made from the title (separators, reserved and control characters become
     `-`, format characters such as U+202E are removed, no leading dot, at most 100 characters, "WGLauncher game" when
     nothing is left or the name is a Windows device name such as `CON`, `nul.txt` or `COM1`); the extension is added
-    when the chosen name lacks it. On macOS it writes the `.webloc` plist whose only content is
+    when the chosen name lacks it. On macOS it writes the `.inetloc` plist whose only content is
     `<string>wglauncher://launch/<id></string>` (XML-escaped; the id is checked to be a lowercase UUIDv7 first). On
     Windows it calls `shell.writeShortcutLink(path, "create", {target: process.execPath, args:
     "--launch-game=<id>", description: "<title> (WGLauncher)", icon: process.execPath, iconIndex: 0})`; unit-tested
     arguments only, not tested on Windows. Other systems get "Shortcuts can be created on macOS and Windows only."
-    (`INTERNAL`); Linux is not a target yet (PRD section 11). In dev and test builds a `.webloc` points at a scheme no
+    (`INTERNAL`); Linux is not a target yet (PRD section 11). In dev and test builds the shortcut points at a scheme no
     build of theirs registers. Cancel is `CANCELLED`; a failed write is `INTERNAL` with no path in the message.
   - `registerDeepLinkScheme` calls `app.setAsDefaultProtocolClient("wglauncher")` in the packaged prod build only
     (`app.isPackaged`); dev and test builds never call it (unit test).
@@ -503,9 +504,16 @@ CREATE INDEX play_sessions_by_game ON play_sessions (game_id, started_at);
     a second instance with the same argument exited 0 and the minimized game window was restored and shown, still one
     game window; second instances with a hostile value, an upper-case deep link, two arguments and an unknown id each
     exited 0, showed the notice, opened no window and left the launcher page's URL unchanged, and the log held none
-    of the input text; "Create shortcut" wrote exactly the `.webloc` above and nothing else. Verified (2026-10-28, Electron 45.0.0,
-    macOS arm64, test flavor). The `wglauncher://` scheme and opening a `.webloc` are checked by hand on the packaged
-    app (Task 16).
+    of the input text; "Create shortcut" wrote exactly the plist above and nothing else. Verified (2026-10-28, Electron 45.0.0,
+    macOS arm64, test flavor).
+- **Packaged app (Phase 1 Task 16).** On macOS 27.0.1 Finder refused the `.webloc` ("the document could not be
+  opened"; `open` gave LaunchServices error -10400), and so did a `mailto:` `.webloc`, while an `https:` one opened:
+  this macOS opens a `.webloc` only for web links. An `.inetloc` with the same plist handed the `wglauncher` link to
+  the packaged app, so "Create shortcut" writes `.inetloc` since then. With it, the shortcut opened the game with the
+  app running and started the app and opened the game with no app process; a deep link with the app running, a
+  second instance, a malformed and an unknown link, and a Dock click with only a game window open behaved as above,
+  and `LSHandlers` mapped `wglauncher` to the bundle id `io.github.maslakovsaveliy.wglauncher`. Verified (2026-10-30,
+  [manual checks](../compat/manual-checks/2026-10-30-macos-arm64.md) 1 to 7, packaged prod build, macOS arm64).
 
 ## 9. Window state and fullscreen
 

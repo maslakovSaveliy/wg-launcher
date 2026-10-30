@@ -480,11 +480,11 @@ verify, save as, shortcut), `src/renderer/recovery/*.tsx`, e2e `e2e/vertical.spe
 **Files:** `apps/desktop/electron-builder.yml`, `apps/desktop/build/after-pack.mjs` (removes `NSCameraUsageDescription`,
 `NSMicrophoneUsageDescription`, `NSAudioCaptureUsageDescription` and the Bluetooth descriptions), `apps/desktop/scripts/
 release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat/manual-checks/<date>-macos-arm64.md`.
-- [ ] `electronFuses` exactly security §4; `protocols: [{name: "WGLauncher", schemes: ["wglauncher"]}]`; ad-hoc signing
+- [x] `electronFuses` exactly security §4; `protocols: [{name: "WGLauncher", schemes: ["wglauncher"]}]`; ad-hoc signing
   (`identity: null`, then `codesign --force --deep --sign -`), no notarization.
-- [ ] `release-check.mjs` (S-14): reads fuses (`@electron/fuses` read API), `Info.plist` (no media/Bluetooth usage
+- [x] `release-check.mjs` (S-14): reads fuses (`@electron/fuses` read API), `Info.plist` (no media/Bluetooth usage
   descriptions, `CFBundleURLTypes` has `wglauncher`), no `__wgTest` in the bundle, renderer deps not duplicated.
-- [ ] **Warn the owner first** (windows open, macOS prompts may appear, ~30–45 min, owner needed at the keyboard).
+- [x] **Warn the owner first** (windows open, macOS prompts may appear, ~30–45 min, owner needed at the keyboard).
   Manual checklist, each result recorded with date, versions, machine: deep link not running / running / second
   instance (AC-19), the `wglauncher://` scheme registered by the packaged app (`Info.plist` and the prod-only
   `setAsDefaultProtocolClient`); a `.webloc` made by "Create shortcut" opens the game, not running and running
@@ -494,8 +494,12 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
   fullscreen, pointer lock, keyboard lock, Esc hold (AC-18, H13 manual): View → Toggle Full Screen clicked and
   Ctrl+Cmd+F pressed in a game window, a short real Esc reaches the game, Esc held 1.5 s ends the launcher's
   fullscreen, a page's own fullscreen ends on Esc, and size, position and fullscreen come back on the next launch; process list after close and quit (AC-13 manual).
-- [ ] If removing the usage descriptions makes macOS kill the process, stop and ask the owner (security open question).
-- [ ] Commit `build(desktop): package the app and add the release check`.
+- [x] If removing the usage descriptions makes macOS kill the process, stop and ask the owner (security open question). It did not (manual check 13).
+- [x] Commit `build(desktop): package the app and add the release check`. Also `fix(desktop): write macOS shortcuts as
+  .inetloc` (macOS 27.0.1 opens a `.webloc` for web links only) and, on the owner's decision of 2026-10-30,
+  `feat(desktop): refuse internal hosts for Open in browser in production`. The real-input checks ran on the
+  unpackaged test build with local pages (the prod build accepts https entries only; same Electron binary). Results:
+  `docs/compat/manual-checks/2026-10-30-macos-arm64.md`.
 
 ### Task 17: H7 on the launcher against Chrome (with H8 Chrome side, H9, demo frame samples) — hands-off
 **Files:** `spikes/runtime-compat/run-timing.mjs` (add runtime `launcher`: drives the packaged test-flavor app with
@@ -527,12 +531,12 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 | 2 | Chromium reverts the key generator on an aborted probe (Task 12) | Record highest numeric key + 1; document the difference. **Settled in Task 12: it reverts** in bundled Chromium 156 (two exports equal, the game's next key unchanged; save-transfer.md section 4); **and in Electron 45 (Task 13):** two exports in a row have the same `contentHash` and the game's next step gets key 8 (`apps/desktop/e2e/export.spec.ts`) |
 | 3 | The page-level service-worker bypass covers cross-site iframes (Task 13, no-bypass control) | Per-child-target bypass is already sent; if a worker still starts, the canary aborts the job and the iframe variant is refused with `EXP_QUIESCENCE_VIOLATION`. **Settled in Task 13: it does** (without any bypass the iframe's partitioned worker started and the canary stopped the job; with the page-level bypass alone, and with the full bypass, the job was clean; `apps/desktop/e2e/quiescent.spec.ts`, save-transfer.md section 5) |
 | 4 | `ses.clearStorageData` without `origin` reaches partitioned cache keys (Task 14) | Clear each known key with CDP `Storage.clearDataForStorageKey` and cache storage types. **Settled in Task 14: it does** (a `127.0.0.1` iframe's partitioned Cache Storage and worker registration under `localhost` were gone after "Clear cache", its data kept; `apps/desktop/e2e/delete.spec.ts`, architecture.md section 12) |
-| 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides) |
+| 5 | Packaged app: media denied without an OS prompt in all three TCC states (Task 16) | Keep the usage descriptions and rely on the handlers, accepting a possible OS prompt (owner decides). **Settled in Task 16: it holds** for the reachable state (undecided: `NotAllowedError`, no prompt, the app kept running); denied and granted cannot be reached, because macOS never lists an app that does not ask (security.md section 5) |
 | 6 | React 19 runs under `trusted-types 'none'` (Task 5): settled 2026-10-28, it does (security.md section 6) | Allow one named policy, keep `require-trusted-types-for 'script'` |
 | 7 | `node:sqlite` runs without a warning in Electron 45 main (Task 6) | better-sqlite3 13.0.3 per ADR-0004 revisit trigger |
 | 8 | `usageDetails` available in an isolated world (Task 13) | Omit `notExported`; "Local data" from counts only (badge may be absent for OPFS-only data). **Settled in Task 13: it is** (the preload's world saw Cache Storage and the worker registration, so the manifest lists them in `notExported`; `apps/desktop/e2e/export.spec.ts`) |
 | 9 | Esc ends a page-requested fullscreen in Electron 45 (Task 10) | Document; the launcher still never takes Esc. **Settled in Task 10: it does** (e2e with `sendInputEvent`; Chromium does not deliver that Esc to the page; architecture.md section 9) |
-| 10 | `.webloc` with `wglauncher://` opens the packaged app (Task 16) | Offer "copy launch link" instead of a macOS shortcut file |
+| 10 | `.webloc` with `wglauncher://` opens the packaged app (Task 16) | Offer "copy launch link" instead of a macOS shortcut file. **Settled in Task 16:** the `.webloc` failed (macOS 27.0.1 opens it for web links only); an `.inetloc` with the same plist works, app running or not, so the shortcut is an `.inetloc` and the fallback is not needed (architecture.md section 8) |
 | 11 | Windows shortcut and deep link (no machine) | Code and unit tests only, labeled not tested |
 
 ## Estimates (honest, rough)

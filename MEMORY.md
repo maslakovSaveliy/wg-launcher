@@ -183,6 +183,15 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   game past its wipe says a task is changing the saves instead of "interrupted". AC-6 (with the restart), AC-7 (service
   worker, iframe) and AC-10 run through the UI [V, 2026-10-30, `apps/desktop/e2e/vertical.spec.ts`, Electron 45.0.0,
   macOS arm64].
+- 2026-10-30 Phase 1 Task 16 (packaging, release check, manual checks; Assumed unless noted): electron-builder
+  26.18.0, `apps/desktop/electron-builder.yml`, macOS arm64 `dir` target, appId `io.github.maslakovsaveliy.wglauncher`
+  (no owned domain), fuses of security.md section 4, the `afterPack` hook `build/after-pack.mjs` removes the five
+  media and Bluetooth usage descriptions, `package:mac` signs ad hoc after packaging, `release:check` runs
+  `scripts/release-check.mjs`; app.asar's `node_modules` hold only `tldts`, `tldts-core` and `zod` [V, 2026-10-30,
+  run locally]. electron-winstaller's install script is denied in `allowBuilds` (no Squirrel target). Owner decision
+  (2026-10-30): a production build refuses internal hosts for "Open in browser?" (security.md section 5). The
+  real-input checks ran on the unpackaged test build with local pages; results in
+  `docs/compat/manual-checks/2026-10-30-macos-arm64.md`. Open checks 5 and 10 are settled (plan table).
 - 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
   one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
   non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an
@@ -648,6 +657,26 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (`apps/desktop/src/renderer/ui-text.test.tsx`) relies on this. Biome 2.6 flags `innerText` in Playwright
   (`useDomNodeTextContent`); `textContent` also reads hidden text, which suits a forbidden-wording scan. [V, 2026-10-30,
   `pnpm exec vitest run apps/desktop/src/renderer`, `pnpm lint`]
+
+- macOS 27.0.1 opens a `.webloc` only for web links: Finder said "the document could not be opened" and `open` gave
+  LaunchServices error -10400 for a `wglauncher:` and a `mailto:` `.webloc`, while an `https:` one opened; an
+  `.inetloc` with the same plist handed the `wglauncher:` link to the packaged app, running or not, so "Create
+  shortcut" writes `.inetloc`. [V, 2026-10-30, scratch files and the packaged app]
+- Electron 45.0.0's fuse wire has nine fuses (`getCurrentFuseWire` of `@electron/fuses` 1.8.0 returns positions 0 to
+  8; position 8, `wasmTrapHandlers`, is on), one more than that package's `FuseV1Options` names. Only the app's own
+  `Info.plist` carries the usage descriptions, the helpers' carry none. electron-builder with `identity: null` skips
+  signing and leaves the fused app with a broken signature ("code has no resources but signature indicates they must
+  be present"), so `package:mac` runs `codesign --force --deep --sign -` after it. [V, 2026-10-30, run locally]
+- A packaged prod app started with `--user-data-dir=<temp>` leaves the real `WGLauncher` profile uncreated (smoke
+  start, 2026-10-30); a deep link or shortcut that LaunchServices starts gets no argument and uses the real profile.
+  `LSHandlers` entries were removed with `PlistBuddy -c "Delete :LSHandlers:<index>"` on
+  `com.apple.launchservices.secure.plist`, and `lsregister -u` unregistered the `dist` app. [V, 2026-10-30, run
+  locally]
+- The e2e pages render default black text on the game window's dark background (dark mode), so a person reads their
+  output through a selection (Cmd+A). [V, 2026-10-30, manual checks]
+- An e2e test that reads `main.log` across two launches of one userData sees the first launch's records only
+  sometimes, because the log is written asynchronously and may not flush before the app closes; count from the
+  records present after the first close. [V, 2026-10-30, `e2e/shortcut.spec.ts` failed 2 of 3 repeats before the fix]
 
 - Plain Node 24.13 prints "SQLite is an experimental feature" when `node:sqlite` loads. `scripts/vitest-setup.ts` (a
   Vitest `setupFiles` entry, logic in `scripts/warning-filter.ts`) wraps `process.emitWarning` and drops only that message;
