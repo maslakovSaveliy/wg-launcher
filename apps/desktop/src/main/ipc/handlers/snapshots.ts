@@ -109,6 +109,7 @@ export function snapshotHandlers(
   context: HandlerContext,
 ): Pick<
   Handlers,
+  | "snapshot:frames"
   | "snapshot:export"
   | "snapshot:import"
   | "snapshot:verify"
@@ -120,6 +121,14 @@ export function snapshotHandlers(
   | "library:deleteOrphanData"
 > {
   return {
+    async "snapshot:frames"({ gameId }) {
+      const { library, snapshots } = context;
+      if (!library || !snapshots) return READ_ONLY;
+      if (!library.repos.games.get(gameId)) return NOT_FOUND;
+      const frames = await snapshots.frames(gameId);
+      return frames.ok ? { ok: true, data: { frames: frames.data } } : frames;
+    },
+
     async "snapshot:export"({ gameId, frameKeys }) {
       const { library, snapshots } = context;
       if (!library || !snapshots) return READ_ONLY;

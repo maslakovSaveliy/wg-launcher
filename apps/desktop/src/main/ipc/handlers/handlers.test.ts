@@ -43,6 +43,7 @@ function setUp(
     saveFile: vi.fn(async (_spec: SaveFileSpec): Promise<string | null> => saves.shift() ?? null),
   };
   const snapshots = {
+    frames: vi.fn(),
     export: vi.fn(),
     restore: vi.fn(),
     verify: vi.fn(),
@@ -577,6 +578,47 @@ describe("snapshot:import, delete local saves and clear cache (architecture.md s
       data: {},
     });
     expect(snapshots.clearCache).toHaveBeenCalledWith(game.gameId);
+  });
+});
+
+describe("snapshot:frames (the export dialog's frame list)", () => {
+  it("answers with the frames main read, counts and usage only", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const frame = {
+      origin: "https://cdn.example",
+      topLevelSite: "https://a.example",
+      inExport: false,
+      localStorageItems: 1,
+      databases: 0,
+      indexedDbBytes: null,
+    };
+    snapshots.frames.mockResolvedValue({ ok: true, data: [frame] });
+    expect(
+      dataOf("snapshot:frames", await handlers["snapshot:frames"]({ gameId: game.gameId })),
+    ).toEqual({ frames: [frame] });
+    expect(snapshots.frames).toHaveBeenCalledWith(game.gameId);
+  });
+
+  it("passes a refusal through (GAME_RUNNING while the window is open) and refuses an unknown game", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.frames.mockResolvedValue({ ok: false, code: "GAME_RUNNING", message: "Running." });
+    expect(await handlers["snapshot:frames"]({ gameId: game.gameId })).toEqual({
+      ok: false,
+      code: "GAME_RUNNING",
+      message: "Running.",
+    });
+    expect(await handlers["snapshot:frames"]({ gameId: uuidv7() })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
   });
 });
 

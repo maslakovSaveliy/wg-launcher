@@ -1,6 +1,12 @@
 // The context every IPC handler is built over, and the read-only refusal they share.
 
-import type { ErrorCode, IpcCode, Result, TaskProgressEvent } from "@wg-launcher/shared";
+import type {
+  ErrorCode,
+  FrameSummary,
+  IpcCode,
+  Result,
+  TaskProgressEvent,
+} from "@wg-launcher/shared";
 import type { Covers } from "../../covers.js";
 import type { Repos } from "../../db/repos/index.js";
 import type { Snapshot } from "../../db/repos/snapshots.js";
@@ -49,6 +55,8 @@ export interface HandlerContext {
 
 /** What the snapshot channels need (snapshots/export.ts and the file system). */
 export interface Snapshots {
+  /** The frames outside the game keys with what they hold (snapshots/frames.ts), for the export dialog. */
+  frames(gameId: string): Promise<Result<FrameSummary[], ErrorCode>>;
   export(gameId: string, options: ExportOptions): Promise<Result<Snapshot, ErrorCode>>;
   restore(
     request: { gameId: string; source: RestoreSource; mapping?: readonly KeyMapping[] },

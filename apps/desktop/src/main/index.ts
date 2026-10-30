@@ -44,6 +44,7 @@ import { createStorageCheckScheduler } from "./snapshots/check-scheduler.js";
 import { clearCache } from "./snapshots/clear-cache.js";
 import { deleteLocalSaves } from "./snapshots/delete-saves.js";
 import { exportSnapshot } from "./snapshots/export.js";
+import { listFrames } from "./snapshots/frames.js";
 import { createSnapshotDeps, verifySession } from "./snapshots/jobs.js";
 import { recoverAtStartup, retryRecovery } from "./snapshots/recovery.js";
 import { runRestore } from "./snapshots/restore.js";
@@ -296,6 +297,7 @@ async function start(userData: string): Promise<AppContext> {
       snapshots:
         snapshotDeps && taskDeps && games
           ? {
+              frames: (gameId) => listFrames(gameId, snapshotDeps),
               export: (gameId, options) => exportSnapshot(gameId, options, snapshotDeps),
               restore: (request, taskHooks) => runRestore({ ...request, ...taskHooks }, taskDeps),
               verify: (gameId, revisionId, taskHooks) =>

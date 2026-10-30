@@ -24,6 +24,7 @@ const VALID: { [C in IpcChannel]: Record<string, unknown> } = {
   "game:clearCache": { gameId: ID },
   "game:deleteSaves": { gameId: ID },
   "shortcut:create": { gameId: ID },
+  "snapshot:frames": { gameId: ID },
   "snapshot:export": {
     gameId: ID,
     frameKeys: [{ origin: "http://127.0.0.1:4317", topLevelSite: "http://localhost" }],
@@ -133,8 +134,26 @@ describe("IPC contract (architecture.md section 6)", () => {
 describe("snapshot channels and task progress (architecture.md section 6)", () => {
   const exportRequest = request("snapshot:export");
 
-  it("bumps the bridge version for the restore, verify, recovery and delete functions", () => {
-    expect(BRIDGE_VERSION).toBe(5);
+  it("bumps the bridge version for the frame list of the export dialog", () => {
+    expect(BRIDGE_VERSION).toBe(6);
+    expect(BRIDGE_CHANNELS.listFrames).toBe("snapshot:frames");
+  });
+
+  it("snapshot:frames lists a game's frames outside its game keys with counts and usage only", () => {
+    const response = IPC_CONTRACT["snapshot:frames"].response;
+    const frame = {
+      origin: "http://127.0.0.1:4317",
+      topLevelSite: "http://localhost",
+      inExport: false,
+      localStorageItems: 2,
+      databases: 1,
+      indexedDbBytes: 4096,
+    };
+    expect(response.safeParse({ frames: [frame] }).success).toBe(true);
+    expect(response.safeParse({ frames: [{ ...frame, indexedDbBytes: null }] }).success).toBe(true);
+    // Counts and usage numbers only: no key names, database names or values (security.md section 9).
+    expect(response.safeParse({ frames: [{ ...frame, keys: ["a"] }] }).success).toBe(false);
+    expect(response.safeParse({ frames: [{ ...frame, databases: -1 }] }).success).toBe(false);
   });
 
   it("snapshot:import takes a stored revision or a file chosen in main, and up to 32 origin mappings", () => {

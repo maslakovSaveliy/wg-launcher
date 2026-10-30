@@ -88,6 +88,23 @@ export const keyMappingSchema = z.strictObject({
 
 const taskId = z.strictObject({ taskId: gameIdSchema });
 
+const count = z.int().min(0);
+
+/**
+ * A frame key of a game outside its game keys, as the export dialog lists it (save-transfer.md section 6, "Export"):
+ * counts and usage numbers only, never key names, database names or values. `indexedDbBytes` is Chromium's
+ * `usageDetails.indexedDB`, null where it is not reported.
+ */
+export const frameSummarySchema = z.strictObject({
+  origin: z.string(),
+  topLevelSite: z.string().nullable(),
+  /** The remembered choice (`storage_targets.in_export`). */
+  inExport: z.boolean(),
+  localStorageItems: count,
+  databases: count,
+  indexedDbBytes: count.nullable(),
+});
+
 /** A stored snapshot as the UI sees it (architecture.md section 7): the row's fields, never its file path. */
 export const snapshotRowSchema = z.strictObject({
   revisionId: gameIdSchema,
@@ -157,6 +174,11 @@ export const IPC_CONTRACT = {
   "game:deleteSaves": { request: byId, response: taskId },
   // The save dialog runs in main: no path crosses IPC (architecture.md section 8).
   "shortcut:create": { request: byId, response: z.strictObject({ created: z.boolean() }) },
+  // Reads what each frame outside the game keys holds, in a quiescent window, for the export dialog.
+  "snapshot:frames": {
+    request: byId,
+    response: z.strictObject({ frames: z.array(frameSummarySchema) }),
+  },
   // Answers once the game's lock is held; progress and the outcome follow as `task:progress` events.
   "snapshot:export": {
     request: z.strictObject({
@@ -218,6 +240,7 @@ export const gameStateEventSchema = z.strictObject({
 export type GameStateEvent = z.output<typeof gameStateEventSchema>;
 
 export type SnapshotRow = z.output<typeof snapshotRowSchema>;
+export type FrameSummary = z.output<typeof frameSummarySchema>;
 export type StorageKeyRef = z.output<typeof storageKeyRefSchema>;
 export type KeyMappingRef = z.output<typeof keyMappingSchema>;
 

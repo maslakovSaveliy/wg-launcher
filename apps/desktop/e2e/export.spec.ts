@@ -165,6 +165,21 @@ test("exports a cross-site iframe's partitioned storage under its top-level site
     frame: true,
   });
   const frameKey = { origin: app.progressLab.loopback, topLevelSite: "http://localhost" };
+  // The export dialog's list: the frame with what it holds, not chosen yet (counts only, through the bridge).
+  const listFrames = () =>
+    app.launcher.evaluate((id) => window.wg?.listFrames({ gameId: id }), gameId);
+  const listed = ok((await listFrames()) ?? { ok: false, code: "INTERNAL", message: "no bridge" });
+  // progress-lab keeps two databases (its own and the Emscripten-style one) and two localStorage items.
+  expect(listed.frames).toEqual([
+    {
+      ...frameKey,
+      inExport: false,
+      localStorageItems: 2,
+      databases: 2,
+      indexedDbBytes: expect.any(Number),
+    },
+  ]);
+  expect(listed.frames[0]?.indexedDbBytes).toBeGreaterThan(0);
   // Without the user's choice the cross-site frame is not part of the game's keys.
   const topOnly = ok(await exportSnapshot(app, gameId));
   expect((await validated(app, topOnly)).manifest.storageKeys).toEqual([
@@ -183,6 +198,10 @@ test("exports a cross-site iframe's partitioned storage under its top-level site
   // The choice is remembered: the next export without one includes the frame again.
   const again = ok(await exportSnapshot(app, gameId));
   expect(again.contentHash).toBe(row.contentHash);
+  const remembered = ok(
+    (await listFrames()) ?? { ok: false, code: "INTERNAL", message: "no bridge" },
+  );
+  expect(remembered.frames).toEqual([expect.objectContaining({ ...frameKey, inExport: true })]);
   // A frame key that is not one of the game's frames is refused.
   expect(
     await exportSnapshot(app, gameId, {

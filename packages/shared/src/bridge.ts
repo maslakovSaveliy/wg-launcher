@@ -11,7 +11,7 @@ import type {
 } from "./ipc.js";
 
 /** Bumped whenever the bridge's functions change. */
-export const BRIDGE_VERSION = 5;
+export const BRIDGE_VERSION = 6;
 
 /** Bridge function name to channel. */
 export const BRIDGE_CHANNELS = {
@@ -26,6 +26,7 @@ export const BRIDGE_CHANNELS = {
   clearCache: "game:clearCache",
   deleteSaves: "game:deleteSaves",
   createShortcut: "shortcut:create",
+  listFrames: "snapshot:frames",
   exportSnapshot: "snapshot:export",
   importSnapshot: "snapshot:import",
   verifySnapshot: "snapshot:verify",
