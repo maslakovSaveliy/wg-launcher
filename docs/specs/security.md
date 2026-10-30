@@ -136,7 +136,12 @@ A release check reads the fuses of the packaged app and fails on any difference 
 | `select-client-certificate` | Prevented with no certificate (by default Electron picks the first one: Verified (2026-10-25, `electron.d.ts`)) |
 
 - **`shell.openExternal`** receives only a URL that passes `isExternalUrlAllowed`: it parses, the scheme is `https:` or
-  `http:`, there is a host and no user info, and it is at most 2048 characters. The confirmation is a native dialog that
+  `http:`, there is a host and no user info, and it is at most 2048 characters. A production build also refuses a host
+  on this computer or the local network (`isInternalHost` in `policy/url-rules.ts`): `localhost` and its subdomains,
+  `.local` names, single-label names, and loopback, private, CGNAT, link-local and unspecified IPv4 and IPv6 addresses
+  (IPv4-mapped forms included), so a game cannot send the user's own browser, with its cookies, to a router or a local
+  service; development and test builds serve games on loopback and keep allowing it. `Owner` (decided 2026-10-30),
+  `Assumed` for the list of ranges; unit-tested in `url-rules.test.ts` and `window-factory.test.ts`. The confirmation is a native dialog that
   shows the host in its punycode form, so a lookalike name is visible. One confirmation per window at a time; others
   are dropped and logged; after a Cancel, that window's requests are dropped and logged for 10 s
   (`EXTERNAL_COOLDOWN_MS`, Assumed), so a game cannot re-ask forever. `window.open` is not gated on a user gesture:
@@ -342,6 +347,9 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
 - All games share Chromium's GPU and network service processes; side channels between games are not addressed.
   `Assumed`
 - A heavy or hostile game can exhaust CPU, GPU or memory; the user closes it ("Force close"). `Assumed`
+- A public host name that resolves to a loopback or private address passes the production refusal of internal hosts
+  for "Open in browser?": deciding it would need a DNS lookup in the main process. The native confirmation still names
+  the host. `Assumed`
 
 ## Open questions
 

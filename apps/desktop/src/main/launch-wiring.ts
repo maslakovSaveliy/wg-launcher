@@ -62,7 +62,13 @@ export function createGames(
     openWindow: ({ gameId, title, entryUrl }) => {
       // The session's handlers exist before the window, so the page never meets Electron's allow-all default.
       gameSession(gameId, { log });
-      const askExternal = createExternalOpener({ gameId, dialogs, openExternal, log });
+      const askExternal = createExternalOpener({
+        gameId,
+        dialogs,
+        openExternal,
+        log,
+        flavor: FLAVOR,
+      });
       const saved = repos.windowState.get(gameId);
       const window = createGameWindow({
         gameId,

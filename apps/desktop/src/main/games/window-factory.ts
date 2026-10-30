@@ -47,6 +47,8 @@ export interface ExternalOpenerDeps {
   /** `shell.openExternal` in production; the test flavor records instead. */
   openExternal(url: string): Promise<void>;
   log: Logger;
+  /** The compile-time build flavor: production refuses hosts on this computer or the local network. */
+  flavor: Flavor;
   /** Milliseconds; injected for the cooldown test. */
   now?: () => number;
 }
@@ -66,7 +68,7 @@ export function createExternalOpener(deps: ExternalOpenerDeps): (url: string) =>
   let pending = false;
   let quietUntil = Number.NEGATIVE_INFINITY;
   return async (url) => {
-    if (!isExternalUrlAllowed(url)) {
+    if (!isExternalUrlAllowed(url, deps.flavor)) {
       deps.log.warn("game.external-refused", { gameId: deps.gameId, length: String(url).length });
       return;
     }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Flavor } from "../flavor.js";
 
 // Electron is not available under Vitest; the window itself is created in the e2e suite.
 vi.mock("electron", () => ({ BrowserWindow: class {} }));
@@ -50,11 +51,17 @@ describe("gameWebPreferences (S-1, AC-3, architecture.md section 5)", () => {
 });
 
 describe("createExternalOpener (S-5, AGENTS.md security invariant 5)", () => {
-  function setUp(answers: boolean[]) {
+  function setUp(answers: boolean[], flavor: Flavor = "prod") {
     const confirm = vi.fn(async (_spec: object) => answers.shift() ?? false);
     const openExternal = vi.fn(async () => undefined);
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
-    const open = createExternalOpener({ dialogs: { confirm }, openExternal, log, gameId: GAME });
+    const open = createExternalOpener({
+      dialogs: { confirm },
+      openExternal,
+      log,
+      gameId: GAME,
+      flavor,
+    });
     return { confirm, openExternal, log, open };
   }
 
@@ -66,6 +73,19 @@ describe("createExternalOpener (S-5, AGENTS.md security invariant 5)", () => {
     expect(JSON.stringify(confirm.mock.calls[0]?.[0])).toContain("xn--bcher-kva.example");
     expect(JSON.stringify(confirm.mock.calls[0]?.[0])).not.toContain("bücher");
     expect(openExternal).toHaveBeenCalledWith("https://xn--bcher-kva.example/path?q=1");
+  });
+
+  it("in production never asks for, and never opens, a host on this computer or the local network", async () => {
+    for (const url of ["http://127.0.0.1:8080/", "http://192.168.0.1/", "http://localhost/admin"]) {
+      const { confirm, openExternal, open } = setUp([true]);
+      await open(url);
+      expect(confirm, url).not.toHaveBeenCalled();
+      expect(openExternal, url).not.toHaveBeenCalled();
+    }
+    // The test build serves its pages on loopback, so it still asks there.
+    const test = setUp([true], "test");
+    await test.open("http://127.0.0.1:8080/");
+    expect(test.openExternal).toHaveBeenCalledWith("http://127.0.0.1:8080/");
   });
 
   it("does not open after a no", async () => {
@@ -96,7 +116,13 @@ describe("createExternalOpener (S-5, AGENTS.md security invariant 5)", () => {
     const confirm = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)));
     const openExternal = vi.fn(async () => undefined);
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
-    const open = createExternalOpener({ dialogs: { confirm }, openExternal, log, gameId: GAME });
+    const open = createExternalOpener({
+      dialogs: { confirm },
+      openExternal,
+      log,
+      gameId: GAME,
+      flavor: "prod",
+    });
     const first = open("https://one.example/");
     await open("https://two.example/");
     expect(confirm).toHaveBeenCalledTimes(1);
@@ -118,6 +144,7 @@ describe("createExternalOpener (S-5, AGENTS.md security invariant 5)", () => {
       openExternal,
       log,
       gameId: GAME,
+      flavor: "prod",
       now: () => now,
     });
     await open("https://one.example/");
@@ -144,7 +171,13 @@ describe("createExternalOpener (S-5, AGENTS.md security invariant 5)", () => {
     });
     const openExternal = vi.fn(async () => undefined);
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
-    const open = createExternalOpener({ dialogs: { confirm }, openExternal, log, gameId: GAME });
+    const open = createExternalOpener({
+      dialogs: { confirm },
+      openExternal,
+      log,
+      gameId: GAME,
+      flavor: "prod",
+    });
     await open("https://example.org/");
     expect(openExternal).not.toHaveBeenCalled();
     expect(log.error).toHaveBeenCalled();

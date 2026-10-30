@@ -290,7 +290,7 @@ describe("decideTopNavigation", () => {
       expect(decideTopNavigation(entry, "https://other.example/q?a\\b", flavor)).toBe(
         "ask-external",
       );
-      expect(isExternalUrlAllowed("https://other.example/q?a\\b")).toBe(false);
+      expect(isExternalUrlAllowed("https://other.example/q?a\\b", flavor)).toBe(false);
       // In the authority the shapes still block.
       expect(decideTopNavigation(entry, "https://evil.com\\.example.com/", flavor)).toBe("block");
       expect(decideTopNavigation(entry, "https://exa mple.com/", flavor)).toBe("block");
@@ -382,7 +382,7 @@ describe("decideFrameNavigation", () => {
 });
 
 describe("isExternalUrlAllowed", () => {
-  it("allows a plain https or http URL with a host", () => {
+  it("allows a plain https or http URL with a public host", () => {
     for (const url of [
       "https://example.com/",
       "https://example.com",
@@ -390,26 +390,69 @@ describe("isExternalUrlAllowed", () => {
       "HTTPS://WWW.EXAMPLE.COM/",
       "https://medium.com/@someone",
       "https://ex\u0430mple.com/",
-      "https://192.168.0.10:8080/",
+      "https://8.8.8.8/",
+      "http://172.32.0.1/",
+      "http://100.128.0.1/",
+      "https://[2001:db8::1]/",
       urlOfLength(2048),
     ]) {
-      expect(isExternalUrlAllowed(url), url).toBe(true);
+      for (const flavor of ["prod", "dev", "test"] as const) {
+        expect(isExternalUrlAllowed(url, flavor), `${flavor} ${url}`).toBe(true);
+      }
+    }
+  });
+
+  // A game must not send the user's real browser, with its cookies, to a service on this computer or the local
+  // network (a router, a local admin page): no remote game has a reason to, so production refuses it.
+  const INTERNAL = [
+    "http://localhost/",
+    "http://localhost:3000/admin",
+    "http://a.localhost/",
+    "http://127.0.0.1:8080/",
+    "http://127.5.4.3/",
+    "http://0.0.0.0/",
+    "http://10.0.0.1/",
+    "http://172.16.0.1/",
+    "http://172.31.255.255/",
+    "https://192.168.0.10:8080/",
+    "http://169.254.169.254/latest/meta-data",
+    "http://100.64.0.1/",
+    "http://[::1]/",
+    "http://[::]/",
+    "http://[fe80::1]/",
+    "http://[fd12:3456::1]/",
+    "http://[::ffff:192.168.0.1]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://router/",
+    "http://printer.local/",
+  ];
+
+  it("refuses loopback, private, link-local and local names in production", () => {
+    for (const url of INTERNAL) {
+      expect(isExternalUrlAllowed(url, "prod"), url).toBe(false);
+    }
+  });
+
+  it("allows them in development and test builds, which serve games on loopback", () => {
+    for (const url of INTERNAL) {
+      expect(isExternalUrlAllowed(url, "test"), url).toBe(true);
+      expect(isExternalUrlAllowed(url, "dev"), url).toBe(true);
     }
   });
 
   it("refuses every hostile input", () => {
     for (const url of HOSTILE_EVERYWHERE) {
-      expect(isExternalUrlAllowed(url), JSON.stringify(url)).toBe(false);
+      expect(isExternalUrlAllowed(url, "test"), JSON.stringify(url)).toBe(false);
     }
   });
 
   it("refuses 2049 characters, measured before parsing", () => {
-    expect(isExternalUrlAllowed(urlOfLength(2049))).toBe(false);
+    expect(isExternalUrlAllowed(urlOfLength(2049), "test")).toBe(false);
   });
 
   it("never throws and refuses non-string input", () => {
     for (const url of [undefined, null, 42, {}, ["https://example.com/"]]) {
-      expect(isExternalUrlAllowed(url as unknown as string)).toBe(false);
+      expect(isExternalUrlAllowed(url as unknown as string, "prod")).toBe(false);
     }
   });
 });
