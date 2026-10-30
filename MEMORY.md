@@ -52,7 +52,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   line-length rule; secretlint on staged files; commitlint with Conventional Commits plus `spike`; lefthook (pre-commit,
   commit-msg, pre-push = typecheck + unit tests); `pnpm test` is Vitest only, `pnpm test:e2e` is the fixture's
   Playwright suite. License gate: production dependencies strict against the allowlist (SPDX `OR`/`AND` understood),
-  dev-only ones warn. Execution style: subagent-driven development, test-first where code exists.
+  dev-only ones warn. Execution style: test-first where code exists (the way tasks are run: CLAUDE.md, changed 2026-10-30).
 - 2026-10-28 Owner: "no machine-specific paths" is enforced by `scripts/check-machine-paths.mjs` (`pnpm paths:check`,
   in `pnpm check`, pre-commit on staged files, CI on all tracked text files); what it flags and the one allowed path
   `/home/web_user`: AGENTS.md "Commands" and the script header. The user-name needle is off on CI (`CI=true`), because a
@@ -173,6 +173,12 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   2026-10-29, `e2e/delete.spec.ts`). Every restore window's deadline is sized from its data, frames send a `working`
   heartbeat every 5 s, nothing thrown after the wipe escapes the rollback, and rollback windows ignore cancels
   (save-transfer.md section 6, "Deadlines" and "No escape after the wipe").
+- 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
+  one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
+  non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an
+  implementation subagent per task; the independent reviews caught data-loss defects in Tasks 12 and 14 that the
+  implementer had missed [V, 2026-10-28 and 2026-10-29, task reviews of `packages/exporters` and the restore protocol];
+  whether the new way is faster is not measured yet [A].
 - 2026-10-29 Owner: the full test suite, desktop e2e included, runs in CI on the draft pull request for every push;
   locally an agent runs unit tests and lint in full and only the e2e specs a change touches; one full local
   `pnpm check` and `pnpm test:e2e` before the final pull request (plan Task 18).

@@ -5,9 +5,11 @@
 
 ## Claude Code specifics
 
-- Skills flow: `brainstorming` → `writing-plans` → `subagent-driven-development` (the owner's chosen way of working).
-  Use `test-driven-development` once code exists, `systematic-debugging` on any failure, and
-  `verification-before-completion` before claiming anything is done.
+- Skills flow: `brainstorming` → `writing-plans` → implementation by one main agent in its own context (owner
+  decision, 2026-10-30), with one independent review per task in a fresh context (a subagent that only reads and
+  reports) and a final whole-branch review. Implementation subagents are used only for independent pieces with a clear
+  boundary, never as a fixed planner → coder → tester chain. Use `test-driven-development` once code exists,
+  `systematic-debugging` on any failure, and `verification-before-completion` before claiming anything is done.
 - Library docs: look up the current API in context7 (or the official docs) before using a library, and check versions
   with `npm view`. Training data may be stale.
 - Plans live in `docs/plans/` as `YYYY-MM-DD-<topic>.md`. Keep their checkboxes honest.
