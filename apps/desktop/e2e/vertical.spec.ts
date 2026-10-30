@@ -211,3 +211,45 @@ test("AC-10: an export that fails in a frame shows its code and message in the c
   expect(outcome).toMatch(/^Export failed: EXP_UNSUPPORTED_VALUE: \S/);
   await expect(cardOf(app, gameId).locator(".task")).toHaveAttribute("role", "alert");
 });
+
+test("AC-24 through the UI: a moved iframe is refused naming both keys, and restored after the mapping form", async () => {
+  test.setTimeout(180_000);
+  launched = await launchApp();
+  const app = launched;
+  const { local, loopback } = app.progressLab;
+  // A second fixture server: the same game's iframe at another port of 127.0.0.1.
+  server = await startProgressLab();
+  const moved = server.loopback;
+  const host = (frame: string) =>
+    `${local}/iframe-host.html?src=${encodeURIComponent(`${frame}/`)}`;
+  const gameA = await addByUi(app, host(loopback), "Lab A");
+  const pageA = await playFromCard(app, gameA);
+  await progressLab(pageA.frameLocator("#game-frame")).play(4);
+  const hash = await progressLab(pageA.frameLocator("#game-frame")).ready();
+  await close(app, gameA);
+  await exportFromCard(app, gameA, true);
+  expect(await taskOutcome(app, gameA)).toBe("Export: done");
+
+  // Entry C has the same origin and has run once, so its iframe at the new port is recorded.
+  const gameC = await addByUi(app, host(moved), "Lab C");
+  await playFromCard(app, gameC);
+  await close(app, gameC);
+  const card = cardOf(app, gameC);
+  await card.getByRole("button", { name: "Snapshots and restore" }).click();
+  const fromA = card.getByRole("region", { name: "Snapshots of Lab A" });
+  await fromA.getByRole("button", { name: "Restore into this game" }).first().click();
+  // Refused before anything was written: the card names both origins and offers the mapping form.
+  const refusal = card.getByRole("alert").filter({ hasText: "IMP_STORAGE_KEY_MISMATCH" });
+  await expect(refusal).toContainText(loopback);
+  await expect(refusal).toContainText(moved);
+  const form = card.getByRole("form", { name: "Map storage origins" });
+  await form.getByLabel("Snapshot origin").fill(loopback);
+  await form.getByLabel("Origin of this game").fill(moved);
+  await queueConfirm(app, true);
+  await form.getByRole("button", { name: "Restore with this mapping" }).click();
+  expect(await taskOutcome(app, gameC)).toBe("Import: done");
+  await expect(form).toHaveCount(0);
+  const pageC = await playFromCard(app, gameC);
+  expect(await progressLab(pageC.frameLocator("#game-frame")).ready()).toBe(hash);
+  await close(app, gameC);
+});

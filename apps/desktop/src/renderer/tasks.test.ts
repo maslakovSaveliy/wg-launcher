@@ -59,7 +59,7 @@ describe("what the launcher says about a task: real steps and measured bytes onl
     );
   });
 
-  it("shows a failure's code and message as text (AC-10, Review Focus 5)", () => {
+  it("shows a failure's code and message as text (AC-10)", () => {
     expect(
       describeTask(
         event({

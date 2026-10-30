@@ -1,5 +1,6 @@
-// The page's one subscription to `task:progress`: a book of every task's last event, and a callback when a task
-// ends, so a view reloads what main recorded (rows, badges) instead of guessing.
+// A view's subscription to `task:progress` (the library and settings each hold one; the preload allows several
+// listeners): a book of every task's last event, and a callback when a task ends, so the view reloads what main
+// recorded (rows, badges) instead of guessing.
 
 import type { TaskProgressEvent } from "@wg-launcher/shared";
 import { useEffect, useState } from "react";

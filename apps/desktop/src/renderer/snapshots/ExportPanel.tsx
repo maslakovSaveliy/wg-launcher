@@ -60,10 +60,51 @@ export function FrameChoices({
   );
 }
 
-type PanelView =
+/** At most 32 frame keys, the `snapshot:export` bound (a manifest holds at most 32 storage keys). */
+const MAX_FRAME_KEYS = 32;
+
+export type PanelView =
   | { kind: "reading" }
-  | { kind: "error"; message: string }
+  | { kind: "error"; code: string; message: string }
   | { kind: "ready"; frames: FrameSummary[] };
+
+/**
+ * The panel's content in each state. The frame list is optional: when it could not be read (an open window, a frame
+ * the job window could not reach), the error is shown with its code and the export can still start, with the frames
+ * chosen before (no `frameKeys`, so main uses the remembered choice).
+ */
+export function ExportBody({
+  view,
+  chosen,
+  onToggle,
+  onStart,
+}: {
+  view: PanelView;
+  chosen: readonly StorageKeyRef[];
+  onToggle(frame: FrameSummary): void;
+  onStart(): void;
+}) {
+  if (view.kind === "reading") return <p>Reading what the game's frames hold.</p>;
+  const tooMany = view.kind === "ready" && chosen.length > MAX_FRAME_KEYS;
+  return (
+    <>
+      {view.kind === "error" ? (
+        <p role="alert">
+          {view.code}: {view.message} The frames could not be read, so the export covers the game's
+          own pages and the frames chosen for an earlier export.
+        </p>
+      ) : (
+        <FrameChoices frames={view.frames} chosen={chosen} onToggle={onToggle} />
+      )}
+      {tooMany && (
+        <p role="alert">A snapshot holds at most {MAX_FRAME_KEYS} frames; untick some.</p>
+      )}
+      <button type="button" onClick={onStart} disabled={tooMany}>
+        Start export
+      </button>
+    </>
+  );
+}
 
 export function ExportPanel({
   gameId,
@@ -85,7 +126,7 @@ export function ExportPanel({
       .then((result) => {
         if (!live) return;
         if (!result.ok) {
-          setView({ kind: "error", message: result.message });
+          setView({ kind: "error", code: result.code, message: result.message });
           return;
         }
         setView({ kind: "ready", frames: result.data.frames });
@@ -108,10 +149,10 @@ export function ExportPanel({
     );
 
   const start = async () => {
-    if (view.kind !== "ready") return;
-    // With frames listed the choice is always sent, so main remembers it; without any, nothing is chosen.
+    if (view.kind === "reading") return;
+    // With frames listed the choice is always sent, so main remembers it; without a list, nothing is chosen here.
     const result = await bridge().exportSnapshot(
-      view.frames.length > 0 ? { gameId, frameKeys: chosen } : { gameId },
+      view.kind === "ready" && view.frames.length > 0 ? { gameId, frameKeys: chosen } : { gameId },
     );
     if (result.ok) onStarted();
     else setError(`${result.code}: ${result.message}`);
@@ -120,16 +161,7 @@ export function ExportPanel({
   return (
     <section className="panel" aria-label="Export snapshot">
       <h3>Export snapshot</h3>
-      {view.kind === "reading" && <p>Reading what the game's frames hold.</p>}
-      {view.kind === "error" && <p role="alert">{view.message}</p>}
-      {view.kind === "ready" && (
-        <>
-          <FrameChoices frames={view.frames} chosen={chosen} onToggle={toggle} />
-          <button type="button" onClick={() => void start()}>
-            Start export
-          </button>
-        </>
-      )}
+      <ExportBody view={view} chosen={chosen} onToggle={toggle} onStart={() => void start()} />
       <button type="button" onClick={onClose}>
         Close
       </button>

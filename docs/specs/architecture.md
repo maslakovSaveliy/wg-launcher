@@ -346,8 +346,11 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
     dialog; for a file the file dialog opens again) and the `needs_recovery` banner with "Retry recovery" are in
     `src/renderer/{library,snapshots,recovery}/`. Settings offers "Delete local saves" for a removed game's data.
     No "Flush, close and export" control exists, because no bundled adapter declares a flush hook (save-transfer.md
-    section 7). Verified (2026-10-30, `apps/desktop/e2e/vertical.spec.ts`: AC-6 with the restart, AC-7 for the
-    service-worker and iframe variants, AC-10 in the card, all through the UI).
+    section 7). The frame list is optional: when `snapshot:frames` fails, the panel shows the code and message and
+    still starts an export without `frameKeys` (the remembered choice applies); it refuses to start with more than 32
+    frames ticked. Verified (2026-10-30, `apps/desktop/e2e/vertical.spec.ts`: AC-6 with the restart, AC-7 for the
+    service-worker and iframe variants, AC-10 in the card, and AC-24 with a moved iframe refused naming both origins
+    and restored after the mapping form, all through the UI).
 - Game windows have no IPC at all; quiescent windows use only the handshake of
   [save-transfer.md](save-transfer.md#5-quiescent-window). Bulk data never travels as JSON IPC (AGENTS.md data-safety
   invariant 9).

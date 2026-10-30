@@ -1,7 +1,7 @@
 // Task progress as the launcher shows it (architecture.md section 6, `task:progress`): real steps and measured bytes
 // only, a percentage only when main sent the total (AGENTS.md honesty rule 1), and a failure's code and message as
-// text (AC-10, Review Focus 5). The book is keyed by task id, so an event that arrives before the page knows the
-// task id from its call's reply is kept like any other.
+// text (AC-10). The book is keyed by task id, so an event that arrives before the page knows the task id from its
+// call's reply is kept like any other.
 
 import type { TaskProgressEvent } from "@wg-launcher/shared";
 

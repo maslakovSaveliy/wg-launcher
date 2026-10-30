@@ -1,5 +1,5 @@
 // The latest task of a game as one line of text: its real step and measured bytes, or its outcome; a failure shows
-// its code and message (AC-10, Review Focus 5).
+// its code and message (AC-10).
 
 import type { TaskProgressEvent } from "@wg-launcher/shared";
 import { describeTask } from "../tasks.js";

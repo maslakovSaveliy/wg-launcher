@@ -380,9 +380,10 @@ Each step is written to `restore_journal` ([architecture.md](architecture.md#7-s
   `Owner` for backup, restore on failure and verify (AGENTS.md data-safety invariant 3), `Assumed` for the steps.
 - **Failed rollback:** `IMP_RECOVERY_FAILED`. The game stays locked in `needs_recovery`: launching it is refused with an
   explicit message naming the backup, and the UI offers "Retry recovery". The backup is never deleted, by this or any
-  other action (PRD section 9). `Assumed` While a restore, a delete or a rollback still holds the game's lease past its wipe, a refused
-  launch says that a task is changing the saves and the game can start when it ends, and names no backup yet (Phase 1
-  Task 15, `recoveryNotice` in `snapshots/recovery.ts`, unit-tested). `Assumed`
+  other action (PRD section 9). `Assumed`
+- **A launch while a task works on the saves:** while a restore, a delete or a rollback still holds the game's lease
+  past its wipe, a refused launch says that a task is changing the saves and the game can start when it ends, and
+  names no backup yet (Phase 1 Task 15, `recoveryNotice` in `snapshots/recovery.ts`, unit-tested). `Assumed`
 - **Crash or power loss:** at start-up the main process reads unfinished journal entries before any game can launch. A
   job that stopped in R1 to R4 changed nothing: its temporary files under `tmp/` are removed and the entry closed. A job
   that reached R5 or later runs the rollback first. `Assumed`
@@ -563,8 +564,11 @@ verified" needs a successful round trip and says nothing about flush. `Owner` (d
   success, error, timeout, a value other than `true`, input after the hook started, and a late close; only the success
   case without input and with a prompt close gives `confirmed`. A UI test checks that every place showing an
   `unconfirmed` snapshot shows "flush unconfirmed" and never "save point", "guaranteed" or "complete". Verified
-  (2026-10-30, `apps/desktop/src/renderer/ui-text.test.tsx`, which renders the snapshot list and every other launcher
-  component to static markup; replacing the label with "save point" made it fail). The only list is the card's
+  (2026-10-30, `apps/desktop/src/renderer/ui-text.test.tsx`, which renders every launcher component to static
+  markup in the states it can show without the bridge, and the pure parts of the export and snapshot panels in the
+  states the bridge leads to; replacing the label with "save point" made it fail). Text that main writes (refusal
+  messages, the read-only reason) is not covered there; `apps/desktop/e2e/vertical.spec.ts` scans the live launcher
+  page after the scenario. The only list is the card's
   snapshot panel; no "Flush, close and export" control exists while no bundled adapter declares a hook (Phase 1
   Task 15).
 - The hook runs in the game page's main world through `webContents.executeJavaScript` from a fixed template. Its only
