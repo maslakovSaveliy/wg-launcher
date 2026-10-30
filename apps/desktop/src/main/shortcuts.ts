@@ -1,6 +1,7 @@
 // Game shortcuts (architecture.md section 8, PRD F-8): a shortcut calls the one shared client with the game's id; no
-// per-game bundle exists. macOS gets a `.webloc` file whose only variable part is the validated id (a `.command`
-// file is never offered: it runs a shell script). Windows gets a `.lnk` from `shell.writeShortcutLink` that starts
+// per-game bundle exists. macOS gets a `.inetloc` file whose only variable part is the validated id: macOS 27 opens
+// a `.webloc` only for http and https links, while an `.inetloc` with the same property list hands any scheme to
+// LaunchServices (a `.command` file is never offered: it runs a shell script). Windows gets a `.lnk` from `shell.writeShortcutLink` that starts
 // the executable with `--launch-game=<id>` (unit-tested arguments only: not tested on Windows, no machine). The file
 // is placed where the user says in a native save dialog (default: the Desktop); no path crosses IPC.
 
@@ -23,8 +24,8 @@ function checkId(gameId: string): void {
   if (!isUuidV7(gameId)) throw new TypeError("shortcut: not a lowercase UUIDv7");
 }
 
-/** The `.webloc` property list: the deep link `wglauncher://launch/<gameId>` and nothing else. */
-export function weblocContent(gameId: string): string {
+/** The `.inetloc` property list: the deep link `wglauncher://launch/<gameId>` and nothing else. */
+export function inetlocContent(gameId: string): string {
   checkId(gameId);
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -63,7 +64,7 @@ export function windowsShortcutOptions(
   };
 }
 
-/** Shortcuts exist on macOS (`.webloc`) and Windows (`.lnk`) only; Linux is not a target yet (PRD section 11). */
+/** Shortcuts exist on macOS (`.inetloc`) and Windows (`.lnk`) only; Linux is not a target yet (PRD section 11). */
 export function shortcutsSupported(platform: NodeJS.Platform): boolean {
   return platform === "darwin" || platform === "win32";
 }
@@ -123,7 +124,7 @@ export async function createShortcut(
       message: "Shortcuts can be created on macOS and Windows only.",
     };
   }
-  const extension = windows ? ".lnk" : ".webloc";
+  const extension = windows ? ".lnk" : ".inetloc";
   const join = windows ? win32.join : posix.join;
   const chosen = await deps.dialogs.saveFile({
     title: "Create a shortcut",
@@ -139,7 +140,7 @@ export async function createShortcut(
         throw new Error("shell.writeShortcutLink returned false");
       }
     } else {
-      await deps.writeFile(path, weblocContent(game.id));
+      await deps.writeFile(path, inetlocContent(game.id));
     }
   } catch (error) {
     deps.log.error("shortcut.failed", { gameId: game.id, error });

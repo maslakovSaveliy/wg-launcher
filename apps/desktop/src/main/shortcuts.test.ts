@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createShortcut,
+  inetlocContent,
   type ShortcutDeps,
   shortcutFileName,
   shortcutsSupported,
-  weblocContent,
   windowsShortcutOptions,
   xmlEscape,
 } from "./shortcuts.js";
@@ -12,9 +12,9 @@ import {
 const ID = "0190a5b2-7c3d-7e4f-8a1b-2c3d4e5f6a7b";
 const OTHER = "0190a5b2-7c3d-7e4f-8a1b-2c3d4e5f6a7c";
 
-describe("the macOS .webloc shortcut (architecture.md section 8)", () => {
+describe("the macOS .inetloc shortcut (architecture.md section 8)", () => {
   it("is a plist whose only content is the deep link of the game", () => {
-    expect(weblocContent(ID)).toBe(
+    expect(inetlocContent(ID)).toBe(
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -30,12 +30,12 @@ describe("the macOS .webloc shortcut (architecture.md section 8)", () => {
   });
 
   it("varies only in the id", () => {
-    expect(weblocContent(OTHER)).toBe(weblocContent(ID).replace(ID, OTHER));
+    expect(inetlocContent(OTHER)).toBe(inetlocContent(ID).replace(ID, OTHER));
   });
 
   it("refuses anything but a lowercase UUIDv7, so no other text can reach the file", () => {
     for (const bad of [ID.toUpperCase(), `${ID}/`, "x</string><string>evil", ""]) {
-      expect(() => weblocContent(bad)).toThrow(TypeError);
+      expect(() => inetlocContent(bad)).toThrow(TypeError);
     }
   });
 
@@ -62,7 +62,7 @@ describe("the Windows shortcut (architecture.md section 8; not tested on Windows
 
 describe("shortcutFileName", () => {
   it("keeps a plain title and adds the extension", () => {
-    expect(shortcutFileName("My Game 2", ".webloc")).toBe("My Game 2.webloc");
+    expect(shortcutFileName("My Game 2", ".inetloc")).toBe("My Game 2.inetloc");
   });
 
   it("replaces characters that file systems refuse and control characters", () => {
@@ -73,7 +73,7 @@ describe("shortcutFileName", () => {
 
   it("drops format characters such as U+202E (right-to-left override), which could disguise the name", () => {
     expect(shortcutFileName("evil\u202Eknl.exe", ".lnk")).toBe("evilknl.exe.lnk");
-    expect(shortcutFileName("a\u200Bb\u2066c\uFEFF", ".webloc")).toBe("abc.webloc");
+    expect(shortcutFileName("a\u200Bb\u2066c\uFEFF", ".inetloc")).toBe("abc.inetloc");
     expect(shortcutFileName("\u202E\u200F", ".lnk")).toBe("WGLauncher game.lnk");
   });
 
@@ -101,7 +101,7 @@ describe("shortcutFileName", () => {
   it("never starts with a dot, never is empty, and is at most 100 characters before the extension", () => {
     expect(shortcutFileName("..hidden", ".lnk")).toBe("hidden.lnk");
     expect(shortcutFileName("  ", ".lnk")).toBe("WGLauncher game.lnk");
-    expect(shortcutFileName("x".repeat(300), ".webloc")).toBe(`${"x".repeat(100)}.webloc`);
+    expect(shortcutFileName("x".repeat(300), ".inetloc")).toBe(`${"x".repeat(100)}.inetloc`);
   });
 });
 
@@ -110,7 +110,7 @@ function deps(patch: Partial<ShortcutDeps> = {}): ShortcutDeps & {
   writeShortcutLink: ReturnType<typeof vi.fn>;
   saveFile: ReturnType<typeof vi.fn>;
 } {
-  const saveFile = vi.fn(async () => "/volume/desk/Desktop/My Game.webloc" as string | null);
+  const saveFile = vi.fn(async () => "/volume/desk/Desktop/My Game.inetloc" as string | null);
   const base = {
     platform: "darwin" as NodeJS.Platform,
     execPath: "/Applications/WGLauncher.app/Contents/MacOS/WGLauncher",
@@ -136,17 +136,17 @@ describe("shortcutsSupported", () => {
 describe("createShortcut (shortcut:create)", () => {
   const game = { id: ID, title: "My Game" };
 
-  it("on macOS asks where to save, defaulting to the Desktop, and writes the .webloc there", async () => {
+  it("on macOS asks where to save, defaulting to the Desktop, and writes the .inetloc there", async () => {
     const d = deps();
     expect(await createShortcut(game, d)).toEqual({ ok: true, data: { created: true } });
     expect(d.saveFile).toHaveBeenCalledWith({
       title: "Create a shortcut",
-      defaultPath: "/volume/desk/Desktop/My Game.webloc",
-      filters: [{ name: "Shortcut", extensions: ["webloc"] }],
+      defaultPath: "/volume/desk/Desktop/My Game.inetloc",
+      filters: [{ name: "Shortcut", extensions: ["inetloc"] }],
     });
     expect(d.writeFile).toHaveBeenCalledWith(
-      "/volume/desk/Desktop/My Game.webloc",
-      weblocContent(ID),
+      "/volume/desk/Desktop/My Game.inetloc",
+      inetlocContent(ID),
     );
     expect(d.writeShortcutLink).not.toHaveBeenCalled();
   });
@@ -155,7 +155,7 @@ describe("createShortcut (shortcut:create)", () => {
     const d = deps();
     d.saveFile.mockResolvedValueOnce("/tmp/short");
     await createShortcut(game, d);
-    expect(d.writeFile).toHaveBeenCalledWith("/tmp/short.webloc", weblocContent(ID));
+    expect(d.writeFile).toHaveBeenCalledWith("/tmp/short.inetloc", inetlocContent(ID));
   });
 
   it("on Windows writes a .lnk through shell.writeShortcutLink", async () => {

@@ -1,5 +1,5 @@
 // Shortcuts and launch arguments (Phase 1 Task 11): the automated part of AC-19 and the shortcut part of AC-1 and
-// F-8 through `--launch-game=<id>` (plan M13). The `wglauncher://` scheme and opening a `.webloc` are checked by
+// F-8 through `--launch-game=<id>` (plan M13). The `wglauncher://` scheme and opening an `.inetloc` are checked by
 // hand on the packaged app (Task 16 checklist).
 
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
@@ -52,7 +52,11 @@ test("--launch-game=<id> opens that game at start-up, and a second instance with
   try {
     launched = await launchApp({ userData });
     const gameId = await addGame(launched, `${lab.local}/`, "Shortcut game");
-    await launched.close();
+    const first = launched;
+    await first.close();
+    // The log is written asynchronously, so the first start's own record may or may not have reached the file
+    // before it closed; only the records after it count.
+    const before = (await eventsNamed(first, "launch.input")).length;
 
     // First start with the argument, as the Windows shortcut does.
     launched = await launchApp({ userData, extraArgs: [`--launch-game=${gameId}`] });
@@ -60,7 +64,7 @@ test("--launch-game=<id> opens that game at start-up, and a second instance with
     await expectState(app, gameId, "running");
     expect(await windowCount(app)).toBe(2);
     await expect
-      .poll(() => eventsNamed(app, "launch.input"))
+      .poll(async () => (await eventsNamed(app, "launch.input")).slice(before))
       .toEqual([expect.objectContaining({ source: "argv", result: "valid", gameId })]);
 
     // Under bare xvfb-run (Linux CI) minimize is never applied (see launcher.spec.ts): hide instead.
@@ -174,15 +178,15 @@ test("a launch request after the launcher was closed while a game runs opens the
   expect(await windowCount(app)).toBe(2);
 });
 
-test("Create shortcut writes a .webloc with the deep link and nothing else; no per-game bundle exists (F-8)", async () => {
+test("Create shortcut writes an .inetloc with the deep link and nothing else; no per-game bundle exists (F-8)", async () => {
   launched = await launchApp();
   const app = launched;
   const lab = app.progressLab;
-  const gameId = await addGame(app, `${lab.local}/`, "Webloc game");
+  const gameId = await addGame(app, `${lab.local}/`, "Shortcut game");
   const target = await tempDir();
   await app.app.evaluate(
     (_electron, path) => globalThis.__wgTest?.queueDialogAnswer({ kind: "saveFile", value: path }),
-    join(target, "Webloc game"),
+    join(target, "Shortcut game"),
   );
   await app.launcher.getByRole("button", { name: "Settings" }).click();
   await app.launcher.getByRole("button", { name: "Library" }).click();
@@ -194,8 +198,8 @@ test("Create shortcut writes a .webloc with the deep link and nothing else; no p
     return;
   }
   await card.getByRole("button", { name: "Create shortcut" }).click();
-  await expect.poll(() => readdir(target)).toEqual(["Webloc game.webloc"]);
-  expect(await readFile(join(target, "Webloc game.webloc"), "utf8")).toBe(
+  await expect.poll(() => readdir(target)).toEqual(["Shortcut game.inetloc"]);
+  expect(await readFile(join(target, "Shortcut game.inetloc"), "utf8")).toBe(
     [
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -211,5 +215,5 @@ test("Create shortcut writes a .webloc with the deep link and nothing else; no p
   await expect(card.getByRole("alert")).toHaveCount(0);
   // The shortcut is the only new file: no app bundle or script was made for the game.
   const made = await readdir(app.userData, { recursive: true });
-  expect(made.filter((name) => /\.(app|command|sh|webloc|lnk)$/.test(name))).toEqual([]);
+  expect(made.filter((name) => /\.(app|command|sh|webloc|inetloc|lnk)$/.test(name))).toEqual([]);
 });
