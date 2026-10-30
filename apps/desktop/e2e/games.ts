@@ -37,13 +37,21 @@ export async function expectState(launched: Launched, gameId: string, state: Gam
  * hidden windows too (a storage check runs after every exit), so the game's page is the new window that shows the
  * game window's own URL, never the first window that appears.
  */
-export async function openGame(launched: Launched, gameId: string): Promise<Page> {
+export async function openGame(
+  launched: Launched,
+  gameId: string,
+  /** How the launch is asked for; by default through the test hook, a UI spec clicks Play instead. */
+  start?: () => Promise<void>,
+): Promise<Page> {
   const pages: Page[] = [];
   const onWindow = (page: Page) => pages.push(page);
   launched.app.on("window", onWindow);
   try {
-    const result = await launchGame(launched, gameId);
-    expect(result).toEqual({ ok: true, data: { window: "opened" } });
+    if (start) await start();
+    else {
+      const result = await launchGame(launched, gameId);
+      expect(result).toEqual({ ok: true, data: { window: "opened" } });
+    }
     await expectState(launched, gameId, "running");
     const urlOfGame = () =>
       launched.app.evaluate(({ webContents }, id) => {
