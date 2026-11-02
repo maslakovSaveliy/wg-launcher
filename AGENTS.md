@@ -17,7 +17,8 @@ It is not cloud streaming, not a reverse-engineering tool and not an automatic c
 **Phase 1 (launcher MVP) is done in code and tests** (all tasks of
 [docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md), 2026-11-02): the first vertical
 scenario (add a URL, play, save progress, export, restore in a clean session) plus the library and every MUST of the
-specs, on macOS arm64; there is no release. Merging it to `main` and the next phase start only on the owner's word. Phase 0 (foundation: specifications, documentation, rules, tooling and a runtime evaluation) is done; its
+specs, on macOS arm64; there is no release. It is merged to `main` (pull requests #2 and #3, the latter on 2026-11-02).
+The next phase has no plan yet; it starts only on the owner's word, with its own plan in `docs/plans/`. Phase 0 (foundation: specifications, documentation, rules, tooling and a runtime evaluation) is done; its
 plan is [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md).
 
 Stack: Electron 45 ([ADR-0002](docs/adr/0002-desktop-runtime.md), accepted by the owner on the condition that Phase 1
@@ -210,7 +211,7 @@ paths, game isolation).
    guess-and-retry loops.
 5. Spikes are throwaway: they live in `spikes/`, are labeled THROWAWAY, keep their own lockfiles and stay outside the
    pnpm workspace. Biome, the TypeScript project and Vitest ignore `spikes/`; only Markdown linting covers its documents.
-   Phase 1 starts no new spikes.
+   Phase 1 started no new spikes; a new spike needs the owner's approval.
 
 ## Definition of Done
 
