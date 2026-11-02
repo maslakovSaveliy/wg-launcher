@@ -408,7 +408,7 @@ export async function runRestore(
  * game's base revision and the journal's `done`. An external file whose revision is stored already is not adopted
  * again; its copy is removed with the others.
  */
-async function commitRestore(
+export async function commitRestore(
   gameId: string,
   validated: Validated,
   copy: string | null,

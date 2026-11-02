@@ -203,6 +203,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   state and evidence; the compatibility matrix gains launcher rows (`LAUNCHER_RECORDS` in `matrix.mjs`) that cite
   `docs/compat/runs/` and `manual-checks/`; the final local run passed (`docs/compat/runs/2026-11-02-macos-arm64.md`,
   [V, 2026-11-02]). Owner decision (2026-11-02): `spikes/runtime-compat/` stays as it is.
+- 2026-11-02 Whole-branch review fix (Assumed): a restored file's own `flushState` is believed only when a bundled
+  adapter with a flush hook made it (`trustedFlushState`), because `contentHash` does not cover the manifest; in v1 every
+  restored row is `unconfirmed` (save-transfer.md section 8, `snapshots/restore.test.ts`).
 - 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
   one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
   non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an

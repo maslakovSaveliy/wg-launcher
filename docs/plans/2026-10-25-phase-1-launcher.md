@@ -527,8 +527,9 @@ hooks `addGame` and `launchGame` over Playwright `_electron`, see HYPOTHESES "Am
   specs' open questions closed or kept, ADR action items checked, MEMORY.md current, AGENTS.md repository map.
 - [x] Ask the owner whether to archive or delete `spikes/runtime-compat/` now that H7 is recorded (MEMORY decision).
   The owner keeps it as it is (2026-11-02).
-- [ ] `pnpm check`, `pnpm test:e2e`, release check; whole-branch review; PR with the real outputs pasted (push only on
-  the owner's word).
+- [x] `pnpm check`, `pnpm test:e2e`, release check; whole-branch review; PR with the real outputs pasted (push only on
+  the owner's word). Final run: `docs/compat/runs/2026-11-02-macos-arm64.md`; the review's fixes landed with their own
+  checks; the pull request stays a draft until the owner says otherwise.
 
 ## Open checks from the specs, each with its fallback
 
