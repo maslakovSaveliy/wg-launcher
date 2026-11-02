@@ -45,7 +45,8 @@ could be accepted only once every fatal criterion passed (rule 2), and a criteri
   to be measured on the real launcher against Chrome, and chose to proceed with Electron now. This overrides waiting for
   H7 under rules 2 and 7: H7 has not passed, it is a condition of this acceptance. `Owner` (2026-10-25)
 - **Condition: Phase 1 MUST re-run H7** on the launcher with the frozen method (Chrome calibrated to an uncapped p50 of
-  60 to 120% of the vsync interval at a fixed load, hardware WebGL2 in both, window visible and focused, three
+  60 to 120% of the vsync interval at a fixed load; changed on 2026-11-02, by the owner's choice, to the GPU timer query in
+  Chrome with vsync on, see "Phase 1 outcome", hardware WebGL2 in both, window visible and focused, three
   alternating runs per runtime at 1280 x 720). `Owner` for the re-run; the outcomes follow HYPOTHESES sections 2 and 4:
   - **PASS:** median Electron p95 at most median Chrome p95 x 1.15. Measured against the installed Chrome 155 it is
     labeled "version mismatch, re-check when Chrome 156 is installed".

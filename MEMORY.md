@@ -716,8 +716,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   2026-11-02, scratch Playwright probes; the clock-scaling cause is [A]]
 - The game window opens hidden and is shown after its first paint, so a page loaded as the entry records "not
   focused" at load; the H7 runner opens the entry on a blank page and navigates to the scene once the window is
-  visible, focused and 1280 x 720 CSS px. Playwright `_electron.launch({executablePath})` drives a packaged app only
-  without fuses (it needs the Node inspector). [V, 2026-11-02, smoke and hands-off runs]
+  visible, focused and 1280 x 720 CSS px [V, 2026-11-02, smoke and hands-off runs]. Playwright
+  `_electron.launch({executablePath})` drove the unfused packaged test build; a fused one is assumed to refuse it,
+  because Playwright connects through the Node inspector that the `nodeCliInspect` fuse turns off [A]
 
 ## Open questions
 

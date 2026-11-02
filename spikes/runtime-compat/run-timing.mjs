@@ -28,8 +28,9 @@
 //   h8         spawn to first frame, 3 cold + 3 warm launches each of Electron and Chrome (default load 512)
 //   h9         memory after 60 s of the scene, one run each for Electron and Chrome (owner-approved), same external definition
 //   demos      the six public demos (H21), one 20 s run per demo per runtime in Electron and Chrome, indicative only
-//   h7b        optional, not planned: uncapped runs of the same scene in Electron and Chrome (reported); post-checks the
-//              calibration (without it the calibration run itself, made under the H7b conditions, is the only check)
+//   h7b        optional, not planned: uncapped runs of the same scene in Electron and Chrome (reported only). It no
+//              longer post-checks the calibration: uncapped Chrome 156 frame time cannot be read (HYPOTHESES
+//              "Amendments" 2026-11-02), and the calibration is the GPU-timer one
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -68,7 +69,7 @@ import {
   topCpu,
   writeAggregate,
 } from "./common.mjs";
-import { LOAD_LADDER, applyPostCheck, calibrationStep, environmentReasons as realEnvironmentReasons, h7Verdict, postCheck, ratioToVsync, runSlot, summary, validity } from "./timing-logic.mjs";
+import { LOAD_LADDER, calibrationStep, environmentReasons as realEnvironmentReasons, h7Verdict, ratioToVsync, runSlot, summary, validity } from "./timing-logic.mjs";
 
 const ALL = ["calibrate", "h7", "h8", "h9", "demos", "h7b"];
 // h7b (uncapped runs) is optional and not planned (owner decision): it runs only when asked for with --only=...,h7b.
@@ -279,6 +280,8 @@ function rowOf(runtime, label, outcome, extra = {}) {
     scene: payload ? { renderer: payload.data.scene.renderer, softwareRenderer: payload.data.scene.softwareRenderer, load: payload.data.settings.load, drawingBuffer: [payload.data.scene.drawingBufferWidth, payload.data.scene.drawingBufferHeight], dpr: payload.data.scene.devicePixelRatio } : null,
     visibility: payload ? { everHidden: payload.page.visibility.everHidden, everUnfocused: payload.page.visibility.everUnfocused } : null,
     vsyncHz: payload?.data?.vsync?.hostReportedHz ?? null,
+    // The launcher's window sizing and readiness before the scene was loaded (absent for other runtimes).
+    ...(outcome.value.sizing !== undefined ? { sizing: outcome.value.sizing, ready: outcome.value.ready } : {}),
     ...extra,
   };
 }
@@ -429,6 +432,7 @@ async function launcherFrame({ load, uncapped = false, duration = DURATION, warm
       if (ready?.visible && ready.focus && ready.w === WIDTH && ready.h === HEIGHT) break;
       await sleep(200);
     }
+    if (!(ready?.visible && ready.focus && ready.w === WIDTH && ready.h === HEIGHT)) log(`  launcher ${label}: the game window was not visible, focused and ${WIDTH}x${HEIGHT} within 20 s (${JSON.stringify(ready)}); the probe's own checks decide the run`);
     await sleep(300);
     const mark = run.mark();
     await page.goto(run.spikeUrl("/", { mode: "frametime", runtime: "launcher", version: electronVersion, load, duration, warmup, vsyncHz: hz(), label }));
@@ -474,7 +478,9 @@ async function groupCalibrate() {
     const result = await slot("chrome", `calibration-${candidate}`, { load: candidate, gpuTimer: true });
     const row = result.final;
     const gpu = row?.gpu?.stats ?? null;
-    const gpuP50 = typeof gpu?.p50Ms === "number" ? gpu.p50Ms : null;
+    // As many GPU samples as validity() wants frame deltas: a quarter of the vsync rate over the measured window.
+    const minGpuSamples = Math.floor(DURATION / (4 * vsyncMs));
+    const gpuP50 = typeof gpu?.p50Ms === "number" && gpu.count >= minGpuSamples ? gpu.p50Ms : null;
     const ratio = ratioToVsync(gpuP50, hz());
     sweep.push({ load: candidate, valid: !!row, gpuP50Ms: gpuP50, gpuP95Ms: gpu?.p95Ms ?? null, gpuSamples: gpu?.count ?? null, gpuDisjointFrames: row?.gpu?.disjointFrames ?? null, frameP50Ms: row?.stats?.p50Ms ?? null, ratioToVsync: ratio, attempts: result.attempts });
     state.checks.calibration = { vsyncMs, band: "GPU-time p50 (EXT_disjoint_timer_query_webgl2) 60% to 120% of the vsync interval, Chrome with vsync on, 2 s warm-up and 20 s measured", sweep };
@@ -549,17 +555,6 @@ async function groupH7() {
   state.hypotheses["H20-6"] = { status: v["H20-6"].status, reason: v["H20-6"].reason, metrics: { ...v["H20-6"].metrics, load: state.load } };
 }
 
-/** Applies the H7b post-check to H7 and H20-6 once the uncapped Chrome runs exist. */
-function applyCalibrationPostCheck(chromeUncapped) {
-  const check = postCheck(chromeUncapped.medianP50Ms, hz());
-  state.checks.calibrationPostCheck = check;
-  if (!state.calibrated) return;
-  for (const id of ["H7", "H20-6"]) {
-    const h = state.hypotheses[id];
-    if (h && !["N/A", "INVALID"].includes(h.status)) state.hypotheses[id] = { ...h, ...applyPostCheck({ status: h.status, reason: h.reason, metrics: h.metrics }, check) };
-  }
-}
-
 async function groupH7b() {
   if (!state.load) {
     state.hypotheses.H7b = { status: "N/A", reason: `no load: ${state.calibrationNote}` };
@@ -578,7 +573,6 @@ async function groupH7b() {
   const electron = summary(finals("electron"));
   const chrome = summary(finals("chrome"));
   state.hypotheses.H7b = { status: "REPORTED", reason: "uncapped (--disable-frame-rate-limit --disable-gpu-vsync) throughput, not presentation; no threshold", metrics: { load: state.load, calibrated: state.calibrated, electron, chrome } };
-  applyCalibrationPostCheck(chrome);
 }
 
 // -- H8 -------------------------------------------------------------------------------------------
@@ -806,6 +800,10 @@ try {
     } catch (error) {
       log(`  group ${name} ERROR ${error.stack}`);
       state.checks[`${name}Error`] = run.sanitize(String(error.stack ?? error));
+      if (name === "calibrate" && !state.calibrated) {
+        state.load = null;
+        state.calibrationNote = `the calibrate group failed: ${run.sanitize(String(error.message ?? error))}`;
+      }
       if (/was not idle for/.test(String(error.message))) throw error; // abort the whole run, not just the group
     }
     state.completedGroups.push(name);

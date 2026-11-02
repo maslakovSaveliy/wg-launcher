@@ -503,7 +503,8 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 
 ### Task 17: H7 on the launcher against Chrome (with H8 Chrome side, H9, demo frame samples) — hands-off
 **Files:** `spikes/runtime-compat/run-timing.mjs` (add runtime `launcher`: drives the packaged test-flavor app with
-`--launch-game=<id>` of an entry pointing at the spike scene), `spikes/runtime-compat/results/*.json`, `RESULTS.md`
+`--launch-game=<id>` of an entry pointing at the spike scene; as built, it adds and launches the entry through the test
+hooks `addGame` and `launchGame` over Playwright `_electron`, see HYPOTHESES "Amendments"), `spikes/runtime-compat/results/*.json`, `RESULTS.md`
 (dated Phase 1 section), `docs/compat/matrix.md` (regenerated), ADR-0002 and ADR-0005 status.
 - [x] Wiring check with tiny durations (no result).
 - [x] **STOP: READY_FOR_HANDS_OFF.** Tell the owner: total ≈ 45–60 min (calibration, 3 alternating runs per runtime,

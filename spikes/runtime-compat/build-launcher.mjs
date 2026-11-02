@@ -4,15 +4,16 @@
 //
 // The test flavor accepts the spike server's `http://localhost` scene as a library entry (the prod flavor accepts
 // https only) and carries the test hooks the timing runner drives through Playwright. It is packaged with the
-// release config of apps/desktop (electron-builder.yml) minus three things: no fuses (Playwright's `_electron` needs
-// the Node inspector, which a fused app refuses), no `wglauncher` scheme and its own app id and name, so this build
-// never registers itself as the deep-link handler next to the real app. Frame time of this build is assumed equal to
+// release config of apps/desktop (electron-builder.yml) minus three things: no fuses (Playwright's `_electron` connects
+// through the Node inspector, which the release fuse `nodeCliInspect` turns off), no `wglauncher` scheme and its own app id and name, so this build
+// never registers itself as the deep-link handler next to the real app. It overwrites `apps/desktop/out` with the test
+// flavor (gitignored build output; rebuild before packaging the release app). Frame time of this build is assumed equal to
 // a release build (same Electron 45.0.0 and Chromium); RESULTS.md labels it so. Signed ad hoc like `package:mac`.
 // Prints the path of the .app.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 const out = process.argv[2];
 if (!out || !isAbsolute(out)) {
@@ -20,7 +21,8 @@ if (!out || !isAbsolute(out)) {
   process.exit(2);
 }
 const repo = resolve(import.meta.dirname, "..", "..");
-if (resolve(out).startsWith(repo)) {
+const inside = relative(repo, resolve(out));
+if (inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))) {
   console.error("the output directory must be outside the repository");
   process.exit(2);
 }

@@ -126,8 +126,9 @@ was handled by the launcher's close procedure (AC-13, `docs/specs/architecture.m
   (> 33.3 ms) in 1200, 1200 and 1201 frames. Every run visible and focused throughout.
 - H7b, `--disable-frame-rate-limit --disable-gpu-vsync`: p50 13.9, 14.0, 20.5 ms; p95 14.2, 15.3, 26.5 ms; long frames
   0, 0, 32. The third run was slower; see the findings on GPU backlog and heat.
-- No verdict: H7 compares Electron p95 with a calibrated Chrome p95 in alternating E, C runs and applies the noise rule
-  to Chrome's spread. Both are deferred to Phase 1 (owner decision 2026-10-25).
+- No verdict in Phase 0: H7 compares Electron p95 with a calibrated Chrome p95 in alternating E, C runs and applies the
+  noise rule to Chrome's spread. Both were deferred to Phase 1 (owner decision 2026-10-25); the Phase 1 verdict on the
+  launcher is PASS, see "Phase 1: hands-off timing runs (2026-11-02)".
 
 ### H8: cold and warm start
 
@@ -410,8 +411,9 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 
 - **Machine and state:** the dev Mac of "Run" (same OS, display 60.0024 Hz), on AC power, screen unlocked, no thermal or
   performance warning recorded (`pmset -g therm`) in any run, no keyboard or trackpad input during any measured run. The
-  Claude desktop app and its agent processes were running (sum of the eight busiest processes about 92% CPU at the start
-  of the second run, WindowServer 36% of it). Chrome **156.0.8078.79**, so the major matches Electron 45's Chromium 156:
+  Claude desktop app and its agent processes were running: `checks.startConditions.topCpuPercentSum` (the eight busiest
+  processes, sampled right after the runner's own Electron environment launch) is 86 in run 1 and 92 in run 2; which
+  processes they were comes from the runner's console only (deviation 26). Chrome **156.0.8078.79**, so the major matches Electron 45's Chromium 156:
   no "version mismatch". Runner on Node 24.13.0; Electron side as below.
 - **The launcher build:** `node build-launcher.mjs <dir outside the repository>` packages the test flavor of
   `apps/desktop` with the release builder config minus fuses and the `wglauncher` scheme (amendment "H7 measures the
@@ -442,6 +444,9 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
   the GPU busy for most of each frame, not the headroom at a higher clock; amendment 2), and every runtime presents at
   the 60 Hz vsync (p50 16.7 ms), so the comparison is about dropped and late frames at that rate. One machine, one
   display; nothing is extrapolated. The test-flavor build stands in for the release build (Assumed).
+- **Launcher profile:** the three launcher runs of run 2 share one userData directory and one library entry (the first
+  launch adds it, later launches reuse it), while every Chrome run starts with a fresh profile. The scene stores nothing,
+  so this is assumed not to change frame time. Assumed
 - **H8** (run 1, spike app against Chrome, spawn to first frame, ms): spike app cold 420, 303, 308 (median 308), warm 291,
   302, 301 (median 301); Chrome cold 591, 470, 455 (median 470), warm 486, 406, 422 (median 422). All 12 launches valid.
   Reported, no threshold; cold means an empty profile, the OS file cache is not flushed.
@@ -522,6 +527,17 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 24. **Phase 1: a stale label in run 2's aggregate.** `hypotheses.H7.metrics.loadSource` says "calibrated in Chrome
     (uncapped)"; the calibration was the GPU-timer one with vsync on, as `checks.calibration.band` and the sweep record.
     The runner's text was fixed after the run; the result file is left as written.
+25. **Phase 1: a wrong reason in run 1's aggregate.** `hypotheses.H7.reason` says "the calibrate group was not run in this
+    invocation"; the group ran and threw (`checks.calibrateError`). The runner now records the failure as the reason; the
+    file is left as written.
+26. **Phase 1: other processes running.** HYPOTHESES section 2 asks for no other heavy apps; the Claude desktop app and its
+    agent processes ran during both runs (`topCpuPercentSum` 86 and 92, see "Phase 1"). They ran the same way for every
+    runtime and alternation spreads drift, but their effect is not measured.
+27. **Phase 1: validity and runner fixes after the runs** (from the task review): a run with fewer frame deltas than a
+    quarter of the vsync rate is INVALID, calibration needs as many GPU samples, the GPU timer drops every result read
+    after a disjoint event, the H7b group no longer post-checks the calibration, and the launcher rows keep their window
+    sizing and readiness. Re-applied to the committed files, the new validity rule changes nothing: every H7 run of run 2
+    has 1 199 to 1 201 deltas and stays valid; only run 1's calibration row (0 deltas) would be INVALID.
 
 ## Findings and gotchas
 

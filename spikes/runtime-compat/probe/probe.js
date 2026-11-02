@@ -369,9 +369,10 @@ function frameStats(deltas, vsyncMs) {
 
 const vsyncOf = (hz) => (hz ? 1000 / hz : null);
 
-// GPU time of each frame's draw calls with EXT_disjoint_timer_query_webgl2 (the H7 calibration fallback, HYPOTHESES
-// "Amendments" 2026-11-02). One TIME_ELAPSED query per frame; results are read when available, and a frame whose
-// result arrives while the GPU reports a disjoint event is dropped. Only frames begun inside the measured window count.
+// The TIME_ELAPSED_EXT interval around each frame's draw calls, as the browser's GPU backend reports it, with
+// EXT_disjoint_timer_query_webgl2 (the H7 calibration fallback, HYPOTHESES
+// "Amendments" 2026-11-02; on ANGLE Metal it includes queueing once the GPU is saturated). One query per frame;
+// results are read when available. Only frames begun inside the measured window count.
 function gpuTimer(gl) {
   const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
   if (!ext) return { begin() {}, end() {}, poll() {}, finish: async () => ({ available: false }) };
@@ -390,9 +391,14 @@ function gpuTimer(gl) {
       active = null;
     },
     poll() {
-      while (pending.length && gl.getQueryParameter(pending[0].query, gl.QUERY_RESULT_AVAILABLE)) {
-        const { query, measured } = pending.shift();
-        if (gl.getParameter(ext.GPU_DISJOINT_EXT)) disjoint++;
+      // Reading GPU_DISJOINT_EXT clears it, so it is read once per poll; a disjoint event makes every result read in
+      // this poll unreliable, so all of them are dropped (and counted).
+      const ready = [];
+      while (pending.length && gl.getQueryParameter(pending[0].query, gl.QUERY_RESULT_AVAILABLE)) ready.push(pending.shift());
+      if (!ready.length) return;
+      const lost = gl.getParameter(ext.GPU_DISJOINT_EXT);
+      for (const { query, measured } of ready) {
+        if (lost) disjoint++;
         else if (measured) samples.push(gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6);
         gl.deleteQuery(query);
       }
