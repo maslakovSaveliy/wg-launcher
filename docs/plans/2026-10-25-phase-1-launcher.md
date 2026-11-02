@@ -4,6 +4,8 @@
 > one main agent implemented each task with one independent review (owner decision, 2026-10-30). Steps use `- [ ]`.
 > Approved by the owner on 2026-10-25; committed on branch `phase-1-launcher` together with the Prerequisite below.
 > Task 1 and every later task start only on the owner's explicit word.
+> **Status: done.** All tasks complete; merged to `main` through pull requests #2 (Tasks 1 to 7) and #3 (Tasks 8 to 18,
+> merge commit 59ad0bc, 2026-11-02).
 
 **Goal:** A working WGLauncher on macOS arm64: add an HTTPS URL → card in SQLite → own game window with its own
 persistent session → progress survives close and reopen → export a `.wgsnap` → restore into a clean session → same

@@ -13,7 +13,8 @@ rules apply to humans and AI agents.
 - Security problems are never reported in public issues or pull requests. Use the private channel described in
   [SECURITY.md](SECURITY.md).
 - Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
-- Phase 0 contains no launcher client code and none may be added. Phase 1 gets its own plan.
+- Phase 0 (foundation) and Phase 1 (the launcher MVP) are done and merged to `main`. The next phase starts only with its
+  own plan in `docs/plans/`, on the owner's word.
 
 ## Setup
 
@@ -42,7 +43,7 @@ The command table is in the [README](README.md#quick-start-for-contributors). Al
 4. When something fails, find the root cause: reproduce it, test one hypothesis at a time. No guess-and-retry loops.
 5. Verify before you claim. Run the command, read the real output, and paste it into the pull request.
 6. Spikes are throwaway experiments. They live in `spikes/`, are labeled THROWAWAY, keep their own lockfiles and stay
-   outside the pnpm workspace. Phase 1 starts no new spikes.
+   outside the pnpm workspace. Phase 1 started no new spikes; a new spike needs the owner's approval.
 
 ### Commits
 

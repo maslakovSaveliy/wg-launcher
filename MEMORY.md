@@ -8,7 +8,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 ## Decisions
 
 - Phase 0 plan [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md) (specs, docs,
-  rules, tooling, runtime spike; no client code) is merged to `main` at d5a4812 (Phase 1 plan "Context"). ADRs in
+  rules, tooling, runtime spike; no client code) is merged to `main` at d5a4812 (Phase 1 plan "Context"). Phase 1 (the
+  launcher MVP) is merged to `main` too: part 1 in pull request #2 (d644459), part 2 in #3 (merge commit 59ad0bc,
+  2026-11-02, owner). The next phase has no plan yet and starts only on the owner's word. ADRs in
   [docs/adr/](docs/adr/), index [docs/README.md](docs/README.md): 0001 own small client (Accepted); 0002 Electron 45.0.0
   (Accepted 2026-10-25 under the H7 condition below); 0003 Rust deferred, Go not adopted (Accepted); 0004 toolchain and
   layout (Accepted; Electron rows reopen with 0002); 0005 quiescent-window save transfer (Accepted, same condition);

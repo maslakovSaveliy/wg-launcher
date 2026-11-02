@@ -65,7 +65,7 @@ Real runs only. A platform without a row is not tested.
 | Document | Content |
 | --- | --- |
 | [2026-10-24-phase-0-foundation.md](plans/2026-10-24-phase-0-foundation.md) | The Phase 0 plan (done) |
-| [2026-10-25-phase-1-launcher.md](plans/2026-10-25-phase-1-launcher.md) | The Phase 1 plan, the launcher MVP (done 2026-11-02) |
+| [2026-10-25-phase-1-launcher.md](plans/2026-10-25-phase-1-launcher.md) | The Phase 1 plan, the launcher MVP (done and merged to `main` 2026-11-02) |
 
 ## Runtime spike and test game
 

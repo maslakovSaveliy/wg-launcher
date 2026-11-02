@@ -10,11 +10,11 @@ codename, and `wglauncher://` the deep-link scheme.
 
 ## Status
 
-**Phase 1, the launcher MVP, is done in code and tests; there is no release.** You can build the app from source and
-package an ad-hoc-signed macOS arm64 build locally; there is no installer, no signed or notarized build and no auto-update.
-Phase 0 (specifications, decision records, rules, tooling and a runtime evaluation) and Phase 1
+**Phase 1, the launcher MVP, is done and merged to `main` (2026-11-02); there is no release.** You can build the app
+from source and package an ad-hoc-signed macOS arm64 build locally; there is no installer, no signed or notarized build
+and no auto-update. Phase 0 (specifications, decision records, rules, tooling and a runtime evaluation) and Phase 1
 ([its plan](docs/plans/2026-10-25-phase-1-launcher.md)) are done: add an HTTPS link, play the game in its own window,
-export a snapshot of its saves and restore it in another entry with the same progress.
+export a snapshot of its saves and restore it in another entry with the same progress. The next phase has no plan yet.
 
 | Exists | Does not exist yet |
 | --- | --- |
