@@ -345,4 +345,21 @@ transfer).
 
 ## 6. Amendments
 
-None yet. Any change after the first run is added here with its date, the reason and the old and new text.
+Any change after the first run is added here with its date, the reason and the old and new text.
+
+### 2026-11-02: H7 measures the launcher (Phase 1)
+
+- **Reason:** the owner accepted ADR-0002 and ADR-0005 on the condition that Phase 1 re-runs H7 on the launcher with
+  this method. The hands-off runs had not been made yet; this amendment is written before any H7 run.
+- **Old text (H7, "Runtime"):** "Electron 45.0.0 against Chrome (H19)". The runner measured the spike app
+  (`electron/main.mjs --mode=frametime`).
+- **New text:** "Electron 45.0.0, as the WGLauncher launcher, against Chrome (H19)". The Electron side of H7 is the
+  packaged test-flavor launcher (`build-launcher.mjs`: the release builder config without fuses and without the
+  `wglauncher` scheme). The scene page is a library entry opened in a game window (sandbox and context isolation on,
+  no preload) and driven through Playwright `_electron`, as Chrome is driven through Playwright. The game window opens
+  hidden and is shown after its first paint, so the runner opens the entry on the spike server's blank page, sizes the
+  window to 1280 x 720 CSS px, waits until the page is visible and focused, and only then navigates it to the scene
+  (as the Chrome `--app` runner already does). The test flavor is used because it accepts the `http://localhost` scene;
+  its frame time is assumed equal to a release build (same Electron and Chromium). Assumed
+- **Unchanged:** the scene, its calibration in Chrome, the viewport, the alternating runs, the noise rule, the PASS and
+  FAIL thresholds and the validity rules. H8, H9 and the demo samples still run the spike app.

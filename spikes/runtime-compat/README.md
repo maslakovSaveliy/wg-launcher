@@ -19,6 +19,7 @@ results are kept. Nothing here is reused by the launcher.
 | `electron/` | Electron 45.0.0 spike app with its own `package-lock.json` (npm, outside the pnpm workspace) |
 | `common.mjs`, `run-compare.mjs`, `groups/` | Task 6: shared helpers; the non-timing checks of Chrome (Playwright), Chrome `--app`, the Safari WebKit proxy and the public demos |
 | `run-timing.mjs`, `timing-logic.mjs` | Task 6: the hands-off measurements (frame time calibration and H7, cold and warm start, memory, demo frame samples), built but not run: deferred to Phase 1 |
+| `build-launcher.mjs` | Phase 1 Task 17: packages the test-flavor WGLauncher (no fuses, no `wglauncher` scheme, own app id) into a directory outside the repository; H7 measures it (HYPOTHESES "Amendments") |
 | `demos.json` | The six public demos of H21, fixed before any demo run |
 | `matrix.mjs` | Generates `docs/compat/matrix.md` from `results/*.json` (see `docs/compat/methodology.md`) |
 | `results/` | Committed result JSON: `<runtime>-<version>-<UTC timestamp>.json` (probe payloads and run aggregates) |
@@ -73,7 +74,8 @@ the capability proxy. Both runners reuse `electron/node_modules` (Playwright, aj
 ```sh
 node run-compare.mjs                              # chrome, chromium, app, safari, demos: about 6 minutes, windows appear
 node matrix.mjs > ../../docs/compat/matrix.md     # regenerate the matrix (run twice and diff: identical)
-node run-timing.mjs --smoke --runs=1              # wiring check of the timing runner with tiny durations (scratch results)
+node build-launcher.mjs <dir outside the repo>     # the launcher H7 measures; prints the path of its .app
+node run-timing.mjs --launcher-app=<.app> --smoke --runs=1   # wiring check with tiny durations (scratch results)
 ```
 
 - `run-compare.mjs` opens the probe in the owner's Safari (a new tab in the running window) and closes only the tabs it opened

@@ -1,6 +1,7 @@
 // THROWAWAY spike runner (runtime-compat, Task 6): the hands-off measurements.
 //
-//   node run-timing.mjs [--only=calibrate,h7,h8,h9,demos,h7b] [--load=<n>] [--runs=3] [--cooldown=30]   (default: all but h7b)
+//   node run-timing.mjs --launcher-app=<path to the .app from build-launcher.mjs>
+//                       [--only=calibrate,h7,h8,h9,demos,h7b] [--load=<n>] [--runs=3] [--cooldown=30]   (default: all but h7b)
 //                       [--min-idle=30] [--allow-battery] [--smoke]
 //
 // Needs the machine idle: window visible, unobscured and in the foreground, nobody touching keyboard or
@@ -20,7 +21,8 @@
 //   calibrate  H7 calibration: Chrome with vsync and frame limit off, 2 s warm-up + 20 s measured (H7b
 //              conditions); load whose p50 is 60-120% of the vsync interval. Only a load found here counts as
 //              calibrated; without one, H7, H20-6 and H7b are N/A (or INVALID with a load given by --load).
-//   h7         Electron (E), Chrome via Playwright (C), Chrome --app (A); runs alternate E, C, A, E, C, A, ...
+//   h7         the launcher (L: the packaged test-flavor WGLauncher, the scene as a library entry in a game window;
+//              Phase 1, HYPOTHESES "Amendments"), Chrome via Playwright (C), Chrome --app (A); runs alternate L, C, A, ...
 //   h8         spawn to first frame, 3 cold + 3 warm launches each of Electron and Chrome (default load 512)
 //   h9         memory after 60 s of the scene, one run each for Electron and Chrome (owner-approved), same external definition
 //   demos      the six public demos (H21), one 20 s run per demo per runtime in Electron and Chrome, indicative only
@@ -28,7 +30,7 @@
 //              calibration (without it the calibration run itself, made under the H7b conditions, is the only check)
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { runDemoChrome, runDemoElectron } from "./groups/demo-lib.mjs";
@@ -53,6 +55,7 @@ import {
   memoryOfTree,
   onBattery,
   portListeners,
+  playwrightCore,
   processList,
   processesMatching,
   screenLocked,
@@ -82,6 +85,7 @@ const { values: opts } = parseArgs({
     smoke: { type: "boolean", default: false },
     "smoke-ignore-environment": { type: "boolean", default: false },
     "keep-temp": { type: "boolean", default: false },
+    "launcher-app": { type: "string" },
   },
   strict: true,
 });
@@ -115,6 +119,12 @@ const SPIKE_PORT = Number(opts["spike-port"]);
 const environmentReasons = (outcome) => (IGNORE_ENV ? [] : realEnvironmentReasons(outcome));
 
 // ---- Preflight ---------------------------------------------------------------------------------
+
+const LAUNCHER_APP = opts["launcher-app"];
+if (groups.includes("h7") && !(LAUNCHER_APP && existsSync(join(LAUNCHER_APP, "Contents", "MacOS")))) {
+  console.error("h7 measures the launcher: pass --launcher-app=<path to the .app that build-launcher.mjs printed>");
+  process.exit(2);
+}
 
 if (!SMOKE && screenLocked()) {
   console.error("The macOS screen is locked: no window can be visible and focused. Unlock it and rerun.");
@@ -368,7 +378,69 @@ async function chromeAppFrame({ load, uncapped = false, duration = DURATION, war
   }
 }
 
-const RUNNERS = { electron: electronFrame, chrome: chromeFrame, "chrome-app": chromeAppFrame };
+// The launcher keeps one userData directory and one library entry per runner invocation: the first launch adds the
+// entry (the spike server's blank storage page, so the game window opens on the scene's origin), later launches
+// reuse it. Every run is a fresh launch of the app, as Electron's runs are fresh launches of the spike app.
+let launcherProfile = null;
+
+function launcherExecutable() {
+  const dir = join(LAUNCHER_APP, "Contents", "MacOS");
+  const [binary] = readdirSync(dir);
+  return join(dir, binary);
+}
+
+async function launcherFrame({ load, uncapped = false, duration = DURATION, warmup = WARMUP, label }) {
+  if (uncapped) throw new Error("the launcher is measured capped only (H7)");
+  launcherProfile ??= { dir: mkdtempSync(join(run.tmp, "launcher-profile-")), gameId: null };
+  const { dir } = launcherProfile;
+  const { _electron } = playwrightCore();
+  const app = await _electron.launch({ executablePath: launcherExecutable(), args: [`--user-data-dir=${dir}`], env: { ...process.env, WG_USER_DATA: dir }, timeout: 60000 });
+  const child = app.process();
+  children.add(child);
+  try {
+    const electronVersion = await app.evaluate(() => process.versions.electron);
+    launcherProfile.gameId ??= await app.evaluate((_electron, url) => globalThis.__wgTest.addGame(url, "H7 scene"), run.spikeUrl("/storage.html", {}, { token: false }));
+    const { gameId } = launcherProfile;
+    const launched = await app.evaluate((_electron, id) => globalThis.__wgTest.launchGame(id), gameId);
+    if (!launched?.ok) throw new Error(`launch refused: ${JSON.stringify(launched)}`);
+    let page = null;
+    for (let i = 0; i < 300 && !page; i++) {
+      page = app.windows().find((p) => p.url().includes("/storage.html")) ?? null;
+      if (!page) await sleep(100);
+    }
+    if (!page) throw new Error("the game window did not appear within 30 s");
+    // The game window opens hidden and is shown after its first paint. The scene is loaded only once the window is
+    // visible, focused and 1280x720 CSS px, so the probe's first visibility entry is already visible and focused.
+    const sizing = await app.evaluate(({ app: electronApp, BrowserWindow, webContents }, { id, width, height }) => {
+      const contents = webContents.fromId(globalThis.__wgTest.gameWebContentsId(id));
+      const win = contents ? BrowserWindow.fromWebContents(contents) : null;
+      if (!win) return null;
+      win.setContentSize(width, height);
+      electronApp.focus({ steal: true });
+      win.focus();
+      return win.getContentBounds();
+    }, { id: gameId, width: WIDTH, height: HEIGHT });
+    let ready = null;
+    for (let i = 0; i < 100; i++) {
+      ready = await page.evaluate("({ visible: document.visibilityState === 'visible', focus: document.hasFocus(), w: innerWidth, h: innerHeight })").catch(() => null);
+      if (ready?.visible && ready.focus && ready.w === WIDTH && ready.h === HEIGHT) break;
+      await sleep(200);
+    }
+    await sleep(300);
+    const mark = run.mark();
+    await page.goto(run.spikeUrl("/", { mode: "frametime", runtime: "launcher", version: electronVersion, load, duration, warmup, vsyncHz: hz(), label }));
+    const waitState = await waitPage(page, (duration + warmup) * 4 + 120000);
+    if (waitState.state !== "posted") return { payload: null, file: null, error: `probe state ${waitState.state} ${waitState.error ?? ""}`, sizing, ready };
+    const posted = await run.waitResult(mark, { timeoutMs: 10000 });
+    return { payload: posted.data, file: posted.file, error: null, sizing, ready };
+  } finally {
+    const closed = await Promise.race([app.close().then(() => true, () => false), sleep(20000).then(() => false)]);
+    if (!closed) child.kill("SIGKILL");
+    children.delete(child);
+  }
+}
+
+const RUNNERS = { electron: electronFrame, launcher: launcherFrame, chrome: chromeFrame, "chrome-app": chromeAppFrame };
 
 /** One slot of frame-time runs (see runSlot): every attempt is recorded, a failed launch is a recorded attempt. */
 function slot(runtime, label, params, { cooldownMs = COOLDOWN_MS } = {}) {
@@ -437,11 +509,11 @@ async function groupH7() {
     state.hypotheses["H20-6"] = na;
     return;
   }
-  const order = ["electron", "chrome", "chrome-app"];
+  const order = ["launcher", "chrome", "chrome-app"];
   const passes = [];
-  state.checks.h7 = { order: "E, C, A alternating (Electron, Chrome via Playwright, Chrome --app)", load: state.load, calibrated: state.calibrated, passes };
+  state.checks.h7 = { order: "L, C, A alternating (the launcher: packaged test-flavor WGLauncher; Chrome via Playwright; Chrome --app)", load: state.load, calibrated: state.calibrated, passes };
   async function pass(runsWanted, tag) {
-    const slots = { electron: [], chrome: [], "chrome-app": [] };
+    const slots = { launcher: [], chrome: [], "chrome-app": [] };
     passes.push({ tag, runsWanted, slots });
     for (let i = 1; i <= runsWanted; i++) {
       for (const runtime of order) {
@@ -451,10 +523,10 @@ async function groupH7() {
       }
     }
     const finals = (rt) => slots[rt].map((s) => s.final).filter(Boolean);
-    return { electron: summary(finals("electron")), chrome: summary(finals("chrome")), chromeApp: summary(finals("chrome-app")) };
+    return { launcher: summary(finals("launcher")), chrome: summary(finals("chrome")), chromeApp: summary(finals("chrome-app")) };
   }
   const verdicts = (s, runsWanted, rerun) => ({
-    H7: h7Verdict({ name: "Electron", kind: "electron", s: s.electron, chrome: s.chrome, runsWanted, rerun, calibrated: state.calibrated, calibrationNote: state.calibrationNote }),
+    H7: h7Verdict({ name: "Electron (the launcher, test-flavor build)", kind: "electron", s: s.launcher, chrome: s.chrome, runsWanted, rerun, calibrated: state.calibrated, calibrationNote: state.calibrationNote }),
     "H20-6": h7Verdict({ name: "Chrome --app", kind: "chrome-app", s: s.chromeApp, chrome: s.chrome, runsWanted, rerun, calibrated: state.calibrated, calibrationNote: state.calibrationNote }),
   });
   let runsWanted = RUNS;
