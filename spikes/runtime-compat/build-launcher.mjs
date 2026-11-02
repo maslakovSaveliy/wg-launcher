@@ -13,7 +13,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const out = process.argv[2];
 if (!out || !isAbsolute(out)) {
@@ -22,7 +22,8 @@ if (!out || !isAbsolute(out)) {
 }
 const repo = resolve(import.meta.dirname, "..", "..");
 const inside = relative(repo, resolve(out));
-if (inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))) {
+// Outside means a path that leaves the repository (`..` or `../...`); the repository itself and anything below it are refused.
+if (!(inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside))) {
   console.error("the output directory must be outside the repository");
   process.exit(2);
 }

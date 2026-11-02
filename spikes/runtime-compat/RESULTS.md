@@ -441,7 +441,8 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
   Chrome's p95 spread is 6.6% (below 15%), so no 5-run rerun. **H7: PASS**, the launcher's p95 17.70 ms ≤ 18.10 × 1.15 =
   20.81 ms (ratio 0.978). H20-6 reported: ratio 1.000.
 - **What the verdict does not say:** the scene is calibrated only as far as the GPU timer allows on this Mac (it shows
-  the GPU busy for most of each frame, not the headroom at a higher clock; amendment 2), and every runtime presents at
+  the GPU busy for most of each frame, not the headroom at a higher clock, and loads 128 and 256 would also have read
+  inside the band; amendment 2), and every runtime presents at
   the 60 Hz vsync (p50 16.7 ms), so the comparison is about dropped and late frames at that rate. One machine, one
   display; nothing is extrapolated. The test-flavor build stands in for the release build (Assumed).
 - **Launcher profile:** the three launcher runs of run 2 share one userData directory and one library entry (the first

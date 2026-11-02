@@ -70,6 +70,8 @@ export function ratioToVsync(p50Ms, hz) {
   return typeof p50Ms === "number" && hz ? p50Ms / (1000 / hz) : null;
 }
 
+// postCheck and applyPostCheck are no longer called: the H7b group stopped post-checking the calibration when it
+// moved to the GPU timer (HYPOTHESES "Amendments" 2026-11-02). They stay for the record of the Phase 0 method.
 /** H7b post-check: does Chrome's uncapped median p50 land in the calibration band? */
 export function postCheck(chromeUncappedMedianP50Ms, hz) {
   const ratio = ratioToVsync(chromeUncappedMedianP50Ms, hz);

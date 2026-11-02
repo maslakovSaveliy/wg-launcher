@@ -280,7 +280,7 @@ function rowOf(runtime, label, outcome, extra = {}) {
     scene: payload ? { renderer: payload.data.scene.renderer, softwareRenderer: payload.data.scene.softwareRenderer, load: payload.data.settings.load, drawingBuffer: [payload.data.scene.drawingBufferWidth, payload.data.scene.drawingBufferHeight], dpr: payload.data.scene.devicePixelRatio } : null,
     visibility: payload ? { everHidden: payload.page.visibility.everHidden, everUnfocused: payload.page.visibility.everUnfocused } : null,
     vsyncHz: payload?.data?.vsync?.hostReportedHz ?? null,
-    // The launcher's window sizing and readiness before the scene was loaded (absent for other runtimes).
+    // Window sizing before the scene was loaded (the launcher and Chrome --app) and the launcher's readiness check.
     ...(outcome.value.sizing !== undefined ? { sizing: outcome.value.sizing, ready: outcome.value.ready } : {}),
     ...extra,
   };

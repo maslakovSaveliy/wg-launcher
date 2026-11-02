@@ -93,7 +93,8 @@ viewport is 1280 x 720 and a launch whose viewport differs is INVALID.
   median frame time in Chrome with `--disable-gpu-vsync --disable-frame-rate-limit`, cannot be read in Chrome 156, which
   does not wait for the GPU in that mode. Verified (2026-11-02, RESULTS.md "Phase 1"). On this Mac the timer reading tracks
   the GPU's busy time at its chosen clock and includes queueing once saturated, so "calibrated" means the GPU is busy for
-  most of each frame, not a fixed cost. The 60% and 120% bounds are Assumed (HYPOTHESES.md). Without a calibrated load H7 is
+  most of each frame, not a fixed cost; the band rejects only the lightest scenes (load 64 read 46%, loads 128 and 256
+  already 65% and 74%). The 60% and 120% bounds are Assumed (HYPOTHESES.md). Without a calibrated load H7 is
   N/A (nothing in band) or INVALID (a load that was not calibrated in the same session).
 - **Runs.** 2 s warm-up discarded, then 20 s measured; three valid runs per runtime, alternating between runtimes (Electron,
   Chrome, Chrome `--app`, Electron, ...) with a cooldown between runs to spread thermal drift. Each statistic (p50, p95, long

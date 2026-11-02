@@ -391,10 +391,12 @@ Any change after the first run is added here with its date, the reason and the o
   - The H7b sentence "It doubles as the calibration condition above" no longer holds: H7b is now a reported variant only.
   - The old calibration text verbatim: "In Chrome with the frame-rate limit and vsync disabled (the H7b conditions below),
     the scene's p50 frame time must be between 60% and 120% of the vsync interval."
-  - The "uncalibrated or saturated scene" rule still applies, read through the timer. A light load falls below the band:
-    with vsync on, load 64 read 7.66 ms (46%), load 128 10.80 ms (65%) and load 256 12.25 ms (74%), so the reading rises
-    with the load until saturation. Verified (2026-11-02, scratch runs, 20 s each, frame p50 16.7 ms). An overloaded scene
-    reads above 120% (load 768, see above) and the ladder moves down. "Calibrated" therefore means the GPU is busy for 60%
-    or more of each frame at the clock it chose, not a fixed cost per frame.
+  - The "uncalibrated or saturated scene" rule applies only weakly through the timer. With vsync on, load 64 read
+    7.66 ms (46%, below the band), load 128 10.80 ms (65%) and load 256 12.25 ms (74%): the reading rises with the load,
+    but loads 128 and 256, two to four times lighter than the chosen 512, already read inside the band, so it rejects
+    only the lightest scenes. An overloaded scene reads above 120% (load 768, see above) and the ladder moves down.
+    "Calibrated" therefore means the GPU is busy for 60% or more of each frame at the clock it chose, not a fixed cost per
+    frame. Verified (2026-11-02, scratch runs not committed: the probe in `frametime` mode with `gpuTimer=1` and
+    `load=64`, `128` and `256` in Chrome via Playwright, vsync on, 2 s warm-up and 20 s measured; frame p50 16.7 ms)
   - The reading is the `TIME_ELAPSED_EXT` interval around the draw calls as ANGLE Metal reports it, not only the draw
     calls' own GPU work: at load 768 it exceeded the frame mean.
