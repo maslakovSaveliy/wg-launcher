@@ -733,6 +733,10 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   exist". `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` restored it and removed
   1217. What removed 1248 is unknown [U]. [V, 2026-11-02, run locally]
 
+- While a `BrowserWindow` closes, its `webContents` can be destroyed while `window.isDestroyed()` is still false, so
+  `window.webContents.getURL()` throws "Object has been destroyed"; a probe over `BrowserWindow.getAllWindows()` checks
+  `window.webContents.isDestroyed()` too. [V, 2026-11-02, CI run 41436677514 on macos-latest, `e2e/shortcut.spec.ts`]
+
 ## Open questions
 
 - Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (party and governing law are filled in; whether the
