@@ -3,7 +3,8 @@
 **Status:** Accepted, together with ADR-0002 and under its Phase 1 H7 condition. This ADR's own evidence (H14, variants
 a to d) is complete; but a Phase 1 H7 FAIL reopens ADR-0002 and this ADR, because the alternative it points to (Chrome
 `--app` with CDP) offers no preload, `ses.protocol.handle` or `webContents.debugger` on a `BrowserWindow`, so decisions
-1, 2, 4 and 6 below would not hold there. Assumed (reasoning; the H20 checks did not test a save mechanism)
+1, 2, 4 and 6 below would not hold there. Assumed (reasoning; the H20 checks did not test a save mechanism). The condition is
+met: H7 on the launcher is PASS. Verified (2026-11-02, ADR-0002 "Phase 1 outcome")
 
 **Date:** 2026-10-24
 
@@ -154,5 +155,5 @@ Assumed
 
 ## Action items
 
-- [ ] Phase 1 implements save-transfer.md sections 4 to 6 test-first, including the AC-7, AC-8 and AC-24 tests and the
-  MUST tests listed there (agent).
+- [x] Phase 1 implements save-transfer.md sections 4 to 6 test-first, including the AC-7, AC-8 and AC-24 tests and the
+  MUST tests listed there (agent). Done in Phase 1 Tasks 12 to 15 (PRD section 16.1).

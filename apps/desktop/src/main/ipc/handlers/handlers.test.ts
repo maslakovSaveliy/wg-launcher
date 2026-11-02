@@ -1,0 +1,790 @@
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { IPC_CONTRACT, type IpcChannel, type IpcResult, uuidv7 } from "@wg-launcher/shared";
+import { describe, expect, it, vi } from "vitest";
+import { createCovers } from "../../covers.js";
+import { createRepos } from "../../db/repos/index.js";
+import type { Snapshot } from "../../db/repos/snapshots.js";
+import { dbOptions, fakeClock, openDb, openTestDb, tempDir } from "../../db/testing.js";
+import type { ConfirmSpec, OpenFileSpec, SaveFileSpec } from "../../dialogs.js";
+import type { Flavor } from "../../flavor.js";
+import { LockManager } from "../../games/locks.js";
+import { createHandlers } from "./index.js";
+
+const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+
+function setUp(
+  options: {
+    flavor?: Flavor;
+    confirm?: boolean[];
+    files?: Array<string | null>;
+    shortcutsSupported?: boolean;
+    saveTo?: Array<string | null>;
+  } = {},
+) {
+  const dir = tempDir();
+  const clock = fakeClock();
+  const db = openTestDb(dir, clock);
+  const repos = createRepos(db);
+  const coversDir = join(dir, "covers");
+  const tmpDir = join(dir, "tmp");
+  mkdirSync(coversDir);
+  mkdirSync(tmpDir, { recursive: true });
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() };
+  const locks = new LockManager({ log });
+  const answers = [...(options.confirm ?? [])];
+  const files = [...(options.files ?? [])];
+  const saves = [...(options.saveTo ?? [])];
+  const dialogs = {
+    confirm: vi.fn(async (_spec: ConfirmSpec) => answers.shift() ?? false),
+    openFile: vi.fn(async (_spec: OpenFileSpec): Promise<string | null> => files.shift() ?? null),
+    saveFile: vi.fn(async (_spec: SaveFileSpec): Promise<string | null> => saves.shift() ?? null),
+  };
+  const snapshots = {
+    frames: vi.fn(),
+    export: vi.fn(),
+    restore: vi.fn(),
+    verify: vi.fn(),
+    recover: vi.fn(),
+    deleteSaves: vi.fn(),
+    clearCache: vi.fn(async (_gameId: string) => ({ ok: true as const, data: {} })),
+    sendProgress: vi.fn(),
+    fileOf: (path: string) => join(dir, path),
+    copy: vi.fn(async (_from: string, _to: string) => undefined),
+  };
+  const shortcuts = {
+    supported: options.shortcutsSupported ?? true,
+    create: vi.fn(async (_game: { id: string; title: string }) => ({
+      ok: true as const,
+      data: { created: true },
+    })),
+  };
+  const runtime = {
+    state: vi.fn(() => "idle" as const),
+    launch: vi.fn(async () => ({ ok: true as const, data: { window: "opened" as const } })),
+    focus: vi.fn(() => false),
+  };
+  const handlers = createHandlers({
+    library: { repos, runtime, locks },
+    dialogs,
+    covers: createCovers({ coversDir, tmpDir }),
+    shortcuts,
+    snapshots,
+    flavor: options.flavor ?? "test",
+    log,
+    newId: () => uuidv7(clock.now),
+  });
+  const file = (name: string, bytes: Uint8Array) => {
+    const path = join(dir, name);
+    writeFileSync(path, bytes);
+    return path;
+  };
+  return {
+    dir,
+    db,
+    repos,
+    locks,
+    dialogs,
+    runtime,
+    shortcuts,
+    handlers,
+    coversDir,
+    clock,
+    file,
+    log,
+    snapshots,
+  };
+}
+
+/** Checks the result against the channel's response schema and returns its data. */
+function dataOf<C extends IpcChannel>(channel: C, result: IpcResult<C>) {
+  if (!result.ok) throw new Error(`${channel}: ${result.code} ${result.message}`);
+  return IPC_CONTRACT[channel].response.parse(result.data) as typeof result.data;
+}
+
+describe("library:add (architecture.md section 12, AC-17)", () => {
+  it("stores url.href, defaults the title to the host name and returns the card with honest badges", async () => {
+    const { handlers } = setUp();
+    const card = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://Example.com" }),
+    );
+    expect(card).toMatchObject({
+      url: "https://example.com/",
+      title: "example.com",
+      coverUrl: null,
+      lastLaunchedAt: null,
+      playtimeMs: 0,
+      state: "idle",
+      needsRecovery: false,
+    });
+    expect(card.badges).toEqual([
+      { id: "by-link" },
+      { id: "needs-internet" },
+      { id: "compat-not-verified" },
+    ]);
+    const list = dataOf("library:list", await handlers["library:list"]({}));
+    expect(list).toEqual({ library: "ready", cards: [card], canCreateShortcuts: true });
+  });
+
+  it.each([
+    "ftp://example.com/",
+    "http://example.com/",
+    " https://example.com/",
+    "javascript:alert(1)",
+    // secretlint-disable-next-line
+    "https://user:pass@example.com/",
+  ])("refuses %j with URL_NOT_ALLOWED and adds nothing", async (url) => {
+    const { handlers, repos } = setUp();
+    expect(await handlers["library:add"]({ url })).toMatchObject({
+      ok: false,
+      code: "URL_NOT_ALLOWED",
+    });
+    expect(repos.games.list()).toEqual([]);
+  });
+
+  it("accepts development origins only in the dev and test flavors", async () => {
+    const test = setUp({ flavor: "test" });
+    expect((await test.handlers["library:add"]({ url: "http://127.0.0.1:4317/" })).ok).toBe(true);
+    const prod = setUp({ flavor: "prod" });
+    expect(await prod.handlers["library:add"]({ url: "http://127.0.0.1:4317/" })).toEqual({
+      ok: false,
+      code: "URL_NOT_ALLOWED",
+      message: "Only https:// addresses can be added.",
+    });
+  });
+
+  it("the same URL twice asks first; Cancel adds nothing, confirming adds a second entry with its own id", async () => {
+    const { handlers, dialogs, repos } = setUp({ confirm: [false, true] });
+    const first = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/", title: "Lab" }),
+    );
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+
+    expect(await handlers["library:add"]({ url: "https://a.example/" })).toMatchObject({
+      ok: false,
+      code: "CANCELLED",
+    });
+    expect(dialogs.confirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: "Already in the library",
+        confirmLabel: "Add a second entry",
+      }),
+    );
+    expect(repos.games.list()).toHaveLength(1);
+
+    const second = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    expect(second.gameId).not.toBe(first.gameId);
+    expect(
+      repos.games
+        .list()
+        .map((g) => g.id)
+        .sort(),
+    ).toEqual([first.gameId, second.gameId].sort());
+  });
+
+  it("refuses everything while the database is read-only, but lists the reason", async () => {
+    const dir = tempDir();
+    const raw = new DatabaseSync(join(dir, "library.db"));
+    raw.exec("PRAGMA user_version = 99");
+    raw.close();
+    const db = openDb(join(dir, "library.db"), dbOptions(dir));
+    expect(db.readOnly).toBe(true);
+    const handlers = createHandlers({
+      library: null,
+      readOnlyReason: db.readOnly ? db.reason : "",
+      dialogs: { confirm: vi.fn(), openFile: vi.fn(), saveFile: vi.fn() },
+      covers: createCovers({ coversDir: dir, tmpDir: dir }),
+      shortcuts: { supported: true, create: vi.fn() },
+      snapshots: null,
+      flavor: "test",
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), flush: vi.fn() },
+      newId: uuidv7,
+    });
+    const list = dataOf("library:list", await handlers["library:list"]({}));
+    expect(list).toEqual({ library: "read-only", reason: expect.stringContaining("newer") });
+    const gameId = uuidv7();
+    const writes = await Promise.all([
+      handlers["library:add"]({ url: "https://a.example/" }),
+      handlers["library:update"]({ gameId, title: "T" }),
+      handlers["library:remove"]({ gameId }),
+      handlers["library:orphans"]({}),
+      handlers["game:launch"]({ gameId }),
+      handlers["game:focus"]({ gameId }),
+      handlers["shortcut:create"]({ gameId }),
+      handlers["snapshot:export"]({ gameId }),
+      handlers["snapshot:list"]({ gameId }),
+      handlers["snapshot:saveAs"]({ gameId, revisionId: gameId }),
+      handlers["settings:set"]({}),
+    ]);
+    for (const result of writes)
+      expect(result).toMatchObject({ ok: false, code: "LIBRARY_READ_ONLY" });
+  });
+});
+
+describe("library:update (AC-17)", () => {
+  it("changes the title and keeps gameId and url", async () => {
+    const { handlers } = setUp();
+    const card = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const edited = dataOf(
+      "library:update",
+      await handlers["library:update"]({
+        gameId: card.gameId,
+        title: "<img src=x onerror=alert(1)>",
+      }),
+    );
+    expect(edited).toMatchObject({
+      gameId: card.gameId,
+      url: card.url,
+      title: "<img src=x onerror=alert(1)>",
+    });
+  });
+
+  it("picks a cover in the dialog, replaces it (old file removed) and removes it", async () => {
+    const { handlers, file, coversDir, dialogs } = setUp();
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    dialogs.openFile
+      .mockResolvedValueOnce(file("one.png", PNG))
+      .mockResolvedValueOnce(file("two.jpg", JPEG));
+
+    const first = dataOf(
+      "library:update",
+      await handlers["library:update"]({ gameId, cover: "pick" }),
+    );
+    const [firstName] = readdirSync(coversDir);
+    expect(first.coverUrl).toBe(`app://launcher/covers/${firstName}`);
+    expect(firstName).toMatch(new RegExp(`^${gameId}-[0-9a-f]{16}\\.png$`));
+
+    const second = dataOf(
+      "library:update",
+      await handlers["library:update"]({ gameId, cover: "pick" }),
+    );
+    const [secondName] = readdirSync(coversDir);
+    expect(readdirSync(coversDir)).toHaveLength(1);
+    expect(secondName).toMatch(/\.jpg$/);
+    expect(second.coverUrl).toBe(`app://launcher/covers/${secondName}`);
+
+    const removed = dataOf(
+      "library:update",
+      await handlers["library:update"]({ gameId, cover: "remove" }),
+    );
+    expect(removed.coverUrl).toBeNull();
+    expect(readdirSync(coversDir)).toEqual([]);
+  });
+
+  it("two overlapping picks leave only the last copy: each removes the cover the row held when it was updated", async () => {
+    const { handlers, file, coversDir, dialogs } = setUp();
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    dialogs.openFile.mockResolvedValueOnce(file("zero.png", PNG));
+    await handlers["library:update"]({ gameId, cover: "pick" });
+    const first = Promise.withResolvers<string | null>();
+    const second = Promise.withResolvers<string | null>();
+    dialogs.openFile.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    // Both dialogs are open before either answers.
+    const a = handlers["library:update"]({ gameId, cover: "pick" });
+    const b = handlers["library:update"]({ gameId, cover: "pick" });
+    first.resolve(file("one.jpg", JPEG));
+    await a;
+    second.resolve(file("two.png", PNG));
+    const last = dataOf("library:update", await b);
+    expect(readdirSync(coversDir).map((name) => `app://launcher/covers/${name}`)).toEqual([
+      last.coverUrl,
+    ]);
+  });
+
+  it("a cancelled pick and a file that is not an image change nothing", async () => {
+    const { handlers, file, coversDir, dialogs } = setUp();
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    dialogs.openFile.mockResolvedValueOnce(file("one.png", PNG));
+    const withCover = dataOf(
+      "library:update",
+      await handlers["library:update"]({ gameId, cover: "pick" }),
+    );
+
+    dialogs.openFile.mockResolvedValueOnce(null);
+    expect(await handlers["library:update"]({ gameId, cover: "pick", title: "New" })).toMatchObject(
+      {
+        ok: false,
+        code: "CANCELLED",
+      },
+    );
+    dialogs.openFile.mockResolvedValueOnce(file("fake.png", new TextEncoder().encode("text")));
+    expect(await handlers["library:update"]({ gameId, cover: "pick" })).toMatchObject({
+      ok: false,
+      code: "INVALID_ARGUMENT",
+    });
+    const card = dataOf("library:list", await handlers["library:list"]({}));
+    expect(card.library === "ready" && card.cards[0]).toMatchObject({
+      title: "a.example",
+      coverUrl: withCover.coverUrl,
+    });
+    expect(readdirSync(coversDir)).toHaveLength(1);
+  });
+
+  it("an unknown game is NOT_FOUND", async () => {
+    const { handlers } = setUp();
+    expect(await handlers["library:update"]({ gameId: uuidv7(), title: "T" })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+  });
+});
+
+describe("library:remove and library:orphans (architecture.md section 12)", () => {
+  it("confirms in a native dialog that says what is kept, then keeps snapshots and lists the orphan", async () => {
+    const { handlers, repos, dialogs, file, coversDir } = setUp({ confirm: [false, true] });
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/", title: "Lab" }),
+    );
+    dialogs.openFile.mockResolvedValueOnce(file("c.png", PNG));
+    await handlers["library:update"]({ gameId, cover: "pick" });
+    repos.snapshots.addIfAbsent({
+      revisionId: uuidv7(),
+      gameId,
+      kind: "export",
+      manifestGameId: gameId,
+      parentRevisionId: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      deviceId: repos.device.ensure().id,
+      exporterId: "generic-web-storage",
+      exporterVersion: "1.0.0",
+      contentHash: "0".repeat(64),
+      sizeBytes: 1,
+      path: "snapshots/x.wgsnap",
+      flushState: "unconfirmed",
+    });
+
+    expect(await handlers["library:remove"]({ gameId })).toMatchObject({
+      ok: false,
+      code: "CANCELLED",
+    });
+    expect(repos.games.get(gameId)).not.toBeNull();
+    const spec = dialogs.confirm.mock.calls[0]?.[0];
+    expect(spec?.confirmLabel).toBe("Remove from library");
+    expect(spec?.detail).toMatch(/snapshots/i);
+    expect(spec?.detail).toMatch(/backups/i);
+    expect(spec?.detail).toContain("Data of removed games");
+
+    expect(dataOf("library:remove", await handlers["library:remove"]({ gameId }))).toEqual({});
+    expect(repos.games.get(gameId)).toBeNull();
+    expect(repos.snapshots.listForGame(gameId, null)).toHaveLength(1);
+    expect(readdirSync(coversDir)).toEqual([]);
+    expect(dataOf("library:orphans", await handlers["library:orphans"]({}))).toEqual({
+      orphans: [{ gameId, title: "Lab", url: "https://a.example/", removedAt: expect.any(Number) }],
+    });
+    expect(dataOf("library:list", await handlers["library:list"]({}))).toEqual({
+      library: "ready",
+      cards: [],
+      canCreateShortcuts: true,
+    });
+  });
+
+  it("refuses while the game's window is open (GAME_RUNNING), without a dialog", async () => {
+    const { handlers, locks, dialogs } = setUp({ confirm: [true] });
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const lease = await locks.acquire(gameId, "session");
+    expect(await handlers["library:remove"]({ gameId })).toMatchObject({
+      ok: false,
+      code: "GAME_RUNNING",
+    });
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+    if ("release" in lease) lease.release();
+    expect((await handlers["library:remove"]({ gameId })).ok).toBe(true);
+  });
+});
+
+describe("badges and card state come from recorded state only (architecture.md section 11)", () => {
+  it("shows Local data only after a storage check with data, and the runtime's state", async () => {
+    const { handlers, repos, runtime, clock } = setUp();
+    const { gameId } = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    repos.storageChecks.save(gameId, false);
+    let list = dataOf("library:list", await handlers["library:list"]({}));
+    expect(list.library === "ready" && list.cards[0]?.badges.map((b) => b.id)).not.toContain(
+      "local-data",
+    );
+    repos.storageChecks.save(gameId, true);
+    runtime.state.mockReturnValue("running" as never);
+    list = dataOf("library:list", await handlers["library:list"]({}));
+    expect(list.library === "ready" && list.cards[0]).toMatchObject({
+      state: "running",
+      badges: expect.arrayContaining([{ id: "local-data", checkedAt: clock.now() }]),
+    });
+  });
+});
+
+describe("game:launch and game:focus", () => {
+  it("passes the runtime's result through with the state", async () => {
+    const { handlers, runtime } = setUp();
+    const gameId = uuidv7();
+    runtime.state.mockReturnValue("launching" as never);
+    expect(dataOf("game:launch", await handlers["game:launch"]({ gameId }))).toEqual({
+      window: "opened",
+      state: "launching",
+    });
+    runtime.launch.mockResolvedValueOnce({ ok: false, code: "NOT_FOUND", message: "x" } as never);
+    expect(await handlers["game:launch"]({ gameId })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+    expect(await handlers["game:focus"]({ gameId })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+    runtime.focus.mockReturnValue(true);
+    expect(dataOf("game:focus", await handlers["game:focus"]({ gameId }))).toEqual({});
+  });
+});
+
+describe("shortcut:create (architecture.md section 8)", () => {
+  it("creates the shortcut of a game in the library, with its id and title", async () => {
+    const { handlers, repos, shortcuts } = setUp();
+    const gameId = uuidv7();
+    repos.games.insert({ id: gameId, url: "https://example.com/", title: "Example" });
+    expect(dataOf("shortcut:create", await handlers["shortcut:create"]({ gameId }))).toEqual({
+      created: true,
+    });
+    expect(shortcuts.create).toHaveBeenCalledWith({ id: gameId, title: "Example" });
+  });
+
+  it("tells the UI through library:list whether shortcuts can be made here, so it offers no control that always fails", async () => {
+    for (const supported of [true, false]) {
+      const { handlers } = setUp({ shortcutsSupported: supported });
+      expect(dataOf("library:list", await handlers["library:list"]({}))).toMatchObject({
+        canCreateShortcuts: supported,
+      });
+    }
+  });
+
+  it("is NOT_FOUND for a game that is not in the library, and asks nothing", async () => {
+    const { handlers, shortcuts } = setUp();
+    expect(await handlers["shortcut:create"]({ gameId: uuidv7() })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+    expect(shortcuts.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("settings", () => {
+  it("has no allowlisted key: get is empty and set stores nothing", async () => {
+    const { handlers, repos } = setUp();
+    expect(dataOf("settings:get", await handlers["settings:get"]({}))).toEqual({});
+    expect(dataOf("settings:set", await handlers["settings:set"]({}))).toEqual({});
+    expect(repos.settings.all()).toEqual({});
+  });
+});
+
+describe("snapshot:import, delete local saves and clear cache (architecture.md section 6)", () => {
+  it("opens the file dialog in main for a file source, and Cancel imports nothing", async () => {
+    const { handlers, snapshots, dialogs } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    dialogs.openFile.mockResolvedValueOnce(null);
+    expect(
+      await handlers["snapshot:import"]({ gameId: game.gameId, source: "file" }),
+    ).toMatchObject({
+      ok: false,
+      code: "CANCELLED",
+    });
+    expect(snapshots.restore).not.toHaveBeenCalled();
+    dialogs.openFile.mockResolvedValueOnce("/chosen/x.wgsnap");
+    snapshots.restore.mockImplementation(async (_request, hooks) => {
+      hooks.onStep("validate");
+      hooks.onLocked();
+      hooks.onStep("backup");
+      return { ok: true, data: {} };
+    });
+    const mapping = [{ from: "https://a.example", to: "https://b.example" }];
+    const { taskId } = dataOf(
+      "snapshot:import",
+      await handlers["snapshot:import"]({ gameId: game.gameId, source: "file", mapping }),
+    );
+    expect(snapshots.restore.mock.calls[0]?.[0]).toEqual({
+      gameId: game.gameId,
+      source: { file: "/chosen/x.wgsnap" },
+      mapping,
+    });
+    await vi.waitFor(() => expect(snapshots.sendProgress).toHaveBeenCalledTimes(3));
+    expect(
+      snapshots.sendProgress.mock.calls.map(([e]) => [e.taskId, e.kind, e.step, e.status]),
+    ).toEqual([
+      [taskId, "import", "validate", "running"],
+      [taskId, "import", "backup", "running"],
+      [taskId, "import", "backup", "done"],
+    ]);
+  });
+
+  it("returns a key mismatch found before the lock as the call's result", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.restore.mockResolvedValue({
+      ok: false,
+      code: "IMP_STORAGE_KEY_MISMATCH",
+      message: "The snapshot's storage keys do not match this game.",
+    });
+    expect(
+      await handlers["snapshot:import"]({ gameId: game.gameId, source: { revisionId: uuidv7() } }),
+    ).toMatchObject({ ok: false, code: "IMP_STORAGE_KEY_MISMATCH" });
+    expect(snapshots.sendProgress).not.toHaveBeenCalled();
+  });
+
+  it("runs delete local saves as a task, for a library entry and for a removed game's data only", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.deleteSaves.mockImplementation(async (_gameId, hooks) => {
+      hooks.onLocked();
+      return { ok: true, data: {} };
+    });
+    dataOf("game:deleteSaves", await handlers["game:deleteSaves"]({ gameId: game.gameId }));
+    // A library entry is not a removed game's data.
+    expect(await handlers["library:deleteOrphanData"]({ gameId: game.gameId })).toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await handlers["game:clearCache"]({ gameId: game.gameId })).toEqual({
+      ok: true,
+      data: {},
+    });
+    expect(snapshots.clearCache).toHaveBeenCalledWith(game.gameId);
+  });
+});
+
+describe("snapshot:frames (the export dialog's frame list)", () => {
+  it("answers with the frames main read, counts and usage only", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const frame = {
+      origin: "https://cdn.example",
+      topLevelSite: "https://a.example",
+      inExport: false,
+      localStorageItems: 1,
+      databases: 0,
+      indexedDbBytes: null,
+    };
+    snapshots.frames.mockResolvedValue({ ok: true, data: [frame] });
+    expect(
+      dataOf("snapshot:frames", await handlers["snapshot:frames"]({ gameId: game.gameId })),
+    ).toEqual({ frames: [frame] });
+    expect(snapshots.frames).toHaveBeenCalledWith(game.gameId);
+  });
+
+  it("passes a refusal through (GAME_RUNNING while the window is open) and refuses an unknown game", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.frames.mockResolvedValue({ ok: false, code: "GAME_RUNNING", message: "Running." });
+    expect(await handlers["snapshot:frames"]({ gameId: game.gameId })).toEqual({
+      ok: false,
+      code: "GAME_RUNNING",
+      message: "Running.",
+    });
+    expect(await handlers["snapshot:frames"]({ gameId: uuidv7() })).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+  });
+});
+
+describe("snapshot:export, snapshot:list and snapshot:saveAs (architecture.md section 6)", () => {
+  const row = (gameId: string, revisionId: string, addedAt = 1): Snapshot => ({
+    revisionId,
+    gameId,
+    kind: "export",
+    manifestGameId: gameId,
+    parentRevisionId: null,
+    createdAt: "2026-10-28T00:00:00.000Z",
+    deviceId: gameId,
+    exporterId: "generic-web-storage",
+    exporterVersion: "1.0.0",
+    adapterId: null,
+    adapterVersion: null,
+    contentHash: "a".repeat(64),
+    sizeBytes: 10,
+    path: `snapshots/${gameId}/${revisionId}.wgsnap`,
+    flushState: "unconfirmed",
+    verifiedAt: null,
+    verifiedExporterVersion: null,
+    addedAt,
+  });
+
+  it("answers with the task id once the lock is held, then reports progress and the outcome", async () => {
+    const { handlers, repos, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const finished = Promise.withResolvers<void>();
+    snapshots.export.mockImplementation(async (_gameId, options) => {
+      options.onLocked();
+      options.onProgress({ step: "lock" });
+      options.onProgress({ step: "read", bytesDone: 512 });
+      await finished.promise;
+      options.onProgress({ step: "write" });
+      return { ok: true, data: row(game.gameId, uuidv7()) };
+    });
+    const frameKeys = [{ origin: "https://cdn.example", topLevelSite: "https://a.example" }];
+    const { taskId } = dataOf(
+      "snapshot:export",
+      await handlers["snapshot:export"]({ gameId: game.gameId, frameKeys }),
+    );
+    expect(snapshots.export.mock.calls[0]?.[1]).toMatchObject({ frameKeys });
+    // Nothing reaches the page before the reply that tells it the task id.
+    expect(snapshots.sendProgress).not.toHaveBeenCalled();
+    finished.resolve();
+    await vi.waitFor(() => expect(snapshots.sendProgress).toHaveBeenCalledTimes(4));
+    const base = { taskId, gameId: game.gameId, kind: "export" };
+    expect(snapshots.sendProgress.mock.calls.map(([event]) => event)).toEqual([
+      { ...base, step: "lock", status: "running" },
+      { ...base, step: "read", status: "running", bytesDone: 512 },
+      { ...base, step: "write", status: "running" },
+      { ...base, step: "write", status: "done" },
+    ]);
+    expect(repos.games.get(game.gameId)).not.toBeNull();
+  });
+
+  it("returns a refusal before the lock (GAME_RUNNING, AC-11) as the call's result, with no task", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.export.mockResolvedValue({
+      ok: false,
+      code: "GAME_RUNNING",
+      message: "Close the game first.",
+    });
+    expect(await handlers["snapshot:export"]({ gameId: game.gameId })).toEqual({
+      ok: false,
+      code: "GAME_RUNNING",
+      message: "Close the game first.",
+    });
+    expect(snapshots.sendProgress).not.toHaveBeenCalled();
+  });
+
+  it("reports a failure after the lock with its code and message", async () => {
+    const { handlers, snapshots } = setUp();
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    snapshots.export.mockImplementation(async (_gameId, options) => {
+      options.onLocked();
+      options.onProgress({ step: "write" });
+      return {
+        ok: false,
+        code: "SNAP_TOTAL_TOO_LARGE",
+        message: "the uncompressed archive is too large",
+      };
+    });
+    dataOf("snapshot:export", await handlers["snapshot:export"]({ gameId: game.gameId }));
+    await vi.waitFor(() =>
+      expect(snapshots.sendProgress).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          step: "write",
+          status: "failed",
+          code: "SNAP_TOTAL_TOO_LARGE",
+          message: "the uncompressed archive is too large",
+        }),
+      ),
+    );
+  });
+
+  it("is NOT_FOUND for a game not in the library", async () => {
+    const { handlers, snapshots } = setUp();
+    expect(await handlers["snapshot:export"]({ gameId: uuidv7() })).toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(snapshots.export).not.toHaveBeenCalled();
+  });
+
+  it("lists the game's rows and its base revision's, without file paths", async () => {
+    const { handlers, repos } = setUp();
+    const a = dataOf("library:add", await handlers["library:add"]({ url: "https://a.example/" }));
+    const b = dataOf("library:add", await handlers["library:add"]({ url: "https://b.example/" }));
+    const own = row(a.gameId, uuidv7());
+    const other = row(b.gameId, uuidv7());
+    repos.snapshots.addIfAbsent(own);
+    repos.snapshots.addIfAbsent(other);
+    repos.games.update(a.gameId, { baseRevisionId: other.revisionId });
+    const { snapshots } = dataOf(
+      "snapshot:list",
+      await handlers["snapshot:list"]({ gameId: a.gameId }),
+    );
+    expect(snapshots.map((s) => s.revisionId)).toEqual([own.revisionId, other.revisionId]);
+    expect(snapshots[0]).toMatchObject({
+      gameId: a.gameId,
+      flushState: "unconfirmed",
+      exporter: { id: "generic-web-storage", version: "1.0.0" },
+      adapter: null,
+    });
+    expect(JSON.stringify(snapshots)).not.toContain(".wgsnap");
+  });
+
+  it("saveAs copies the stored file to the place chosen in the save dialog, and nothing on Cancel", async () => {
+    const { handlers, repos, snapshots, dialogs } = setUp({
+      saveTo: [null, "/chosen/save.wgsnap"],
+    });
+    const game = dataOf(
+      "library:add",
+      await handlers["library:add"]({ url: "https://a.example/" }),
+    );
+    const stored = row(game.gameId, uuidv7());
+    repos.snapshots.addIfAbsent(stored);
+    const request = { gameId: game.gameId, revisionId: stored.revisionId };
+    expect(dataOf("snapshot:saveAs", await handlers["snapshot:saveAs"](request))).toEqual({
+      saved: false,
+    });
+    expect(snapshots.copy).not.toHaveBeenCalled();
+    expect(dataOf("snapshot:saveAs", await handlers["snapshot:saveAs"](request))).toEqual({
+      saved: true,
+    });
+    expect(snapshots.copy).toHaveBeenCalledWith(
+      snapshots.fileOf(stored.path),
+      "/chosen/save.wgsnap",
+    );
+    expect(dialogs.saveFile.mock.calls[0]?.[0]).toMatchObject({
+      defaultPath: expect.stringMatching(/\.wgsnap$/),
+      filters: [{ name: "WGLauncher snapshot", extensions: ["wgsnap"] }],
+    });
+    expect(
+      await handlers["snapshot:saveAs"]({ gameId: game.gameId, revisionId: uuidv7() }),
+    ).toMatchObject({ code: "NOT_FOUND" });
+  });
+});

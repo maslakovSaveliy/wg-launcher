@@ -34,6 +34,16 @@ const anyAggregate = aggregates.at(-1);
 const machine = anyAggregate?.data.machine;
 const osText = machine ? `${machine.osVersion}, ${machine.arch}, ${machine.cpu}` : "unknown";
 
+// Phase 1 hands-off runs (run-timing.mjs): one aggregate per invocation, runtime name "timing".
+const timingH7 = latest("timing", "H7");
+const timingH8 = latest("timing", "H8");
+const timingH9 = latest("timing", "H9");
+const timingH21 = latest("timing", "H21");
+const timingH20 = latest("timing", "H20-6");
+const ms = (x) => (typeof x === "number" ? x.toFixed(2) : "n/a");
+const mib = (x) => (typeof x === "number" ? x.toFixed(0) : "n/a");
+const h7Runs = (s) => (s ? `p95 ${ms(s.medianP95Ms)} ms (runs ${s.p95Ms.map(ms).join(" / ")}), p50 ${ms(s.medianP50Ms)} ms, long frames ${s.medianLongFrames}, ${s.validRuns} valid runs` : "not recorded");
+
 const lines = [];
 const out = (line = "") => lines.push(line);
 
@@ -41,18 +51,69 @@ out("# Compatibility matrix");
 out();
 out("<!-- Generated file. Do not edit by hand. Regenerate with: node spikes/runtime-compat/matrix.mjs > docs/compat/matrix.md -->");
 out();
-out("> **Generated** from `spikes/runtime-compat/results/*.json` by `node spikes/runtime-compat/matrix.mjs > docs/compat/matrix.md`.");
+out("> **Generated** from `spikes/runtime-compat/results/*.json` and the launcher records listed in `LAUNCHER_RECORDS` of the");
+out("> generator, by `node spikes/runtime-compat/matrix.mjs > docs/compat/matrix.md`.");
 out("> Do not edit by hand; running the command twice gives identical output. Only real recorded runs appear here. Each row is");
 out("> Verified on the date and for the OS shown, with the evidence file named in its last column (a file under");
 out("> `spikes/runtime-compat/results/`). Nothing is extrapolated to other machines, operating systems or games: see");
 out("> [methodology.md](methodology.md). \"Verified\" never applies to a platform or game that has no row with a run.");
-out("> The timing measurements (frame time against Chrome, Chrome-side start time, memory, demo frame samples) are deferred to Phase 1");
-out("> by the owner's decision of 2026-10-25 and show as deferred, not as results.");
+if (timingH7 || timingH8 || timingH9 || timingH21) {
+  out("> The timing measurements were deferred to Phase 1 (owner decision 2026-10-25) and taken there hands-off: frame time (H7) on");
+  out("> the launcher, a packaged test-flavor WGLauncher build, against Chrome; start time (H8), memory (H9) and the demo frame samples");
+  out("> on the spike's Electron app against Chrome (`spikes/runtime-compat/HYPOTHESES.md`, \"Amendments\").");
+} else {
+  out("> The timing measurements (frame time against Chrome, Chrome-side start time, memory, demo frame samples) are deferred to Phase 1");
+  out("> by the owner's decision of 2026-10-25 and show as deferred, not as results.");
+}
 out();
+// Phase 1 runs of the launcher itself. They are not spike result files: each row names its record under docs/compat/.
+const LAUNCHER_RECORDS = [
+  {
+    build: "progress-lab (controlled test fixture, not a real game) in the launcher",
+    url: "`fixtures/test-games/progress-lab`, served from localhost",
+    date: "2026-11-02",
+    runtime: "WGLauncher test flavor (unpackaged) on Electron 45.0.0",
+    launch: "added by link, game window opens (e2e)",
+    input: "`#play-step` through Playwright; real keyboard and mouse input only in the manual checks",
+    save: "progress persists across closing the game and restarting the app (AC-6)",
+    restore: "export, verify, restore into a second entry and again after a restart, same `#progress-hash`; service-worker and cross-site iframe variants; key mapping (AC-6, AC-7, AC-24)",
+    notes: "the desktop e2e suite, the exporters' browser tests and the fixture suite passed in the final local run of Phase 1",
+    evidence: "docs/compat/runs/2026-11-02-macos-arm64.md",
+  },
+  {
+    build: "progress-lab (controlled test fixture, not a real game) in a packaged test-flavor build with the release fuses",
+    url: "`fixtures/test-games/progress-lab`, served from localhost",
+    date: "2026-11-02",
+    runtime: "WGLauncher test flavor packaged from `app.asar` on Electron 45.0.0; release fuses except `nodeCliInspect` (on, for Playwright)",
+    launch: "game window opens",
+    input: "`#play-step` through Playwright",
+    save: "progress persists across closing the game",
+    restore: "export, verify, restore into a second entry, same `#progress-hash`",
+    notes: "the snapshot worker and the quiescent preload ran from `app.asar` with the asar fuses on",
+    evidence: "docs/compat/runs/2026-11-02-macos-arm64.md",
+  },
+  {
+    build: "WGLauncher packaged app (prod flavor), with `https://example.com/` and local test pages",
+    url: "`apps/desktop/dist/mac-arm64/WGLauncher.app`, ad hoc signed",
+    date: "2026-10-30",
+    runtime: "WGLauncher 0.0.0 on Electron 45.0.0",
+    launch: "deep links and shortcuts start or focus the game (AC-19)",
+    input: "real keyboard and mouse: fullscreen, Esc hold, pointer and keyboard lock (AC-18; test flavor)",
+    save: "n/a (no snapshot in the manual checks)",
+    restore: "n/a",
+    notes: "13 manual checks: deep links, the `.inetloc` shortcut, media denied without an OS prompt, window memory, no process left after close and quit",
+    evidence: "docs/compat/manual-checks/2026-10-30-macos-arm64.md",
+  },
+];
+
 out("## Runs on the dev machine");
 out();
 out("| Game / build | URL or version | Date | OS | Runtime | Launch | Input | Save | Restore | Notes | Evidence |");
 out("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+
+for (const r of LAUNCHER_RECORDS) {
+  out(`| ${cell(r.build)} | ${cell(r.url)} | ${r.date} | ${cell(osText)} | ${cell(r.runtime)} | ${cell(r.launch)} | ${cell(r.input)} | ${cell(r.save)} | ${cell(r.restore)} | ${cell(r.notes)} | ${cell(r.evidence)} |`);
+}
 
 const electronFull = lastOf("electron");
 const electronVersion = electronFull ? `Electron ${electronFull.data.runtime.version} (Chromium ${electronFull.data.runtime.chromium})` : "Electron";
@@ -93,8 +154,12 @@ if (demos) {
     const runtimeText = family === "electron" ? `Electron ${r.runtime.replace("electron-", "")}` : `Google Chrome ${r.runtime.replace("chrome-", "")}`;
     const favicon = r.faviconErrors ? `; ${r.faviconErrors} of the console errors is the /favicon.ico 404 that only Chrome requests` : "";
     const launch = r.unreachable ? "not tested (unreachable)" : r.loadOk ? `loads, ${r.canvases} canvas(es)` : `did not load: ${r.loadError}`;
+    const sample = timingH21?.h.metrics?.demos?.find((d) => d.id === r.id && d.runtime.split("-")[0] === family);
+    const frame = sample
+      ? `frame sample ${date(timingH21)} (${sample.runtime.replace("electron-", "Electron ").replace("chrome-", "Chrome ")}, indicative): p50 ${ms(sample.p50Ms)} ms, p95 ${ms(sample.p95Ms)} ms, long frames ${sample.longFrames}${sample.valid ? "" : ", INVALID"}`
+      : "frame sample deferred to Phase 1";
     out(
-      `| ${cell(`${r.id} (${r.id.startsWith("webgpu") || r.url.includes("webgpu") ? "WebGPU" : "WebGL"} demo)`)} | \`${cell(r.url)}\` | ${date(demos)} | ${cell(osText)} | ${cell(runtimeText)} | ${cell(launch)} | not tested | n/a (no game save) | n/a | WebGPU used: ${r.webgpuUsed}; console errors: ${r.consoleErrors}${cell(favicon)}; frame sample deferred to Phase 1 | ${cell(demos.file)} |`,
+      `| ${cell(`${r.id} (${r.id.startsWith("webgpu") || r.url.includes("webgpu") ? "WebGPU" : "WebGL"} demo)`)} | \`${cell(r.url)}\` | ${date(demos)} | ${cell(osText)} | ${cell(runtimeText)} | ${cell(launch)} | not tested | n/a (no game save) | n/a | WebGPU used: ${r.webgpuUsed}; console errors: ${r.consoleErrors}${cell(favicon)}; ${cell(frame)} | ${cell(sample ? `${demos.file}, ${timingH21.file}` : demos.file)} |`,
     );
   }
 } else out("| public demos (webgpu-samples, three.js examples) | n/a | not tested | n/a | Electron, Chrome | not tested | not tested | not tested | not tested | no result file | none |");
@@ -122,10 +187,20 @@ out(`| WebGPU adapter and features (H5) | ${electronGpu?.webgpu?.adapter ? `${el
 out(`| Cross-origin isolation with server headers (H3) | ${cell(latest("electron", "H3")?.h.reason ?? "not recorded")} | ${chrome ? cell(chrome.data.hypotheses.H3?.reason) : "not tested"} | |`);
 const DEFERRED = "deferred to Phase 1 (owner decision 2026-10-25)";
 const electronH8 = latest("electron", "H8");
-out(`| Frame time, capped scene (H7) | ${DEFERRED} | ${DEFERRED} | the Task 5 Electron numbers (see RESULTS.md) have no verdict without a calibrated Chrome baseline; deferred is not N/A and not a pass |`);
-out(`| Frame time, Chrome \`--app\` (H20-6) | n/a | ${DEFERRED} | |`);
-out(`| Spawn to first frame, cold and warm (H8) | ${electronH8?.h.metrics ? `cold ${electronH8.h.metrics.coldMedianMs} ms, warm ${electronH8.h.metrics.warmMedianMs} ms` : "not recorded"} | ${DEFERRED} | Electron: medians of 3 from ${cell(electronH8?.file ?? "no file")}; cold = empty profile, OS file cache not flushed |`);
-out(`| Memory after 60 s of the scene (H9) | ${DEFERRED} (the Task 5 attempts were INVALID) | ${DEFERRED} | no number is reported |`);
+if (timingH7) {
+  const m = timingH7.h.metrics ?? {};
+  out(`| Frame time, capped scene (H7) | the launcher (packaged test-flavor build): ${cell(h7Runs(m.runtime))} | Chrome ${cell(m.chromeVersion)}: ${cell(h7Runs(m.chrome))} | ${cell(`${timingH7.h.status} (${date(timingH7)}): ${timingH7.h.reason}. Load ${m.load} calibrated with the GPU timer query in Chrome, vsync on (HYPOTHESES "Amendments" 2026-11-02; the timer's weakness on this Mac is in RESULTS.md); ${m.vsyncHz?.toFixed(2)} Hz display. ${timingH7.file}`)} |`);
+} else out(`| Frame time, capped scene (H7) | ${DEFERRED} | ${DEFERRED} | the Task 5 Electron numbers (see RESULTS.md) have no verdict without a calibrated Chrome baseline; deferred is not N/A and not a pass |`);
+if (timingH20?.h.metrics?.runtime) out(`| Frame time, Chrome \`--app\` (H20-6) | n/a | ${cell(h7Runs(timingH20.h.metrics.runtime))} | ${cell(`${timingH20.h.status} (${date(timingH20)}): ${timingH20.h.reason}. ${timingH20.file}`)} |`);
+else out(`| Frame time, Chrome \`--app\` (H20-6) | n/a | ${DEFERRED} | |`);
+if (timingH8) {
+  const m = timingH8.h.metrics.medians;
+  out(`| Spawn to first frame, cold and warm (H8) | spike app: cold ${m.electronCold} ms, warm ${m.electronWarm} ms (${date(timingH8)})${electronH8?.h.metrics ? `; Phase 0: cold ${electronH8.h.metrics.coldMedianMs} ms, warm ${electronH8.h.metrics.warmMedianMs} ms` : ""} | cold ${m.chromeCold} ms, warm ${m.chromeWarm} ms (${date(timingH8)}) | ${cell(`${timingH8.h.status}, no threshold: medians of 3, ${timingH8.h.metrics.validLaunches} of ${timingH8.h.metrics.launches} launches valid; cold = empty profile, OS file cache not flushed. ${timingH8.file}${electronH8 ? `, ${electronH8.file}` : ""}`)} |`);
+} else out(`| Spawn to first frame, cold and warm (H8) | ${electronH8?.h.metrics ? `cold ${electronH8.h.metrics.coldMedianMs} ms, warm ${electronH8.h.metrics.warmMedianMs} ms` : "not recorded"} | ${DEFERRED} | Electron: medians of 3 from ${cell(electronH8?.file ?? "no file")}; cold = empty profile, OS file cache not flushed |`);
+if (timingH9?.h.status === "REPORTED") {
+  const m = timingH9.h.metrics;
+  out(`| Memory after 60 s of the scene (H9) | spike app: resident ${mib(m.electronRssMiB)} MiB, footprint ${mib(m.electronFootprintMiB)} MiB | resident ${mib(m.chromeRssMiB)} MiB, footprint ${mib(m.chromeFootprintMiB)} MiB | ${cell(`REPORTED (${date(timingH9)}), no threshold and no percentage claim: one run each, the process tree summed from outside (ps rss, macOS footprint). ${timingH9.file}`)} |`);
+} else out(`| Memory after 60 s of the scene (H9) | ${DEFERRED} (the Task 5 attempts were INVALID) | ${DEFERRED} | no number is reported |`);
 
 out();
 out("## Not tested");
@@ -138,7 +213,7 @@ out("| Windows on real hardware (any GPU) | not tested | no Windows machine is a
 out("| Windows, GitHub-hosted runner, no GPU | not tested | the optional non-GPU CI job was not added: the spike runner's process accounting is macOS-only, and a `workflow_dispatch` workflow can only be started once its file is on the default branch, and merging to `main` was out of scope. Even if run, it would prove install and non-GPU storage checks only, never game compatibility |");
 out("| Linux | not tested | no Linux machine is available |");
 out("| Other Macs, other macOS versions, other displays | not tested | one machine only |");
-out("| Tauri 2 with WKWebView (H17, H18) | not tested | not run, decision-irrelevant (owner-approved scope change): per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7 (deferred to Phase 1), which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack (Assumed, runtime-and-storage.md sections 3 and 9) |");
+out(`| Tauri 2 with WKWebView (H17, H18) | not tested | not run, decision-irrelevant (owner-approved scope change): per the decision rules Tauri wins only by passing a criterion Electron fails, Electron passed all fatal criteria measured so far except H7 (deferred to Phase 1), which Tauri cannot replace; and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack (Assumed, runtime-and-storage.md sections 3 and 9)${timingH7 ? `. H7 on the launcher: ${timingH7.h.status} (${date(timingH7)})` : ""} |`);
 out("| Gamepad input | not tested | no hardware |");
 out("| Real Emscripten or Unity builds, heavy ports of commercial games | not tested | none is available; `progress-lab` only imitates the IDBFS layout. Their completeness is unproven |");
 process.stdout.write(`${lines.join("\n")}\n`);

@@ -1,0 +1,41 @@
+# Packaging of the desktop app (ADR-0004 option P1, plan Task 16). macOS arm64 only for now: an unpacked `.app`,
+# signed ad hoc after packaging (`package:mac`), not notarized. Windows and Linux are not packaged or tested yet.
+appId: io.github.maslakovsaveliy.wglauncher
+productName: WGLauncher
+directories:
+  output: dist
+  buildResources: build
+# The built app only. React and the workspace packages are bundled by electron-vite, so their node_modules copies
+# would ship twice; the release check fails if they appear in app.asar.
+files:
+  - out/**
+  - package.json
+  - "!node_modules/react/**"
+  - "!node_modules/react-dom/**"
+  - "!node_modules/scheduler/**"
+  - "!node_modules/@wg-launcher/**"
+asar: true
+protocols:
+  - name: WGLauncher
+    schemes:
+      - wglauncher
+# security.md section 4; the release check reads them back.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false
+# Removes the media and Bluetooth usage descriptions from Info.plist (security.md section 5).
+afterPack: build/after-pack.mjs
+mac:
+  target:
+    - target: dir
+      arch:
+        - arm64
+  identity: null
+  hardenedRuntime: false
+  notarize: false

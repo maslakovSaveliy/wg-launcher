@@ -10,8 +10,12 @@ Chrome `--app` per-game profile checks, the Safari proxy and the load and consol
 timing measurements (frame time against Chrome H7, cold and warm start on Chrome, memory H9, frame time of Chrome `--app`
 H20-6 and the demo frame samples) were **deferred to Phase 1 by the owner's decision of 2026-10-25**: they will be taken on the
 real launcher against Chrome. "Deferred" is not N/A and not INVALID, and never counts as a pass. The sections below describe
-the method those runs follow (the runner `run-timing.mjs` implements it; it was only wiring-checked, never run for a result),
-so that Phase 1 measures in the same way.
+the method those runs follow (the runner `run-timing.mjs` implements it).
+
+**Phase 1 (2026-11-02).** The deferred runs were taken: H7 is PASS on the launcher against Chrome 156, and H8, H9, H20-6 and
+the demo frame samples are reported (RESULTS.md "Phase 1"). Two dated amendments of HYPOTHESES.md changed the method before
+the runs they govern: the Electron side of H7 is the packaged test-flavor launcher, and the calibration reads the GPU timer
+query in Chrome with vsync on. The sections below describe the method as amended.
 
 ## Scope and honesty rules
 
@@ -62,7 +66,8 @@ on battery. The owner must leave the machine alone during these runs.
 
 ## Cold and warm start (H8)
 
-Electron's medians from Task 5 are reported as they are; the Chrome side is deferred to Phase 1.
+Electron's medians from Task 5 are reported as they are; Phase 1 (2026-11-02) measured both sides again, the Electron side
+on the spike app.
 
 Spawn to first presented frame: the runner takes the wall time immediately before starting the process; the page reports the
 wall time of its first `requestAnimationFrame` callback after the first draw of the scene. **Cold** is the first launch with an
@@ -72,22 +77,29 @@ Three cold and three warm launches per runtime, alternating between runtimes; th
 is started directly (not through Playwright) so that no automation setup time is included; its window is sized so that the
 viewport is 1280 x 720 and a launch whose viewport differs is INVALID.
 
-## Frame time (H7, H7b, H20-6): method for Phase 1
+## Frame time (H7, H7b, H20-6)
 
 - **Scene.** One fixed WebGL2 scene: a fixed seed, a camera path that is a function of the frame index only, 1024 instanced
   cubes over a full-screen pass whose per-pixel loop count is the load. Frame time is the difference between consecutive
   `requestAnimationFrame` timestamps; a long frame is a difference above twice the vsync interval (1000 divided by the display
   refresh rate).
-- **Calibration.** A vsync cap can hide differences, so the scene must put real load on the GPU. In Chrome with the frame-rate
-  limit and vsync disabled (`--disable-gpu-vsync --disable-frame-rate-limit`), the scene's median frame time must be 60% to
-  120% of the vsync interval; the load is raised or lowered until it is, then fixed and used unchanged for every runtime and
-  recorded. The 60% and 120% bounds are Assumed (HYPOTHESES.md). A run on an uncalibrated or saturated scene is INVALID, never
-  a pass; without a calibrated load H7 is N/A (nothing in band) or INVALID (a load that was not calibrated in the same session).
-  The calibration run itself uses the H7b conditions (2 s warm-up, 20 s measured).
+- **Runtimes.** H7's Electron side is the launcher: a packaged test-flavor WGLauncher build (`build-launcher.mjs`) with the
+  scene as a library entry in a game window, loaded once the window is visible, focused and 1280 x 720 CSS px (amendment
+  of 2026-11-02). Its frame time is assumed equal to a release build's. Assumed
+- **Calibration.** A vsync cap can hide differences, so the scene must put real load on the GPU. As amended on 2026-11-02:
+  in Chrome with vsync on, the median `TIME_ELAPSED_EXT` interval around each frame's draw calls
+  (`EXT_disjoint_timer_query_webgl2`) must be 60% to 120% of the vsync interval; the load is raised or lowered until it is,
+  then fixed and used unchanged for every runtime and recorded (2 s warm-up, 20 s measured). The original condition, the
+  median frame time in Chrome with `--disable-gpu-vsync --disable-frame-rate-limit`, cannot be read in Chrome 156, which
+  does not wait for the GPU in that mode. Verified (2026-11-02, RESULTS.md "Phase 1"). On this Mac the timer reading tracks
+  the GPU's busy time at its chosen clock and includes queueing once saturated, so "calibrated" means the GPU is busy for
+  most of each frame, not a fixed cost; the band rejects only the lightest scenes (load 64 read 46%, loads 128 and 256
+  already 65% and 74%). The 60% and 120% bounds are Assumed (HYPOTHESES.md). Without a calibrated load H7 is
+  N/A (nothing in band) or INVALID (a load that was not calibrated in the same session).
 - **Runs.** 2 s warm-up discarded, then 20 s measured; three valid runs per runtime, alternating between runtimes (Electron,
   Chrome, Chrome `--app`, Electron, ...) with a cooldown between runs to spread thermal drift. Each statistic (p50, p95, long
   frame count and share) is the median of the valid runs. All capped measurement runs come before any uncapped measurement run
-  (H7b); the calibration sweep is itself uncapped, so it comes first and is followed by a longer cooldown. Reason: uncapped
+  (H7b); the calibration sweep comes first and is followed by a cooldown. Reason: uncapped
   runs leave seconds of queued GPU work and heat behind that slowed later capped runs in an earlier experiment. Verified
   (2026-10-24, Electron spike dev runs, `spikes/runtime-compat/RESULTS.md` findings).
 - **Verdict.** Electron passes when its p95 is at most Chrome's p95 times 1.15. **Noise rule (Assumed, HYPOTHESES.md):** the
@@ -98,9 +110,11 @@ viewport is 1280 x 720 and a launch whose viewport differs is INVALID.
   Chrome `--app` (H20-6) the same p95 comparison is only reported, because H20 asks for one pass or fail per check and has no
   combined threshold (an interpretation).
 - **Validity.** The WebGL2 renderer string must not contain "SwiftShader" (a software renderer makes the run INVALID and every
-  number of it is discarded). Uncapped numbers are throughput, not presentation.
+  number of it is discarded). A run with fewer frame deltas than a quarter of the vsync rate over the measured window is
+  INVALID (added after Phase 1 run 1, whose uncapped calibration recorded none). Uncapped numbers are throughput, not
+  presentation.
 
-## Memory (H9): method for Phase 1
+## Memory (H9)
 
 After 60 s of the scene, the process tree of each runtime is summed from outside with the same two tools: resident size (`ps`)
 and physical footprint (macOS `footprint`). Electron also reports its own `app.getAppMetrics()` working-set sum. The
@@ -115,7 +129,7 @@ Each is loaded in Electron and in Chrome with the same hooks injected before any
 calls, canvas context types, visibility log), the same console-error counting over CDP, the same window size and a 6 s
 settle time; the load check judges visibility and focus from the moment the page reported itself visible and focused (a new
 window has no focus when its first log entry is written). The check says whether the page loads, has a canvas, used WebGPU
-and logged errors. The 20 s frame sampler (deferred to Phase 1) is the H7 sampler on a page that is **not calibrated**: its
+and logged errors. The 20 s frame sampler (run in Phase 1, 2026-11-02) is the H7 sampler on a page that is **not calibrated**: its
 numbers are indicative only. These are external sites: an
 unreachable one is "not tested (unreachable)", never a compatibility verdict. Chrome requests `/favicon.ico` and Electron
 does not, so a 404 for it counts as a Chrome-only console error and is called out separately.

@@ -13,6 +13,10 @@
 //   characters such as "exa%2Emple.com", which the parser decodes into another host).
 // After parsing, a host with an empty label ("example..com", ".example.com") is refused: it is never a real site, and
 // tldts would give it a domain such as ".com" that merges unrelated hosts.
+// For a main-frame navigation target (`decideTopNavigation`) these shapes are refused in the scheme and authority
+// only: Chromium hands `will-navigate` a canonical URL that may keep a raw backslash in its path, query or fragment,
+// and the parser cannot move the end of the authority by repairing what comes after it (security.md section 5). Entry URLs and
+// `isExternalUrlAllowed` stay strict everywhere: one is typed by the user, the other goes to another program.
 // Lengths are measured on the raw input before parsing and again on `href`, which percent-encoding can lengthen.
 
 import type { Result } from "@wg-launcher/shared";
@@ -45,9 +49,12 @@ interface ParsedWebUrl {
  * Parses an http or https URL whose raw text has none of the repaired shapes above, with a host and no user info.
  * Returns null for anything else (other schemes included). Never throws.
  */
-function parseWebUrl(input: unknown): ParsedWebUrl | null {
-  if (typeof input !== "string" || UNSAFE_CHARACTERS.test(input)) return null;
-  const authority = HIERARCHICAL.exec(input)?.[1];
+function parseWebUrl(input: unknown, scope: "whole" | "authority" = "whole"): ParsedWebUrl | null {
+  if (typeof input !== "string") return null;
+  const head = HIERARCHICAL.exec(input);
+  const authority = head?.[1];
+  // `whole`: the shapes are refused anywhere. `authority`: only in the scheme and authority, where the site is decided.
+  if (UNSAFE_CHARACTERS.test(scope === "whole" ? input : (head?.[0] ?? input))) return null;
   if (!authority || authority.includes("@") || authority.includes("%")) return null;
   let url: URL;
   try {
@@ -97,7 +104,9 @@ export function decideTopNavigation(
   flavor: Flavor,
 ): TopNavigationDecision {
   if (!(entryUrl instanceof URL) || !checkEntryUrl(entryUrl.href, flavor).ok) return "block";
-  const parsed = parseWebUrl(target);
+  // Chromium hands over canonical URLs whose path, query or fragment may keep a raw backslash (R25); the site comes
+  // from the authority alone, so the raw shapes are refused there only.
+  const parsed = parseWebUrl(target, "authority");
   if (!parsed) return "block";
   if (!isAllowedGameUrl(parsed, flavor)) return "ask-external";
   return siteOf(parsed.url.href) === siteOf(entryUrl.href) ? "allow" : "ask-external";
@@ -122,13 +131,81 @@ export function decideFrameNavigation(target: string): FrameNavigationDecision {
   return url.protocol === "about:" && FRAME_ABOUT_PAGES.has(url.pathname) ? "allow" : "block";
 }
 
+/** Names reserved for this computer or a private network: RFC 6761, mDNS, ICANN's `.internal`, RFC 8375. */
+const PRIVATE_SUFFIXES = [".localhost", ".local", ".internal", ".home.arpa"];
+
+/** IPv4 ranges that are not the public internet: unspecified, private, CGNAT, loopback, link-local. */
+const INTERNAL_V4: readonly [number, number][] = [
+  [0x00000000, 8],
+  [0x0a000000, 8],
+  [0x64400000, 10],
+  [0x7f000000, 8],
+  [0xa9fe0000, 16],
+  [0xac100000, 12],
+  [0xc0a80000, 16],
+];
+
+function v4Internal(value: number): boolean {
+  return INTERNAL_V4.some(([base, bits]) => value >>> (32 - bits) === base >>> (32 - bits));
+}
+
+/** A canonical IPv4 literal (the parser has normalized every other form) as a 32-bit number, or null. */
+function v4Value(host: string): number | null {
+  const parts = host.split(".");
+  if (parts.length !== 4 || !parts.every((part) => /^\d{1,3}$/.test(part))) return null;
+  return parts.reduce((value, part) => value * 256 + Number(part), 0);
+}
+
+/** The eight 16-bit groups of a bracketed IPv6 host as the parser serializes it, or null. */
+function v6Groups(host: string): number[] | null {
+  if (!host.startsWith("[") || !host.endsWith("]")) return null;
+  const [head = "", tail] = host.slice(1, -1).split("::");
+  const groups = (text: string) =>
+    text === "" ? [] : text.split(":").map((g) => Number.parseInt(g, 16));
+  const front = groups(head);
+  const back = tail === undefined ? [] : groups(tail);
+  const zeros = tail === undefined ? 0 : 8 - front.length - back.length;
+  const all = [...front, ...Array<number>(zeros).fill(0), ...back];
+  return all.length === 8 && all.every((g) => Number.isInteger(g)) ? all : null;
+}
+
+/**
+ * Whether a parsed host names this computer or the local network: `localhost` and its subdomains, `.local` (mDNS),
+ * `.internal` and `.home.arpa` names, single-label names (intranet hosts), and loopback, private, CGNAT, link-local
+ * and unspecified addresses, IPv4 and IPv6 (unique-local, link-local, site-local and IPv4-mapped forms included). A public name that resolves to such an
+ * address is not caught: that would need DNS here (security.md section 12, residual risks).
+ */
+export function isInternalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  const v6 = v6Groups(host);
+  if (v6) {
+    const [a = 0, , , , , f = 0, g = 0, h = 0] = v6;
+    if (v6.slice(0, 7).every((x) => x === 0) && h <= 1) return true; // :: and ::1
+    // fc00::/7 unique-local, fe80::/10 link-local, fec0::/10 the deprecated site-local range
+    if ((a & 0xfe00) === 0xfc00 || (a & 0xffc0) === 0xfe80 || (a & 0xffc0) === 0xfec0) return true;
+    if (v6.slice(0, 5).every((x) => x === 0) && f === 0xffff) return v4Internal(g * 65536 + h);
+    return false;
+  }
+  const v4 = v4Value(host);
+  if (v4 !== null) return v4Internal(v4);
+  return (
+    host === "localhost" ||
+    PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix)) ||
+    !host.includes(".")
+  );
+}
+
 /**
  * The only gate before `shell.openExternal` (AGENTS.md security invariant 5): it parses, the scheme is https or
- * http, there is a host and no user info, and it is at most 2048 characters. The caller opens `new URL(url).href`
- * and shows the punycode host in its confirmation.
+ * http, there is a host and no user info, and it is at most 2048 characters. A production build also refuses a host
+ * on this computer or the local network (`isInternalHost`, owner decision 2026-10-30): no remote game has a reason to
+ * send the user's own browser, with its cookies, to a router or a local service; development and test builds serve
+ * games on loopback and keep allowing it. The caller opens `new URL(url).href` and shows the punycode host in its
+ * confirmation.
  */
-export function isExternalUrlAllowed(url: string): boolean {
+export function isExternalUrlAllowed(url: string, flavor: Flavor): boolean {
   if (typeof url !== "string" || url.length > MAX_URL_LENGTH) return false;
   const parsed = parseWebUrl(url);
-  return parsed !== null && parsed.url.href.length <= MAX_URL_LENGTH;
+  if (parsed === null || parsed.url.href.length > MAX_URL_LENGTH) return false;
+  return flavor !== "prod" || !isInternalHost(parsed.url.hostname);
 }

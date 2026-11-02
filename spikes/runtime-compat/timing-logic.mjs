@@ -21,6 +21,13 @@ export function validity(payload, { load, width = 1280, height = 720, buffer = [
   if (d.viewport.innerWidth !== width || d.viewport.innerHeight !== height) reasons.push(`viewport ${d.viewport.innerWidth}x${d.viewport.innerHeight}`);
   if (d.scene.drawingBufferWidth !== buffer[0] || d.scene.drawingBufferHeight !== buffer[1]) reasons.push(`drawing buffer ${d.scene.drawingBufferWidth}x${d.scene.drawingBufferHeight}`);
   if (load !== undefined && d.settings.load !== load) reasons.push(`load ${d.settings.load}`);
+  // Interpretation (Phase 1, after run 1): a run needs real frame deltas. A page whose rAF stalled (run 1's uncapped
+  // calibration drew 2054 frames but recorded none) is not a measurement; fewer deltas than a quarter of the vsync rate
+  // over the measured window (a mean frame above four vsync intervals) counts as too few.
+  const count = d.stats?.count ?? 0;
+  const vsyncMs = d.vsync?.intervalMs;
+  const minimum = vsyncMs && d.settings?.durationMs ? Math.floor(d.settings.durationMs / (4 * vsyncMs)) : 2;
+  if (count < Math.max(2, minimum)) reasons.push(`too few frame deltas (${count}, at least ${Math.max(2, minimum)})`);
   return reasons;
 }
 
@@ -63,6 +70,8 @@ export function ratioToVsync(p50Ms, hz) {
   return typeof p50Ms === "number" && hz ? p50Ms / (1000 / hz) : null;
 }
 
+// postCheck and applyPostCheck are no longer called: the H7b group stopped post-checking the calibration when it
+// moved to the GPU timer (HYPOTHESES "Amendments" 2026-11-02). They stay for the record of the Phase 0 method.
 /** H7b post-check: does Chrome's uncapped median p50 land in the calibration band? */
 export function postCheck(chromeUncappedMedianP50Ms, hz) {
   const ratio = ratioToVsync(chromeUncappedMedianP50Ms, hz);

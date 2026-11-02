@@ -84,7 +84,7 @@ research. Verified (2026-10-24, [runtime-and-storage.md](../research/runtime-and
 | `loadBrowserProcessSpecificV8Snapshot` | Default (off) | Not needed. `Assumed` |
 | `wasmTrapHandlers` | Default (on) | Turning it off adds bounds checks and slows WebAssembly games. `Assumed` |
 
-A release check reads the fuses of the packaged app and fails on any difference (S-14). `Assumed`
+A release check reads the fuses of the packaged app and fails on any difference, a missing fuse or one at an unknown position (S-14): `apps/desktop/scripts/release-check.mjs`. Verified (2026-10-30, run locally on the packaged app; unit-tested on fixtures).
 
 ## 5. Permission and navigation policy
 
@@ -120,8 +120,16 @@ A release check reads the fuses of the packaged app and fails on any difference 
      unless an ADR adds a feature that needs one; the packaging step removes them and the release check asserts their
      absence;
   3. on the packaged app, with the macOS microphone and camera permissions undecided, denied and granted, a game's
-     `getUserMedia` MUST reject with `NotAllowedError`, MUST NOT show an OS prompt, and the app MUST keep running. What
-     macOS does when a process without a usage description touches the device is Unverified (see Open questions).
+     `getUserMedia` MUST reject with `NotAllowedError`, MUST NOT show an OS prompt, and the app MUST keep running.
+  Settled in Phase 1 Task 16: `apps/desktop/build/after-pack.mjs` removes the five descriptions (only the app's own
+  `Info.plist` has them; the helpers' do not) and `scripts/release-check.mjs` fails if any remains (a build without
+  the hook failed it naming all five). On the packaged app with both permissions reset with `tccutil` (undecided),
+  the WebRTC samples page got `NotAllowedError` for the camera and no stream for the microphone (that page shows no error, so the microphone's error name was not observed), the log recorded
+  `game.permission-denied` (`media`) for both, macOS showed no prompt and the app kept running. Denied and granted
+  cannot be reached: an app that never asks macOS for these devices is not listed under Camera or Microphone in
+  System Settings, so there is nothing to deny or grant. Verified (2026-10-30, [manual
+  checks](../compat/manual-checks/2026-10-30-macos-arm64.md) 8 and 13, macOS 27.0.1 arm64). Open check 5 holds for what
+  could be observed (no prompt, a denial, the app kept running); the fallback (keeping the descriptions) is not needed.
 
 **Navigation and windows (AC-5).** URL decisions are pure functions on WHATWG `URL` objects, never string prefixes.
 
@@ -136,9 +144,18 @@ A release check reads the fuses of the packaged app and fails on any difference 
 | `select-client-certificate` | Prevented with no certificate (by default Electron picks the first one: Verified (2026-10-25, `electron.d.ts`)) |
 
 - **`shell.openExternal`** receives only a URL that passes `isExternalUrlAllowed`: it parses, the scheme is `https:` or
-  `http:`, there is a host and no user info, and it is at most 2048 characters. The confirmation is a native dialog that
+  `http:`, there is a host and no user info, and it is at most 2048 characters. A production build also refuses a host
+  on this computer or the local network (`isInternalHost` in `policy/url-rules.ts`): `localhost` and its subdomains,
+  `.local`, `.internal` and `.home.arpa` names, single-label names, and loopback, private, CGNAT, link-local, site-local
+  and unspecified IPv4 and IPv6 addresses (IPv4-mapped forms included; NAT64 and multicast forms are not covered), so a game cannot send the user's own browser, with its cookies, to a router or a local
+  service; development and test builds serve games on loopback and keep allowing it. `Owner` (decided 2026-10-30),
+  `Assumed` for the list of ranges; unit-tested in `url-rules.test.ts` and `window-factory.test.ts`. The confirmation is a native dialog that
   shows the host in its punycode form, so a lookalike name is visible. One confirmation per window at a time; others
-  are dropped and logged. Never any other scheme (AGENTS.md security invariant 5). `Owner` for the rule, `Assumed` for
+  are dropped and logged; after a Cancel, that window's requests are dropped and logged for 10 s
+  (`EXTERNAL_COOLDOWN_MS`, Assumed), so a game cannot re-ask forever. `window.open` is not gated on a user gesture:
+  Electron 45's window-open handler details have no activation flag (Verified, 2026-10-25 `electron.d.ts`
+  `HandlerDetails`), and a `window.open` without a gesture reached the handler and was offered (Verified, 2026-10-28,
+  `apps/desktop/e2e/game-isolation.spec.ts`). Never any other scheme (AGENTS.md security invariant 5). `Owner` for the rule, `Assumed` for
   the details.
 - The unit tests (S-5) cover at least: `javascript:`, `file:`, `wglauncher:` and `app:` URLs; `https://user:pass@host`
   and `https://good.example@evil.example`; an IDN lookalike; `https://example.com.evil.net` and `https://evil-example.com`
@@ -153,8 +170,12 @@ A release check reads the fuses of the packaged app and fails on any difference 
     `https://evil.com\.example.com`), a scheme not followed by exactly `//` and a host (`https:evil.com`,
     `https:///evil.com`), and `@` or `%` in the authority (user info in any form, also an empty one such as
     `https://@evil.com`, which the parser drops silently; percent-encoded host characters such as `exa%2Emple.com`,
-    which the parser decodes into `exa.mple.com`). This applies to entry URLs, main-frame targets and
-    `isExternalUrlAllowed`, not to subframes (a `data:` frame URL may contain spaces).
+    which the parser decodes into `exa.mple.com`). This applies to the whole text of entry URLs and of
+    `isExternalUrlAllowed` (one is typed by the user, the other goes to another program), but only to the scheme and
+    authority of a main-frame target (decided 2026-10-28, Phase 1 Task 8): Chromium hands `will-navigate` a canonical URL that may
+    keep a raw backslash in its path, query or fragment, and repairing what comes after the authority cannot change
+    the host, so `?q=a\b%20c#x\y%20z` on the entry's site is allowed while `https://evil.com\.example.com/` is still
+    blocked. Not to subframes either (a `data:` frame URL may contain spaces).
   - After parsing, a host with an empty label (`example..com`, `.example.com`, `example.com..`) is refused: tldts
     7.4.19 gives such hosts a domain such as `.com`, which would merge unrelated hosts into one site. `siteOf` itself
     also uses the whole host for them.
@@ -167,11 +188,31 @@ A release check reads the fuses of the packaged app and fails on any difference 
   - Development origins are only the literal hosts `localhost` and `127.0.0.1` in the raw text (any port), in dev and
     test builds; other spellings that the parser maps to `127.0.0.1` (`2130706433`, `0x7f.0.0.1`, `127.1`), `[::1]`,
     `localhost.` and `sub.localhost` are not. A production-flavor call refuses them all (Verified, 2026-10-28,
-    `url-rules.test.ts`); Task 8 passes the compile-time `FLAVOR` (Assumed until wired); the dev-origin strings are
+    `url-rules.test.ts`); Task 8 passes the compile-time `FLAVOR` (`apps/desktop/src/main/index.ts` and `games/lifecycle.ts`); the dev-origin strings are
     still in the prod bundle, because the flavor is a parameter, so `pnpm bundle:check` asserts nothing about them.
   - Subframes: `about:blank` and `about:srcdoc` are matched on the parsed path, so a query or fragment does not
     matter; `about:BLANK` and every other `about:` page are blocked.
   - Permissions: a `Set` lookup with exact case, so `Fullscreen`, `__proto__` or an empty name are denied.
+- **Wired in Phase 1 Task 8** (`apps/desktop/e2e/game-isolation.spec.ts`; Verified, 2026-10-28, Electron 45.0.0, macOS
+  arm64, one machine, with the macOS screen locked; the allowed-permission bullet below was rerun unlocked, see there):
+  - camera `getUserMedia` got no stream (`NotFoundError` on this run; the cause, that Chromium offered no camera
+    because the check handler denies `media`, is Assumed), `permissions.query({name: "microphone"})` gave `denied` (the check handler; no
+    `getUserMedia` for audio is ever made in e2e, so no OS prompt can appear), geolocation error code 1, notifications
+    `denied`, display capture and `getScreenDetails` `NotAllowedError`; each name was logged once
+    (`game.permission-denied`, origin only), `media` once although it was requested and checked. Chromium also checks
+    `automatic-fullscreen` on `requestFullscreen()`; it is denied like any other name and fullscreen still works.
+  - fullscreen and keyboard lock succeeded after their own clicks; with the screen locked, pointer lock failed with
+    `WrongDocumentError` (MEMORY.md, H13), so that run did not verify it. Rerun with the screen unlocked (Verified,
+    2026-10-28, `e2e/game-isolation.spec.ts` "permissions", 3 runs plus the full desktop suite, Electron 45.0.0, macOS
+    arm64): pointer lock, fullscreen and keyboard lock all succeeded in a game window, each after its own injected
+    click, pointer lock first and released (`pointerlockchange`) before the next click, with the window focused. The
+    test checks the `WrongDocumentError` outcome, annotated "pointer lock not verified", when the screen is locked.
+  - an off-site link and a `window.open` to an https URL were prevented and offered through the queued dialog; only
+    the confirmed one reached the `shell.openExternal` stub; `window.open("file:...")` asked nothing; a download was
+    cancelled and logged; a same-site redirect at start loaded and a cross-site one was offered and ended the launch.
+  - Chromium escapes spaces in the query and fragment before `will-navigate` (`?q=a%20b#x%20y`) but
+    hands over a backslash there raw (`?q=a\b%20c#x\y%20z`). The first Task 8 run showed the raw-shape rule
+    blocking such a same-site navigation; after the rule above the e2e test loads both.
 
 ## 6. Launcher renderer
 
@@ -244,7 +285,16 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
   final rename all use that private copy, so the user's file cannot change between checks. `Assumed`
 - Other limits: one task per game and at most two snapshot jobs at once; a watchdog per job
   ([save-transfer.md](save-transfer.md#5-quiescent-window)); 64 KiB per launcher IPC message; one pending external-link
-  confirmation per game window; rate-limited denial logs. `Assumed`
+  confirmation per game window; rate-limited denial logs. `Assumed` Phase 1 Task 13 enforces one job per game (the lock), the
+  watchdog (60 s plus 1 s per MiB read) and the cap of two jobs at once (`quiescent/slots.ts`: a third job is refused
+  with `GAME_BUSY` naming the cap, except that a user task takes the slot of a running storage check, which it
+  cancels, waiting at most 2 s for it; storage checks run one at a time, so background work holds at most one slot;
+  Verified 2026-10-28, `job.test.ts`). The watchdog covers the commit too: a commit still pending at the deadline
+  (a hung worker write) is left, the job returns `EXP_TIMEOUT`, and the export's discard kills the worker, waits for
+  its exit (at most 2 s) and only then removes the partial and the final file; no row is written (Verified
+  2026-10-28, `job.test.ts`, `export.test.ts`, `worker/client.test.ts`).
+  Messages between a quiescent frame and the snapshot worker carry at most 1 MiB of entry bytes each, and those
+  between main and the worker carry no data bytes at all ([save-transfer.md](save-transfer.md#3-exporter-interface-and-versioning)). `Assumed`
 
 ## 9. Logging and redaction
 
@@ -253,7 +303,10 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
 - A single `redact()` function runs on every log record and is unit-tested (S-12, AC-20): game URLs are reduced to their
   origin (paths and query strings can hold tokens); the home directory becomes `~`; storage values, localStorage key
   names, record contents, snapshot bytes, cookie and `Authorization` headers are never passed to the logger at all;
-  deep-link input is logged only as "valid" with the id or "invalid" with its length. `Assumed`
+  deep-link input is logged only as "valid" with the id or "invalid" with its length. `Assumed`. Implemented as the
+  `launch.input` record of `apps/desktop/src/main/launch-input.ts` (source and result, plus the id or the length);
+  a unit test and `apps/desktop/e2e/shortcut.spec.ts` check that a hostile value's text never reaches the log
+  (Verified, 2026-10-28, Electron 45.0.0, macOS arm64).
 - Logged events: lifecycle, permission denials, navigation refusals, job steps with counts, sizes and error codes,
   migrations, recovery. Errors shown in the UI follow the same rules.
 
@@ -302,12 +355,12 @@ The tutorial's 20 items. Verified (2026-10-25, <https://www.electronjs.org/docs/
 - All games share Chromium's GPU and network service processes; side channels between games are not addressed.
   `Assumed`
 - A heavy or hostile game can exhaust CPU, GPU or memory; the user closes it ("Force close"). `Assumed`
+- A public host name that resolves to a loopback or private address passes the production refusal of internal hosts
+  for "Open in browser?": deciding it would need a DNS lookup in the main process. The native confirmation still names
+  the host. `Assumed`
 
 ## Open questions
 
-- If removing the macOS usage descriptions makes the system terminate a process that touches the camera or microphone,
-  the fallback is to keep the descriptions and rely on the handlers, accepting a possible OS prompt; the owner decides
-  after the packaged test. `Assumed`
 - Should `persistent-storage` be allowed? It protects a game's data from eviction under disk pressure and exposes
   nothing, but the owner's allowlist has only three permissions. Default: denied. Whether Electron evicts best-effort
   storage at all is Unverified.

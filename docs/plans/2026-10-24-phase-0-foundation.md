@@ -177,7 +177,7 @@ outbound "any license"; flagged for lawyer review; CLA Assistant app setup = own
 - [ ] Commit `chore: add quality toolchain, hooks and CI`, push, open **draft PR** `phase-0-foundation → main`; CI green on
   ubuntu/macOS/Windows read via ccd_pr tools (this is the only real Windows evidence: install + unit tests, not games).
 
-### Task 3: Research docs, PRD, spike hypotheses (docs only; controller writes research docs — it holds the source reports)
+### Task 3: Research docs, PRD, spike hypotheses (docs only; the main agent writes the research docs — it holds the source reports)
 **Files:** `docs/research/foundations.md` (OSS bases + license table with SHAs + test games), `docs/research/runtime-and-storage.md`
 (Electron/Tauri/iOS facts + save extraction facts), `docs/product/prd.md`, `spikes/runtime-compat/HYPOTHESES.md`.
 - [ ] PRD (English, from sources): problem, users, vertical scenario, MVP features, honest badges, playtime rule, delete

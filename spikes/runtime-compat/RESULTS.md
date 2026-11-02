@@ -9,12 +9,16 @@
 > side of H8, the H9 memory rerun, H20-6 (frame time of Chrome `--app`) and the frame-time samples of the public demos are not
 > measured in Phase 0. They will be measured on the real launcher against Chrome in Phase 1. "Deferred" is not a result: it is
 > neither N/A nor INVALID, nothing below counts it as a pass, and the Electron numbers already recorded stay as reported.
+>
+> **Phase 1 (2026-11-02): the deferred runs were taken.** H7 on the launcher against Chrome 156 is **PASS**; H8 (both sides),
+> H9, H20-6 and the demo frame samples are reported. Details, both runs and the caveats are in the section "Phase 1: hands-off
+> timing runs (2026-11-02)" below; the two dated amendments of HYPOTHESES.md say what changed in the method and why.
 
 ## Run
 
 - **Date:** 2026-10-24. **Command:** `node run.mjs --runtime=electron` (all groups), then twice `node run.mjs
   --runtime=electron --only=memory --load=512` for H9, then once `node run.mjs --runtime=electron --only=permissions`
-  for H12 (review fix round, file `electron-45.0.0-20261024T154218.995Z.json`, "H12 rerun").
+  for H12 (a rerun after the first permissions run, file `electron-45.0.0-20261024T154218.995Z.json`, "H12 rerun").
 - **Machine:** MacBook Air with Apple M3 (model `Mac15,12`, fanless), 10-core GPU (Metal 4), built-in Retina display at
   1470 x 956 points, scale factor 2, 60 Hz (Electron `displayFrequency` 60.0024), one display, on AC power, screen
   unlocked. macOS 27.0.1 (26A434).
@@ -37,10 +41,10 @@
 | H4 | PASS | `…150310.061Z` (injected), `…150310.887Z` (control) | Same with COOP/COEP added by `webRequest.onHeadersReceived` to the document and worker responses; control false |
 | H5 | PASS (Electron side) | `…150312.029Z` (`checks.webgpu`) | Adapter `apple` / `metal-3`, 24 features, device created, compute readback correct, no switch. Feature count vs Chrome: Task 6 |
 | H6 | PASS | `…150312.029Z`, every frame-time file | `ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)` in every run |
-| H7 | not decided | `…150833.269Z`, `…150926.645Z`, `…151019.994Z` | Electron only: p50 16.7 ms, p95 18.6 / 18.7 / 18.7 ms, 0 long frames. H7 is deferred to Phase 1 (owner decision 2026-10-25): it needs a calibrated Chrome baseline and alternating runs |
+| H7 | PASS (Phase 1, 2026-11-02, the launcher) | `timing-…093221.099Z` | The launcher (packaged test-flavor build) p95 17.70 ms ≤ Chrome 156 p95 18.10 ms × 1.15 = 20.81 ms (ratio 0.978); load 512 calibrated with the GPU timer query; see "Phase 1". Phase 0 (Electron spike app only): p50 16.7 ms, p95 18.6 / 18.7 / 18.7 ms in `…150833.269Z`, `…150926.645Z`, `…151019.994Z` |
 | H7b | reported (Electron only) | `…151113.336Z`, `…151221.931Z`, `…151329.509Z` | Uncapped: p50 13.9 / 14.0 / 20.5 ms, p95 14.2 / 15.3 / 26.5 ms. The Chrome counterpart is deferred to Phase 1 (optional, not planned) |
-| H8 | reported | `…150631.684Z` to `…150636.190Z` | Spawn to first frame: cold 420, 362, 341 ms (median 362); warm 370, 369, 320 ms (median 369); all focused and visible. The Chrome side is deferred to Phase 1 (owner decision 2026-10-25) |
-| H9 | INVALID (Task 5); rerun deferred | aggregate `checks.memory`, `…151642.234Z`, `…152143.695Z` (reruns) | In all three attempts the window was hidden and lost focus 4 to 6 s into the 60 s because the machine was in use. The valid rerun and the Chrome value are deferred to Phase 1 (owner decision 2026-10-25) |
+| H8 | reported | `…150631.684Z` to `…150636.190Z` | Spawn to first frame: cold 420, 362, 341 ms (median 362); warm 370, 369, 320 ms (median 369); all focused and visible. Phase 1 (`timing-…083920.324Z`): spike app cold 308, warm 301 ms; Chrome 156 cold 470, warm 422 ms (medians of 3, 12 of 12 valid) |
+| H9 | reported (Phase 1); Task 5 INVALID | `timing-…083920.324Z`; Task 5: aggregate `checks.memory`, `…151642.234Z`, `…152143.695Z` | Phase 1, one run each after 60 s of the scene, resident / footprint: spike app 398 / 253 MiB, Chrome 156 1009 / 555 MiB (no threshold, no percentage claim). In all three Task 5 attempts the window was hidden and lost focus 4 to 6 s into the 60 s because the machine was in use |
 | H10 | PASS | aggregate `checks.sqlite` | `node:sqlite` (SQLite 3.53.4) and zstd work in the main process and a `utilityProcess`; no warning emitted |
 | H11 | PASS | aggregate `checks.playwright` | `_electron.launch`, `firstWindow`, click, `evaluate` in main, close. Playwright turns iframe storage partitioning off |
 | H12 | FAIL in the full run, PASS in the rerun: environment-dependent | aggregate `checks.permissions`; H12 rerun `checks.permissions` | Full run: the microphone request never reached the handler (8 s timeout) while macOS microphone access was undecided. Rerun after the owner allowed the macOS prompt (`getMediaAccessStatus` `granted`): it reached the handler and was denied; all eight as specified. Depends on macOS TCC state; rerun with the packaged app before relying on it |
@@ -52,13 +56,15 @@
 | H18 | N/A | none | Same reason. Safari was run as a WebKit proxy instead (capabilities only, not WKWebView, no frame time); see "Task 6" |
 | H19 | valid baseline (reported) | `chrome-155.0.8059.85-…` (`…171517.695Z`) | Chrome 155.0.8059.85 (major 155, not 156: version mismatch). Hardware WebGL2, WebGPU adapter `apple`/`metal-3` with 23 features, `crossOriginIsolated` true on `/coi/`, control false |
 | H20-1 to H20-5 | PASS, PASS, PASS (window), PASS (CDP), mixed (cleanup) | five `chrome-app-155.0.8059.85-…` aggregates | Isolation and persistence PASS in 5 of 5 runs; the browser UI was 32 px high in 5 of 5 runs (a normal window: 87 px) and one screenshot read once by the agent showed a title bar only; CDP reads work; the closed window's renderer exited 3.1 to 5.9 s after the close, so H20-5 is PASS in 2 and FAIL in 3 of 5 runs against the Assumed 5 s |
-| H20-6 | deferred to Phase 1 (owner decision 2026-10-25) | none | Frame time of Chrome `--app` is not measured in Phase 0 |
-| H21 | reported (load part) | `demos-electron-45.0.0_chrome-155.0.8059.85-…` | Six public demos load in both runtimes, WebGPU used wherever the page uses it, no failure that is only in Electron; frame-time samples deferred to Phase 1 (owner decision 2026-10-25) |
-| H7, H8 (Chrome side), H9 rerun, demo frame samples | deferred to Phase 1 (owner decision 2026-10-25) | none | The hands-off measurements (`run-timing.mjs`, built and wiring-checked but never run for a result) will be taken on the real launcher against Chrome |
+| H20-6 | reported (Phase 1, 2026-11-02) | `timing-…093221.099Z` | Chrome `--app` p95 18.10 ms against Chrome's 18.10 ms (ratio 1.000); reported, not a verdict |
+| H21 | reported (load part) | `demos-electron-45.0.0_chrome-155.0.8059.85-…` | Six public demos load in both runtimes, WebGPU used wherever the page uses it, no failure that is only in Electron. Phase 1 frame samples (`timing-…083920.324Z`, indicative): all 12 valid, p50 16.7 ms everywhere, p95 17.4 to 18.6 ms in both runtimes, no long frames |
+| H7, H8 (Chrome side), H9 rerun, demo frame samples | measured in Phase 1 (2026-11-02) | two `timing-…` aggregates | See the rows above and the section "Phase 1" |
 
 Decision-rule view (HYPOTHESES section 4), Electron side only: none of the Electron fatal criteria that can be judged
-without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). H7 has no verdict: it is deferred to
-Phase 1 (owner decision 2026-10-25), so this file alone does not decide it. H3 passed on 45.0.0, so no 44.9.x retry was run.
+without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). In Phase 0 H7 had no verdict: it was
+deferred to Phase 1 (owner decision 2026-10-25). H3 passed on 45.0.0, so no 44.9.x retry was run.
+Phase 1 (2026-11-02): H7 on the launcher is PASS, so no fatal criterion of Electron has failed on this machine; H16's FAIL
+was handled by the launcher's close procedure (AC-13, `docs/specs/architecture.md` section 4).
 
 ## Per hypothesis
 
@@ -120,8 +126,9 @@ Phase 1 (owner decision 2026-10-25), so this file alone does not decide it. H3 p
   (> 33.3 ms) in 1200, 1200 and 1201 frames. Every run visible and focused throughout.
 - H7b, `--disable-frame-rate-limit --disable-gpu-vsync`: p50 13.9, 14.0, 20.5 ms; p95 14.2, 15.3, 26.5 ms; long frames
   0, 0, 32. The third run was slower; see the findings on GPU backlog and heat.
-- No verdict: H7 compares Electron p95 with a calibrated Chrome p95 in alternating E, C runs and applies the noise rule
-  to Chrome's spread. Both are deferred to Phase 1 (owner decision 2026-10-25).
+- No verdict in Phase 0: H7 compares Electron p95 with a calibrated Chrome p95 in alternating E, C runs and applies the
+  noise rule to Chrome's spread. Both were deferred to Phase 1 (owner decision 2026-10-25); the Phase 1 verdict on the
+  launcher is PASS, see "Phase 1: hands-off timing runs (2026-11-02)".
 
 ### H8: cold and warm start
 
@@ -176,7 +183,7 @@ value of a switch wins) restored partitioning under Playwright. Only the normal 
   request in a separate script; `systemPreferences.getMediaAccessStatus` then reported `not-determined` for microphone
   and camera; and a macOS `UserNotificationCenter` process started at the moment of the first microphone request.
 - Owner-reported (2026-10-24): the macOS microphone prompt that appeared during the first permissions run was answered
-  "Allow". A TCC log read during the review fix round (not in the committed files) shows a microphone record created for
+  "Allow". A TCC log read afterwards (not in the committed files) shows a microphone record created for
   `com.anthropic.claude-code`, the app that launched the runner, at 15:14:11 UTC, after the full run's permissions group
   had finished.
 - H12 rerun (`…154218.995Z`, the runner now records `getMediaAccessStatus` before, between and after the requests, and a
@@ -292,15 +299,15 @@ Date 2026-10-24, same machine as above (macOS 27.0.1, Apple M3, 60 Hz, scale fac
 timing runner refuses to run that way; these checks do not depend on it). Commands: `node run-compare.mjs
 --only=chrome,chromium,safari,demos` and five times `node run-compare.mjs --only=app`. Runner code: `common.mjs`,
 `run-compare.mjs`, `groups/*.mjs`; probe, scene and server are the Task 5 files, unchanged. The timing part (H7, H8 on
-Chrome, H9, H20-6 and the demo frame samples) is deferred to Phase 1 by the owner's decision of 2026-10-25;
-`run-timing.mjs` and `timing-logic.mjs` were built for it and wiring-checked with tiny durations and mocked inputs, but never
-run for a result.
+Chrome, H9, H20-6 and the demo frame samples) was deferred to Phase 1 by the owner's decision of 2026-10-25;
+`run-timing.mjs` and `timing-logic.mjs` were built for it and wiring-checked with tiny durations and mocked inputs, and were
+run for a result in Phase 1 (section "Phase 1").
 
 ### H17 and H18: Tauri (N/A)
 
 Not run, decision-irrelevant (owner-approved scope change): per decision rule 6 Tauri wins only by passing a criterion
-Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace (and H7 is deferred to
-Phase 1); and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack. Assumed (reasoning, not
+Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace (and H7 was deferred to
+Phase 1, where it passed on the launcher); and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack. Assumed (reasoning, not
 tested): `docs/research/runtime-and-storage.md` section 3 ("WKWebView does not speak the Chrome DevTools Protocol", tagged
 Assumed) and section 9 ("How a Tauri (WKWebView) app would extract saves without CDP", Unverified). No Tauri crate or app was
 written. Nothing here is a Tauri result, and no Tauri row appears in the matrix.
@@ -356,7 +363,8 @@ Installed Chrome 155.0.8059.85 started directly: `--app=<url> --user-data-dir=<d
    remained 5 s later in any run. **Chrome keeps running after its last window closes** (the browser process was still there
    5 s after the close in all runs): a launcher built on `--app` must quit the browser itself. In Electron the equivalent
    renderer lived 27.8 s (H16), so Chrome is quicker, probably because its service worker stops earlier (Unverified).
-6. **Frame time:** deferred to Phase 1 (owner decision 2026-10-25), listed as H20-6.
+6. **Frame time:** deferred to Phase 1 (owner decision 2026-10-25), listed as H20-6; reported there (ratio 1.000 to Chrome,
+   section "Phase 1").
 
 ### Safari as a WebKit proxy (not WKWebView)
 
@@ -386,8 +394,8 @@ three.js `webgl_animation_keyframes`, `webgl_shadowmap`, `webgpu_compute_birds`.
 three webgpu-samples pages and by `webgpu_compute_birds` in both runtimes (adapter and device acquired through the injected
 hook); the two WebGL three.js examples used no WebGPU. Console errors: Electron 0 everywhere; Chrome 1 on each webgpu-samples
 page, in every case the `/favicon.ico` 404 that Chrome requests and an Electron window does not. So no demo fails in Electron
-while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples are deferred to Phase 1 (owner
-decision 2026-10-25). Visibility is judged from the moment the page reported itself visible and focused (`focus-ready`):
+while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples were deferred to Phase 1 (owner
+decision 2026-10-25) and taken there (section "Phase 1"). Visibility is judged from the moment the page reported itself visible and focused (`focus-ready`):
 the log entry written when a new Electron window opens is made before it has focus, so judging from it would call every
 Electron row unfocused.
 
@@ -399,6 +407,59 @@ than a small adapter. (2) GitHub documents that a `workflow_dispatch` workflow o
 the default branch ("This event will only trigger a workflow run if the workflow file exists on the default branch", checked
 2026-10-25 in the GitHub Actions events reference), and merging to `main` was out of scope for this work, so the job could not be run or
 verified from this branch. An unrun workflow was not committed. Windows stays "not tested".
+
+## Phase 1: hands-off timing runs (2026-11-02)
+
+- **Machine and state:** the dev Mac of "Run" (same OS, display 60.0024 Hz), on AC power, screen unlocked, no thermal or
+  performance warning recorded (`pmset -g therm`) in any run, no keyboard or trackpad input during any measured run. The
+  Claude desktop app and its agent processes were running: `checks.startConditions.topCpuPercentSum` (the eight busiest
+  processes, sampled right after the runner's own Electron environment launch) is 86 in run 1 and 92 in run 2; which
+  processes they were comes from the runner's console only (deviation 26). Chrome **156.0.8078.79**, so the major matches Electron 45's Chromium 156:
+  no "version mismatch". Runner on Node 24.13.0; Electron side as below.
+- **The launcher build:** `node build-launcher.mjs <dir outside the repository>` packages the test flavor of
+  `apps/desktop` with the release builder config minus fuses and the `wglauncher` scheme (amendment "H7 measures the
+  launcher"). Its frame time is assumed equal to a release build's: same Electron 45.0.0 and Chromium (Assumed).
+- **Run 1** (`node run-timing.mjs --launcher-app=<.app>`, runner at commit 820234a, aggregate
+  `timing-electron-45.0.0_chrome-156.0.8078.79-20261102T083920.324Z.json`): calibration found no load. The uncapped
+  Chrome run at load 512 drew 2 054 frames in 27.9 s but recorded zero frame deltas: its `requestAnimationFrame`
+  timestamps stalled while the GPU drained a queue, so the runner hit a `TypeError` on the empty statistics, and H7 and
+  H20-6 are N/A for this run. H8, H9 and the demos ran in the same invocation with valid results (below).
+- **Diagnosis** (scratch scripts, no committed result): in uncapped Chrome 156 with the scene, `requestAnimationFrame`
+  ran about 1 800 times in the first second and then waited about 27 s. With vsync on and the GPU timer query, 20 s each:
+  load 384 GPU-time p50 13.06 ms, load 512 14.03 ms (frame p50 16.7 ms for both), load 768 39.45 ms while the frame
+  mean was 20.70 ms. The owner chose the GPU timer fallback (amendment "H7 calibrates with the GPU timer query").
+- **Run 2** (`node run-timing.mjs --only=calibrate,h7 --launcher-app=<.app>`, runner at commit 8e637ec, aggregate
+  `timing-electron-45.0.0_chrome-156.0.8078.79-20261102T093221.099Z.json`): calibration accepted load 512 at once, GPU-time
+  p50 13.98 ms = 84% of the vsync interval (1 201 samples, no disjoint frame). H7, alternating L, C, A, every run valid on
+  its first attempt:
+
+  | Runtime | p95 per run (ms) | Median p95 | Median p50 | Long frames | Files |
+  | --- | --- | --- | --- | --- | --- |
+  | The launcher (L) | 17.70, 17.40, 18.00 | 17.70 | 16.70 | 0 | `launcher-45.0.0-20261102T093344.670Z`, `…093625.833Z`, `…093906.815Z` |
+  | Chrome (C) | 17.30, 18.10, 18.50 | 18.10 | 16.70 | 0 | `chrome-156.0.8078.79-20261102T093438.213Z`, `…093719.516Z`, `…094000.420Z` |
+  | Chrome `--app` (A) | 17.30, 18.10, 18.60 | 18.10 | 16.70 | 0 | `chrome-app-156.0.8078.79-20261102T093532.230Z`, `…093813.303Z`, `…094054.302Z` |
+
+  Chrome's p95 spread is 6.6% (below 15%), so no 5-run rerun. **H7: PASS**, the launcher's p95 17.70 ms ≤ 18.10 × 1.15 =
+  20.81 ms (ratio 0.978). H20-6 reported: ratio 1.000.
+- **What the verdict does not say:** the scene is calibrated only as far as the GPU timer allows on this Mac (it shows
+  the GPU busy for most of each frame, not the headroom at a higher clock, and loads 128 and 256 would also have read
+  inside the band; amendment 2), and every runtime presents at
+  the 60 Hz vsync (p50 16.7 ms), so the comparison is about dropped and late frames at that rate. One machine, one
+  display; nothing is extrapolated. The test-flavor build stands in for the release build (Assumed).
+- **Launcher profile:** the three launcher runs of run 2 share one userData directory and one library entry (the first
+  launch adds it, later launches reuse it), while every Chrome run starts with a fresh profile. The scene stores nothing,
+  so this is assumed not to change frame time. Assumed
+- **H8** (run 1, spike app against Chrome, spawn to first frame, ms): spike app cold 420, 303, 308 (median 308), warm 291,
+  302, 301 (median 301); Chrome cold 591, 470, 455 (median 470), warm 486, 406, 422 (median 422). All 12 launches valid.
+  Reported, no threshold; cold means an empty profile, the OS file cache is not flushed.
+- **H9** (run 1, one run each, the process tree summed from outside after 60 s of the scene): spike app resident 398 MiB,
+  footprint 253 MiB (4 processes); Chrome resident 1 009 MiB, footprint 555 MiB (7 processes). Reported, no threshold,
+  no percentage claim (process models differ).
+- **Demo frame samples** (run 1, H21, 20 s each, indicative: external pages run their own load), p95 in ms, Electron spike
+  app / Chrome: webgpu-hello-triangle 17.40 / 18.30, webgpu-cubemap 18.10 / 18.60, webgpu-compute-boids 18.60 / 18.20,
+  three-animation-keyframes 18.20 / 18.20, three-shadowmap 18.21 / 18.20, three-webgpu-compute-birds 18.20 / 18.20; p50
+  16.70 everywhere, no long frames, all valid.
+- **All result files** of both runs validate against `results.schema.json` (`node validate.mjs results/*20261102*.json`).
 
 ## Deviations from the methods, and why
 
@@ -434,7 +495,7 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
     that transient process is the mechanism the method tests, not a second instance that stays.
 12. **H12 rerun.** The method has no OS-permission precondition. The full run's FAIL stands as measured; the rerun after
     the owner answered the macOS prompt is reported next to it, and H12 is marked environment-dependent.
-13. **Changes after the measurements.** In the review fix round the result transport was hardened (the spike server
+13. **Changes after the measurements.** After the first runs the result transport was hardened (the spike server
     now requires a per-run token and checks the Origin, see `README.md`) and the permissions mode gained the
     media-access status and TCC log. The measuring code is unchanged; only the H12 rerun used the new transport. In the
     H12 rerun file, paths outside the repository in the captured TCC lines (another app's install location) were
@@ -462,6 +523,23 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 21. **Hands-off timing deferred.** The owner decided on 2026-10-25 that H7, the Chrome side of H8, the H9 rerun, H20-6 and the demo
     frame samples are measured in Phase 1 on the real launcher, not in Phase 0. The frozen HYPOTHESES.md still lists them; they
     are reported as "deferred", not as N/A or INVALID, and are never counted as a pass.
+22. **Phase 1: the launcher as H7's Electron side** (HYPOTHESES "Amendments", 2026-11-02, written before any H7 run). H8,
+    H9 and the demo samples still ran the spike app.
+23. **Phase 1: GPU-timer calibration** (HYPOTHESES "Amendments", 2026-11-02, after run 1 found no calibrated load).
+24. **Phase 1: a stale label in run 2's aggregate.** `hypotheses.H7.metrics.loadSource` says "calibrated in Chrome
+    (uncapped)"; the calibration was the GPU-timer one with vsync on, as `checks.calibration.band` and the sweep record.
+    The runner's text was fixed after the run; the result file is left as written.
+25. **Phase 1: a wrong reason in run 1's aggregate.** `hypotheses.H7.reason` says "the calibrate group was not run in this
+    invocation"; the group ran and threw (`checks.calibrateError`). The runner now records the failure as the reason; the
+    file is left as written.
+26. **Phase 1: other processes running.** HYPOTHESES section 2 asks for no other heavy apps; the Claude desktop app and its
+    agent processes ran during both runs (`topCpuPercentSum` 86 and 92, see "Phase 1"). They ran the same way for every
+    runtime and alternation spreads drift, but their effect is not measured.
+27. **Phase 1: validity and runner fixes after the runs** (from the task review): a run with fewer frame deltas than a
+    quarter of the vsync rate is INVALID, calibration needs as many GPU samples, the GPU timer drops every result read
+    after a disjoint event, the H7b group no longer post-checks the calibration, and the launcher rows keep their window
+    sizing and readiness. Re-applied to the committed files, the new validity rule changes nothing: every H7 run of run 2
+    has 1 199 to 1 201 deltas and stays valid; only run 1's calibration row (0 deltas) would be INVALID.
 
 ## Findings and gotchas
 
@@ -484,8 +562,12 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 
 ## Open items for the owner
 
-- H7, the Chrome side of H8, the H9 rerun, H20-6 and the demo frame samples: deferred to Phase 1 (owner decision 2026-10-25).
-- The H13 manual real-click run needs the owner at the machine.
-- H12: rerun with the packaged app (its own bundle id) and with an undecided and a denied macOS microphone state.
+- H7 passed on the launcher in Phase 1 (2026-11-02), the condition under which ADR-0002 and ADR-0005 were accepted; the
+  ADRs record the outcome. The owner keeps `spikes/runtime-compat/` as it is (2026-11-02).
+- H12 and the H13 real-click run were done on the launcher in Phase 1, not in the spike: the packaged app denied media
+  without an OS prompt in the reachable (undecided) state, and real clicks granted pointer and keyboard lock
+  (`docs/compat/manual-checks/2026-10-30-macos-arm64.md`, checks 8 and 10). The spike's own H12 rerun with a denied
+  microphone state and its H13 control were not rerun; macOS never lists an app that does not ask, so the denied state
+  cannot be reached.
 - H13: the frozen control cannot pass for keyboard lock; an Amendment would be the owner's call.
 - Optional: remove the LaunchServices `wgspike` handler preference (recipe under H15; harmless if left).

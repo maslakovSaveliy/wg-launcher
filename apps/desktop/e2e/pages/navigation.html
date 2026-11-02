@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- e2e page (not a game): links and calls the navigation policy must decide. Targets are set by the test. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>navigation</title>
+  </head>
+  <body>
+    <a id="link" href="#">link</a>
+    <a id="download" href="/download">download</a>
+    <button id="popup" type="button">popup</button>
+    <script>
+      window.setLink = (href) => {
+        document.getElementById("link").setAttribute("href", href);
+      };
+      window.popupTarget = "about:blank";
+      document.getElementById("popup").addEventListener("click", () => {
+        window.popupResult = window.open(window.popupTarget) === null ? "null" : "window";
+      });
+    </script>
+  </body>
+</html>

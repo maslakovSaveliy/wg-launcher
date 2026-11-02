@@ -431,7 +431,8 @@ describe("restore journal", () => {
     });
     clock.advance(20);
     repos.restoreJournal.update("j1", { step: "wipe", backupRevisionId: "rev-b" });
-    repos.restoreJournal.update("j2", { state: "done" });
+    repos.restoreJournal.update("j2", { state: "done", revisionId: "rev-c" });
+    expect(repos.restoreJournal.get("j2")?.revisionId).toBe("rev-c");
     expect(repos.restoreJournal.get("j1")).toMatchObject({
       step: "wipe",
       backupRevisionId: "rev-b",

@@ -4,7 +4,8 @@
 import { SnapError } from "../errors.js";
 import { type CborItem, type DecodeOptions, decodeSequence, encodeItem } from "./cbor.js";
 import { compareIdbKeys, type IdbKey, keyFromItem, keyToItem } from "./idb-key.js";
-import { type BlobRefs, checkValueItem, numberItem, stringItem, stringOf } from "./value.js";
+import { numberItem, stringItem, stringOf } from "./value.js";
+import { type BlobRefs, checkValueItem } from "./value-check.js";
 
 export type KeyPath = string | string[];
 
@@ -183,16 +184,24 @@ function countOf(item: CborItem, min: number, what: string): number {
     : invalid(`${what} must be an integer >= ${min}`);
 }
 
+// IndexedDB's "valid key path" string: "", or ECMAScript IdentifierNames joined by single dots. A key path IndexedDB
+// refuses could never be created on restore, so the reader refuses it while validating (before anything is written).
+const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+const isKeyPathString = (path: string) =>
+  path === "" || path.split(".").every((p) => IDENTIFIER.test(p));
+
 function keyPathOf(item: CborItem, nullable: boolean): KeyPath | null {
   if (item.k === "simple" && item.v === null && nullable) {
     return null;
   }
-  if (item.k === "array" && item.v.length > 0) {
-    return item.v.map(
-      (element) => stringOf(element) ?? invalid("key path entries must be strings"),
-    );
+  const path =
+    item.k === "array" && item.v.length > 0
+      ? item.v.map((element) => stringOf(element) ?? invalid("key path entries must be strings"))
+      : (stringOf(item) ?? invalid("key path must be a string or a non-empty array of strings"));
+  if (!(typeof path === "string" ? [path] : path).every(isKeyPathString)) {
+    invalid("key path is not a valid IndexedDB key path");
   }
-  return stringOf(item) ?? invalid("key path must be a string or a non-empty array of strings");
+  return path;
 }
 
 function keyGeneratorOf(item: CborItem, autoIncrement: boolean): number | null {
@@ -238,9 +247,14 @@ function storeOf(item: CborItem): StoreSchema {
   const names = ["name", "keyPath", "autoIncrement", "keyGenerator", "indexes", "records"];
   const m = members(item, names, "store");
   const autoIncrement = boolOf(get(m, "autoIncrement"), "autoIncrement");
+  const keyPath = keyPathOf(get(m, "keyPath"), true);
+  // createObjectStore refuses autoIncrement with an empty or an array key path (InvalidAccessError).
+  if (autoIncrement && (keyPath === "" || Array.isArray(keyPath))) {
+    invalid("an autoIncrement store cannot have an empty or an array key path");
+  }
   return {
     name: nameOf(get(m, "name"), "store"),
-    keyPath: keyPathOf(get(m, "keyPath"), true),
+    keyPath,
     autoIncrement,
     keyGenerator: keyGeneratorOf(get(m, "keyGenerator"), autoIncrement),
     indexes: sortedByName(listOf(get(m, "indexes"), "indexes").map(indexOf), "indexes"),
@@ -263,6 +277,15 @@ export function decodeSchema(bytes: Uint8Array, options?: DecodeOptions): DbSche
 
 // --- store-<s>.cbor ----------------------------------------------------------------------------------------------
 
+/**
+ * One `[primaryKey, value]` record. A store file is a CBOR sequence, so records encoded one at a time in strictly
+ * ascending key order and concatenated are byte-identical to `encodeStoreRecords` of the whole store; the
+ * exporter uses this to keep memory bounded. A key that is not a key is ExportError.
+ */
+export function encodeStoreRecord(key: IdbKey, value: CborItem): Uint8Array {
+  return encodeItem({ k: "array", v: [keyToItem(key), value] });
+}
+
 /** Records sorted by IndexedDB key order. A key that is not a key is ExportError; a duplicate key is TypeError. */
 export function encodeStoreRecords(records: Iterable<readonly [IdbKey, CborItem]>): Uint8Array {
   const sorted = [...records].sort(([a], [b]) => compareIdbKeys(a, b));
@@ -271,7 +294,7 @@ export function encodeStoreRecords(records: Iterable<readonly [IdbKey, CborItem]
       if (i > 0 && compareIdbKeys((sorted[i - 1] as [IdbKey, CborItem])[0], key) === 0) {
         throw new TypeError("duplicate record key");
       }
-      return encodeItem({ k: "array", v: [keyToItem(key), value] });
+      return encodeStoreRecord(key, value);
     }),
   );
 }

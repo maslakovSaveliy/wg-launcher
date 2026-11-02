@@ -1,4 +1,4 @@
-// Ruling R18: the "below 5 ms per statement" budget (architecture.md section 13) is checked by the query plan, not
+// The "below 5 ms per statement" budget (architecture.md section 13) is checked by the query plan, not
 // by a wall-clock number. Each statement on a hot path must be served by an index or the primary key, with no full
 // table scan and no sort step, over a library of 1 000 games.
 

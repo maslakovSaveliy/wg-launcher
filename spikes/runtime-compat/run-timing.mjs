@@ -1,6 +1,7 @@
 // THROWAWAY spike runner (runtime-compat, Task 6): the hands-off measurements.
 //
-//   node run-timing.mjs [--only=calibrate,h7,h8,h9,demos,h7b] [--load=<n>] [--runs=3] [--cooldown=30]   (default: all but h7b)
+//   node run-timing.mjs --launcher-app=<path to the .app from build-launcher.mjs>
+//                       [--only=calibrate,h7,h8,h9,demos,h7b] [--load=<n>] [--runs=3] [--cooldown=30]   (default: all but h7b)
 //                       [--min-idle=30] [--allow-battery] [--smoke]
 //
 // Needs the machine idle: window visible, unobscured and in the foreground, nobody touching keyboard or
@@ -14,21 +15,25 @@
 // partial aggregate is rewritten after every slot, and SIGINT, SIGTERM, SIGHUP and uncaught errors clean up.
 // --smoke shortens every duration and writes into a scratch directory (wiring check only; numbers mean nothing).
 //
-// Groups, in this order. The calibration sweep is itself uncapped (the H7b conditions), so it runs first and
-// is followed by a cooldown; after it all capped measurement runs (h7, h8, h9, demos) come before the uncapped
-// h7b runs, because uncapped runs leave seconds of queued GPU work and heat behind:
-//   calibrate  H7 calibration: Chrome with vsync and frame limit off, 2 s warm-up + 20 s measured (H7b
-//              conditions); load whose p50 is 60-120% of the vsync interval. Only a load found here counts as
-//              calibrated; without one, H7, H20-6 and H7b are N/A (or INVALID with a load given by --load).
-//   h7         Electron (E), Chrome via Playwright (C), Chrome --app (A); runs alternate E, C, A, E, C, A, ...
+// Groups, in this order. The calibration sweep runs first and is followed by a cooldown; all capped measurement
+// runs (h7, h8, h9, demos) come before the uncapped h7b runs, because uncapped runs leave seconds of queued GPU work
+// and heat behind:
+//   calibrate  H7 calibration: Chrome (vsync on), 2 s warm-up + 20 s measured, the scene's GPU time per frame from
+//              EXT_disjoint_timer_query_webgl2 (HYPOTHESES "Amendments" 2026-11-02: uncapped Chrome 156 does not wait
+//              for the GPU, so frame time cannot be read there); load whose GPU-time p50 is 60-120% of the vsync
+//              interval. Only a load found here counts as calibrated; without one, H7, H20-6 and H7b are N/A (or
+//              INVALID with a load given by --load).
+//   h7         the launcher (L: the packaged test-flavor WGLauncher, the scene as a library entry in a game window;
+//              Phase 1, HYPOTHESES "Amendments"), Chrome via Playwright (C), Chrome --app (A); runs alternate L, C, A, ...
 //   h8         spawn to first frame, 3 cold + 3 warm launches each of Electron and Chrome (default load 512)
 //   h9         memory after 60 s of the scene, one run each for Electron and Chrome (owner-approved), same external definition
 //   demos      the six public demos (H21), one 20 s run per demo per runtime in Electron and Chrome, indicative only
-//   h7b        optional, not planned: uncapped runs of the same scene in Electron and Chrome (reported); post-checks the
-//              calibration (without it the calibration run itself, made under the H7b conditions, is the only check)
+//   h7b        optional, not planned: uncapped runs of the same scene in Electron and Chrome (reported only). It no
+//              longer post-checks the calibration: uncapped Chrome 156 frame time cannot be read (HYPOTHESES
+//              "Amendments" 2026-11-02), and the calibration is the GPU-timer one
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { runDemoChrome, runDemoElectron } from "./groups/demo-lib.mjs";
@@ -53,6 +58,7 @@ import {
   memoryOfTree,
   onBattery,
   portListeners,
+  playwrightCore,
   processList,
   processesMatching,
   screenLocked,
@@ -63,7 +69,7 @@ import {
   topCpu,
   writeAggregate,
 } from "./common.mjs";
-import { LOAD_LADDER, applyPostCheck, calibrationStep, environmentReasons as realEnvironmentReasons, h7Verdict, postCheck, ratioToVsync, runSlot, summary, validity } from "./timing-logic.mjs";
+import { LOAD_LADDER, calibrationStep, environmentReasons as realEnvironmentReasons, h7Verdict, ratioToVsync, runSlot, summary, validity } from "./timing-logic.mjs";
 
 const ALL = ["calibrate", "h7", "h8", "h9", "demos", "h7b"];
 // h7b (uncapped runs) is optional and not planned (owner decision): it runs only when asked for with --only=...,h7b.
@@ -82,6 +88,7 @@ const { values: opts } = parseArgs({
     smoke: { type: "boolean", default: false },
     "smoke-ignore-environment": { type: "boolean", default: false },
     "keep-temp": { type: "boolean", default: false },
+    "launcher-app": { type: "string" },
   },
   strict: true,
 });
@@ -115,6 +122,12 @@ const SPIKE_PORT = Number(opts["spike-port"]);
 const environmentReasons = (outcome) => (IGNORE_ENV ? [] : realEnvironmentReasons(outcome));
 
 // ---- Preflight ---------------------------------------------------------------------------------
+
+const LAUNCHER_APP = opts["launcher-app"];
+if (groups.includes("h7") && !(LAUNCHER_APP && existsSync(join(LAUNCHER_APP, "Contents", "MacOS")))) {
+  console.error("h7 measures the launcher: pass --launcher-app=<path to the .app that build-launcher.mjs printed>");
+  process.exit(2);
+}
 
 if (!SMOKE && screenLocked()) {
   console.error("The macOS screen is locked: no window can be visible and focused. Unlock it and rerun.");
@@ -262,10 +275,13 @@ function rowOf(runtime, label, outcome, extra = {}) {
     valid: reasons.length === 0 && !!payload,
     invalidReasons: reasons,
     stats: payload?.data?.stats ?? null,
+    gpu: payload?.data?.gpu ?? null,
     viewport: payload?.data?.viewport ?? null,
     scene: payload ? { renderer: payload.data.scene.renderer, softwareRenderer: payload.data.scene.softwareRenderer, load: payload.data.settings.load, drawingBuffer: [payload.data.scene.drawingBufferWidth, payload.data.scene.drawingBufferHeight], dpr: payload.data.scene.devicePixelRatio } : null,
     visibility: payload ? { everHidden: payload.page.visibility.everHidden, everUnfocused: payload.page.visibility.everUnfocused } : null,
     vsyncHz: payload?.data?.vsync?.hostReportedHz ?? null,
+    // Window sizing before the scene was loaded (the launcher and Chrome --app) and the launcher's readiness check.
+    ...(outcome.value.sizing !== undefined ? { sizing: outcome.value.sizing, ready: outcome.value.ready } : {}),
     ...extra,
   };
 }
@@ -290,11 +306,11 @@ async function waitPage(page, timeoutMs) {
   return { state: "timeout" };
 }
 
-async function chromeFrame({ load, uncapped = false, duration = DURATION, warmup = WARMUP, label }) {
+async function chromeFrame({ load, uncapped = false, gpuTimer = false, duration = DURATION, warmup = WARMUP, label }) {
   const browser = await launchPlaywrightBrowser({ channel: "chrome", uncapped, width: WIDTH, height: HEIGHT });
   try {
     const mark = run.mark();
-    const url = run.spikeUrl("/", { mode: "frametime", runtime: "chrome", version: browser.version, load, duration, warmup, vsyncHz: hz(), label });
+    const url = run.spikeUrl("/", { mode: "frametime", runtime: "chrome", version: browser.version, load, duration, warmup, vsyncHz: hz(), label, ...(gpuTimer ? { gpuTimer: 1 } : {}) });
     await browser.page.goto(url);
     const waitState = await waitPage(browser.page, (duration + warmup) * 4 + 120000);
     if (waitState.state !== "posted") return { payload: null, file: null, error: `probe state ${waitState.state} ${waitState.error ?? ""}` };
@@ -368,7 +384,70 @@ async function chromeAppFrame({ load, uncapped = false, duration = DURATION, war
   }
 }
 
-const RUNNERS = { electron: electronFrame, chrome: chromeFrame, "chrome-app": chromeAppFrame };
+// The launcher keeps one userData directory and one library entry per runner invocation: the first launch adds the
+// entry (the spike server's blank storage page, so the game window opens on the scene's origin), later launches
+// reuse it. Every run is a fresh launch of the app, as Electron's runs are fresh launches of the spike app.
+let launcherProfile = null;
+
+function launcherExecutable() {
+  const dir = join(LAUNCHER_APP, "Contents", "MacOS");
+  const [binary] = readdirSync(dir);
+  return join(dir, binary);
+}
+
+async function launcherFrame({ load, uncapped = false, duration = DURATION, warmup = WARMUP, label }) {
+  if (uncapped) throw new Error("the launcher is measured capped only (H7)");
+  launcherProfile ??= { dir: mkdtempSync(join(run.tmp, "launcher-profile-")), gameId: null };
+  const { dir } = launcherProfile;
+  const { _electron } = playwrightCore();
+  const app = await _electron.launch({ executablePath: launcherExecutable(), args: [`--user-data-dir=${dir}`], env: { ...process.env, WG_USER_DATA: dir }, timeout: 60000 });
+  const child = app.process();
+  children.add(child);
+  try {
+    const electronVersion = await app.evaluate(() => process.versions.electron);
+    launcherProfile.gameId ??= await app.evaluate((_electron, url) => globalThis.__wgTest.addGame(url, "H7 scene"), run.spikeUrl("/storage.html", {}, { token: false }));
+    const { gameId } = launcherProfile;
+    const launched = await app.evaluate((_electron, id) => globalThis.__wgTest.launchGame(id), gameId);
+    if (!launched?.ok) throw new Error(`launch refused: ${JSON.stringify(launched)}`);
+    let page = null;
+    for (let i = 0; i < 300 && !page; i++) {
+      page = app.windows().find((p) => p.url().includes("/storage.html")) ?? null;
+      if (!page) await sleep(100);
+    }
+    if (!page) throw new Error("the game window did not appear within 30 s");
+    // The game window opens hidden and is shown after its first paint. The scene is loaded only once the window is
+    // visible, focused and 1280x720 CSS px, so the probe's first visibility entry is already visible and focused.
+    const sizing = await app.evaluate(({ app: electronApp, BrowserWindow, webContents }, { id, width, height }) => {
+      const contents = webContents.fromId(globalThis.__wgTest.gameWebContentsId(id));
+      const win = contents ? BrowserWindow.fromWebContents(contents) : null;
+      if (!win) return null;
+      win.setContentSize(width, height);
+      electronApp.focus({ steal: true });
+      win.focus();
+      return win.getContentBounds();
+    }, { id: gameId, width: WIDTH, height: HEIGHT });
+    let ready = null;
+    for (let i = 0; i < 100; i++) {
+      ready = await page.evaluate("({ visible: document.visibilityState === 'visible', focus: document.hasFocus(), w: innerWidth, h: innerHeight })").catch(() => null);
+      if (ready?.visible && ready.focus && ready.w === WIDTH && ready.h === HEIGHT) break;
+      await sleep(200);
+    }
+    if (!(ready?.visible && ready.focus && ready.w === WIDTH && ready.h === HEIGHT)) log(`  launcher ${label}: the game window was not visible, focused and ${WIDTH}x${HEIGHT} within 20 s (${JSON.stringify(ready)}); the probe's own checks decide the run`);
+    await sleep(300);
+    const mark = run.mark();
+    await page.goto(run.spikeUrl("/", { mode: "frametime", runtime: "launcher", version: electronVersion, load, duration, warmup, vsyncHz: hz(), label }));
+    const waitState = await waitPage(page, (duration + warmup) * 4 + 120000);
+    if (waitState.state !== "posted") return { payload: null, file: null, error: `probe state ${waitState.state} ${waitState.error ?? ""}`, sizing, ready };
+    const posted = await run.waitResult(mark, { timeoutMs: 10000 });
+    return { payload: posted.data, file: posted.file, error: null, sizing, ready };
+  } finally {
+    const closed = await Promise.race([app.close().then(() => true, () => false), sleep(20000).then(() => false)]);
+    if (!closed) child.kill("SIGKILL");
+    children.delete(child);
+  }
+}
+
+const RUNNERS = { electron: electronFrame, launcher: launcherFrame, chrome: chromeFrame, "chrome-app": chromeAppFrame };
 
 /** One slot of frame-time runs (see runSlot): every attempt is recorded, a failed launch is a recorded attempt. */
 function slot(runtime, label, params, { cooldownMs = COOLDOWN_MS } = {}) {
@@ -386,9 +465,9 @@ function slot(runtime, label, params, { cooldownMs = COOLDOWN_MS } = {}) {
 // ---- Groups ------------------------------------------------------------------------------------
 
 async function groupCalibrate() {
-  // R17: Chrome with frame limit and vsync off; p50 must be 60-120% of the vsync interval. Start at the load
-  // Task 5 chose in Electron (512, or --load) and move one step up or down the ladder until inside the band.
-  // The windows are those of H7b (2 s warm-up, 20 s measured); each candidate gets up to 3 valid-run attempts.
+  // R17 with the GPU timer fallback: Chrome with vsync on; the GPU-time p50 must be 60-120% of the vsync interval.
+  // Start at the load Task 5 chose in Electron (512, or --load) and move one step up or down the ladder until inside
+  // the band. 2 s warm-up, 20 s measured; each candidate gets up to 3 valid-run attempts.
   const vsyncMs = 1000 / hz();
   let index = Math.max(0, LOAD_LADDER.indexOf(state.load ?? 512));
   let direction = 0;
@@ -396,19 +475,23 @@ async function groupCalibrate() {
   let stopReason = "step limit";
   for (let step = 0; step < 6; step++) {
     const candidate = LOAD_LADDER[index];
-    const result = await slot("chrome", `calibration-${candidate}`, { load: candidate, uncapped: true }, { cooldownMs: COOLDOWN_MS * 2 });
+    const result = await slot("chrome", `calibration-${candidate}`, { load: candidate, gpuTimer: true });
     const row = result.final;
-    const ratio = row ? ratioToVsync(row.stats.p50Ms, hz()) : null;
-    sweep.push({ load: candidate, valid: !!row, p50Ms: row?.stats.p50Ms ?? null, p95Ms: row?.stats.p95Ms ?? null, ratioToVsync: ratio, attempts: result.attempts });
-    state.checks.calibration = { vsyncMs, band: "60% to 120% of the vsync interval, Chrome uncapped, 2 s warm-up and 20 s measured (H7b conditions)", sweep };
+    const gpu = row?.gpu?.stats ?? null;
+    // As many GPU samples as validity() wants frame deltas: a quarter of the vsync rate over the measured window.
+    const minGpuSamples = Math.floor(DURATION / (4 * vsyncMs));
+    const gpuP50 = typeof gpu?.p50Ms === "number" && gpu.count >= minGpuSamples ? gpu.p50Ms : null;
+    const ratio = ratioToVsync(gpuP50, hz());
+    sweep.push({ load: candidate, valid: !!row, gpuP50Ms: gpuP50, gpuP95Ms: gpu?.p95Ms ?? null, gpuSamples: gpu?.count ?? null, gpuDisjointFrames: row?.gpu?.disjointFrames ?? null, frameP50Ms: row?.stats?.p50Ms ?? null, ratioToVsync: ratio, attempts: result.attempts });
+    state.checks.calibration = { vsyncMs, band: "GPU-time p50 (EXT_disjoint_timer_query_webgl2) 60% to 120% of the vsync interval, Chrome with vsync on, 2 s warm-up and 20 s measured", sweep };
     checkpoint(`calibration load ${candidate}`);
-    log(`  calibration load ${candidate}: ${row ? `p50 ${row.stats.p50Ms.toFixed(2)} ms = ${(ratio * 100).toFixed(0)}% of vsync` : "no valid run"}`);
-    await sleep(COOLDOWN_MS * 2); // uncapped runs leave GPU backlog and heat behind
+    log(`  calibration load ${candidate}: ${ratio !== null ? `GPU p50 ${gpuP50.toFixed(2)} ms = ${(ratio * 100).toFixed(0)}% of vsync (frame p50 ${row.stats?.p50Ms?.toFixed(2)} ms, ${gpu.count} GPU samples, ${row.gpu.disjointFrames} disjoint)` : `no GPU-time measurement${row?.gpu ? ` (${JSON.stringify(row.gpu.available === false ? "timer query unavailable" : row.gpu.stats)})` : ""}`}`);
+    await sleep(COOLDOWN_MS);
     const decision = calibrationStep({ ratio, index, direction });
     if (decision.action === "accept") {
       state.load = candidate;
       state.calibrated = true;
-      state.loadSource = "calibrated in Chrome (uncapped) in this invocation";
+      state.loadSource = "calibrated in Chrome (GPU timer query, vsync on) in this invocation";
       state.calibrationNote = `load ${candidate} calibrated in this invocation`;
       stopReason = "in band";
       break;
@@ -426,7 +509,7 @@ async function groupCalibrate() {
     state.calibrationNote = `no load in the 60-120% band was found (${stopReason}); H7 is N/A and the owner decides (R17)`;
   }
   state.checks.calibrationOutcome = state.calibrated
-    ? { status: "REPORTED", reason: `load ${state.load}: Chrome uncapped p50 inside the 60-120% band` }
+    ? { status: "REPORTED", reason: `load ${state.load}: Chrome GPU-time p50 inside the 60-120% band` }
     : { status: "N/A", reason: state.calibrationNote };
 }
 
@@ -437,11 +520,11 @@ async function groupH7() {
     state.hypotheses["H20-6"] = na;
     return;
   }
-  const order = ["electron", "chrome", "chrome-app"];
+  const order = ["launcher", "chrome", "chrome-app"];
   const passes = [];
-  state.checks.h7 = { order: "E, C, A alternating (Electron, Chrome via Playwright, Chrome --app)", load: state.load, calibrated: state.calibrated, passes };
+  state.checks.h7 = { order: "L, C, A alternating (the launcher: packaged test-flavor WGLauncher; Chrome via Playwright; Chrome --app)", load: state.load, calibrated: state.calibrated, passes };
   async function pass(runsWanted, tag) {
-    const slots = { electron: [], chrome: [], "chrome-app": [] };
+    const slots = { launcher: [], chrome: [], "chrome-app": [] };
     passes.push({ tag, runsWanted, slots });
     for (let i = 1; i <= runsWanted; i++) {
       for (const runtime of order) {
@@ -451,10 +534,10 @@ async function groupH7() {
       }
     }
     const finals = (rt) => slots[rt].map((s) => s.final).filter(Boolean);
-    return { electron: summary(finals("electron")), chrome: summary(finals("chrome")), chromeApp: summary(finals("chrome-app")) };
+    return { launcher: summary(finals("launcher")), chrome: summary(finals("chrome")), chromeApp: summary(finals("chrome-app")) };
   }
   const verdicts = (s, runsWanted, rerun) => ({
-    H7: h7Verdict({ name: "Electron", kind: "electron", s: s.electron, chrome: s.chrome, runsWanted, rerun, calibrated: state.calibrated, calibrationNote: state.calibrationNote }),
+    H7: h7Verdict({ name: "Electron (the launcher, test-flavor build)", kind: "electron", s: s.launcher, chrome: s.chrome, runsWanted, rerun, calibrated: state.calibrated, calibrationNote: state.calibrationNote }),
     "H20-6": h7Verdict({ name: "Chrome --app", kind: "chrome-app", s: s.chromeApp, chrome: s.chrome, runsWanted, rerun, calibrated: state.calibrated, calibrationNote: state.calibrationNote }),
   });
   let runsWanted = RUNS;
@@ -468,19 +551,8 @@ async function groupH7() {
     summaries = await pass(runsWanted, "rerun5");
     v = verdicts(summaries, runsWanted, true);
   }
-  state.hypotheses.H7 = { status: v.H7.status, reason: v.H7.reason, metrics: { ...v.H7.metrics, load: state.load, vsyncHz: hz(), chromeVersion: CHROME_VERSION, versionMismatch: "Chrome major is compared with Electron 45's Chromium 156; see HYPOTHESES section 2", loadSource: state.loadSource, calibrationCheck: groups.includes("h7b") ? "calibration run and the H7b post-check" : "the calibration run itself (Chrome uncapped, 2 s warm-up + 20 s measured, the H7b conditions); H7b was not run" } };
+  state.hypotheses.H7 = { status: v.H7.status, reason: v.H7.reason, metrics: { ...v.H7.metrics, load: state.load, vsyncHz: hz(), chromeVersion: CHROME_VERSION, versionMismatch: "Chrome major is compared with Electron 45's Chromium 156; see HYPOTHESES section 2", loadSource: state.loadSource, calibrationCheck: "GPU-time calibration in Chrome with vsync on (HYPOTHESES Amendments 2026-11-02)" } };
   state.hypotheses["H20-6"] = { status: v["H20-6"].status, reason: v["H20-6"].reason, metrics: { ...v["H20-6"].metrics, load: state.load } };
-}
-
-/** Applies the H7b post-check to H7 and H20-6 once the uncapped Chrome runs exist. */
-function applyCalibrationPostCheck(chromeUncapped) {
-  const check = postCheck(chromeUncapped.medianP50Ms, hz());
-  state.checks.calibrationPostCheck = check;
-  if (!state.calibrated) return;
-  for (const id of ["H7", "H20-6"]) {
-    const h = state.hypotheses[id];
-    if (h && !["N/A", "INVALID"].includes(h.status)) state.hypotheses[id] = { ...h, ...applyPostCheck({ status: h.status, reason: h.reason, metrics: h.metrics }, check) };
-  }
 }
 
 async function groupH7b() {
@@ -501,7 +573,6 @@ async function groupH7b() {
   const electron = summary(finals("electron"));
   const chrome = summary(finals("chrome"));
   state.hypotheses.H7b = { status: "REPORTED", reason: "uncapped (--disable-frame-rate-limit --disable-gpu-vsync) throughput, not presentation; no threshold", metrics: { load: state.load, calibrated: state.calibrated, electron, chrome } };
-  applyCalibrationPostCheck(chrome);
 }
 
 // -- H8 -------------------------------------------------------------------------------------------
@@ -729,6 +800,10 @@ try {
     } catch (error) {
       log(`  group ${name} ERROR ${error.stack}`);
       state.checks[`${name}Error`] = run.sanitize(String(error.stack ?? error));
+      if (name === "calibrate" && !state.calibrated) {
+        state.load = null;
+        state.calibrationNote = `the calibrate group failed: ${run.sanitize(String(error.message ?? error))}`;
+      }
       if (/was not idle for/.test(String(error.message))) throw error; // abort the whole run, not just the group
     }
     state.completedGroups.push(name);

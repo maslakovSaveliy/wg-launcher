@@ -1,6 +1,6 @@
 // A structural walker over one zstd frame (RFC 8878 sections 3.1.1, 3.1.1.1 and 3.1.1.2), placed in front of Node's
 // decompressor because zstd versions differ on a cut frame (Node 24.13.0 decompresses it without any error, 24.22.1
-// fails it; MEMORY.md, Phase 1 plan M6 and Ruling R23), so the walker, not the library, decides the container codes.
+// fails it; MEMORY.md, Phase 1 plan M6 and snapshot-format.md section 2), so the walker, not the library, decides the container codes.
 // It reads the frame header, every block header and the 4-byte checksum, and passes the frame bytes through; the
 // decompressor still checks the block contents and the checksum value. snapshot-format.md sections 2 and 8.
 import { SnapError } from "../errors.js";

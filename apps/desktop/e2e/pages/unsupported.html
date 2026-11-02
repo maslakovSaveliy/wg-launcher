@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- e2e page (not a game): stores one value the generic exporter cannot represent (an ImageData) in IndexedDB, so an
+     export of this page fails with a named error (AC-10). #stored says "stored" once the write committed. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>unsupported</title>
+  </head>
+  <body>
+    <output id="stored">no</output>
+    <script>
+      const open = indexedDB.open("unsupported", 1);
+      open.onupgradeneeded = () => open.result.createObjectStore("values");
+      open.onsuccess = () => {
+        const transaction = open.result.transaction("values", "readwrite");
+        transaction.objectStore("values").put(new ImageData(1, 1), 1);
+        transaction.oncomplete = () => {
+          document.getElementById("stored").textContent = "stored";
+          open.result.close();
+        };
+      };
+    </script>
+  </body>
+</html>

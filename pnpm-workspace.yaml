@@ -8,3 +8,5 @@ saveExact: true
 # Dependency build scripts are blocked by default; allow only what is needed, deliberately.
 allowBuilds:
   lefthook: true
+  # electron-builder's Windows Squirrel installer; its script only picks a 7z binary. No Squirrel target is built.
+  electron-winstaller: false

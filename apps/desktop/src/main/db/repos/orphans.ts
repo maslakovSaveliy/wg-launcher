@@ -1,6 +1,6 @@
 import type { WritableDb } from "../database.js";
 
-/** A removed game whose saves are still on disk ("Data of removed games" in settings). */
+/** A removed game; whatever it saved stays on disk ("Data of removed games" in settings). */
 export interface Orphan {
   gameId: string;
   url: string;

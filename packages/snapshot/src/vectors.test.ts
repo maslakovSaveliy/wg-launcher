@@ -76,7 +76,7 @@ describe("golden vectors v1", () => {
     it(id, async () => {
       const vector = readVector(id);
       const bytes = new Uint8Array(readFileSync(`${V1}${id}/${vector.input}`));
-      // Ruling R11: the compressed size is the file size.
+      // snapshot-format.md section 8: the compressed size is the file size.
       const options = { compressedSize: bytes.length, limits: vector.limits };
 
       if (!vector.expect.ok) {

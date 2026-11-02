@@ -2,7 +2,7 @@
 // into Node's zstd decompressor, with the size and ratio limits. Async throughout, so the snapshot worker stays
 // responsive; backpressure keeps at most a few chunks in memory. Every verdict is tied to a byte position, so the
 // result does not depend on how the source is chunked or how far Node reads ahead, except for corrupt block content
-// (snapshot-format.md section 2, Ruling R24).
+// (snapshot-format.md section 2, corrupt-block carve-out).
 import { Readable, type Transform } from "node:stream";
 import { finished } from "node:stream/promises";
 import { constants, createZstdDecompress } from "node:zlib";
@@ -41,7 +41,7 @@ class SourceError extends Error {
  * and yielded, and the verdict is thrown where the stream would have ended. So a defect in the frame content (which the
  * tar reader finds) is reported first, and a cut file never reaches the tar reader as a clean end.
  *
- * The result does not depend on the zstd library (Ruling R23; corrupt block content is the exception, R24): Node
+ * The result does not depend on the zstd library (snapshot-format.md section 2; corrupt block content is the exception): Node
  * 24.13.0 ends a cut frame silently, 24.22.1 fails it. The decompressor is ended only after a frame the walker
  * completed; otherwise it is flushed, so everything the library decodes from the bytes before the walker's verdict is
  * yielded. When the decompressor fails anyway (corrupt data, a wrong

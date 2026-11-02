@@ -345,4 +345,58 @@ transfer).
 
 ## 6. Amendments
 
-None yet. Any change after the first run is added here with its date, the reason and the old and new text.
+Any change after the first run is added here with its date, the reason and the old and new text.
+
+### 2026-11-02: H7 measures the launcher (Phase 1)
+
+- **Reason:** the owner accepted ADR-0002 and ADR-0005 on the condition that Phase 1 re-runs H7 on the launcher with
+  this method. The hands-off runs had not been made yet; this amendment is written before any H7 run.
+- **Old text (H7, "Runtime"):** "Electron 45.0.0 against Chrome (H19)". The runner measured the spike app
+  (`electron/main.mjs --mode=frametime`).
+- **New text:** "Electron 45.0.0, as the WGLauncher launcher, against Chrome (H19)". The Electron side of H7 is the
+  packaged test-flavor launcher (`build-launcher.mjs`: the release builder config without fuses and without the
+  `wglauncher` scheme). The scene page is a library entry opened in a game window (sandbox and context isolation on,
+  no preload) and driven through Playwright `_electron`, as Chrome is driven through Playwright. The game window opens
+  hidden and is shown after its first paint, so the runner opens the entry on the spike server's blank page, sizes the
+  window to 1280 x 720 CSS px, waits until the page is visible and focused, and only then navigates it to the scene
+  (as the Chrome `--app` runner already does). The test flavor is used because it accepts the `http://localhost` scene;
+  its frame time is assumed equal to a release build (same Electron and Chromium). Assumed
+- **Unchanged:** the scene, its calibration in Chrome, the viewport, the alternating runs, the noise rule, the PASS and
+  FAIL thresholds and the validity rules. H8, H9 and the demo samples still run the spike app.
+
+### 2026-11-02: H7 calibrates with the GPU timer query
+
+- **Reason:** the first hands-off run (2026-11-02, `results/timing-electron-45.0.0_chrome-156.0.8078.79-20261102T083920.324Z.json`)
+  found no calibrated load. In Chrome 156 with `--disable-gpu-vsync --disable-frame-rate-limit` the page does not wait
+  for the GPU: with the scene at load 512, `requestAnimationFrame` ran about 1 800 times within the first second while
+  its timestamps barely advanced, then the page stalled for about 27 s while the GPU drained the queue, so frame time
+  cannot be read under the H7b conditions. Verified (2026-11-02, a scratch Playwright probe on this Mac; the 20 s
+  calibration run had zero frame deltas). The H7 text already names the GPU timer query as the fallback "if Chrome's
+  cap cannot be removed"; the cap can be removed, but nothing can be measured without it, which this amendment treats
+  as the same case. The owner chose this fallback.
+- **Old text (H7, "Calibration"):** the scene's p50 frame time in Chrome with the frame-rate limit and vsync disabled
+  must be 60% to 120% of the vsync interval.
+- **New text:** in Chrome with vsync on (the H7 conditions), the p50 GPU time of each frame's draw calls, read with
+  `EXT_disjoint_timer_query_webgl2` (`TIME_ELAPSED_EXT`; a frame with a disjoint event is dropped), must be 60% to 120%
+  of the vsync interval, over 2 s warm-up and 20 s measured. The load ladder, its start at 512 and the band are
+  unchanged. The timer runs only in calibration runs; H7's measured runs do not carry it.
+- **Known weakness:** on this Mac the timer reflects the GPU's busy time at whatever clock it chose, not a fixed cost
+  per frame. Chrome with vsync on, 20 s each: load 384 gave a GPU-time p50 of 13.06 ms, load 512 14.03 ms (frame p50
+  16.7 ms for both), load 768 39.45 ms while the frame mean was 20.70 ms and the frame p95 33.5 ms. Verified
+  (2026-11-02, scratch runs). So below saturation the reading changes little with the load, and above it the reading
+  includes queueing. That the GPU lowers its clock to meet the frame budget is Assumed. A load in the band therefore
+  shows that the GPU is busy most of each frame, not how much headroom a faster clock would leave; RESULTS.md carries
+  this caveat with the H7 verdict.
+- **Added after run 2 (2026-11-02, from the task review; nothing above was changed):**
+  - The H7b sentence "It doubles as the calibration condition above" no longer holds: H7b is now a reported variant only.
+  - The old calibration text verbatim: "In Chrome with the frame-rate limit and vsync disabled (the H7b conditions below),
+    the scene's p50 frame time must be between 60% and 120% of the vsync interval."
+  - The "uncalibrated or saturated scene" rule applies only weakly through the timer. With vsync on, load 64 read
+    7.66 ms (46%, below the band), load 128 10.80 ms (65%) and load 256 12.25 ms (74%): the reading rises with the load,
+    but loads 128 and 256, two to four times lighter than the chosen 512, already read inside the band, so it rejects
+    only the lightest scenes. An overloaded scene reads above 120% (load 768, see above) and the ladder moves down.
+    "Calibrated" therefore means the GPU is busy for 60% or more of each frame at the clock it chose, not a fixed cost per
+    frame. Verified (2026-11-02, scratch runs not committed: the probe in `frametime` mode with `gpuTimer=1` and
+    `load=64`, `128` and `256` in Chrome via Playwright, vsync on, 2 s warm-up and 20 s measured; frame p50 16.7 ms)
+  - The reading is the `TIME_ELAPSED_EXT` interval around the draw calls as ANGLE Metal reports it, not only the draw
+    calls' own GPU work: at load 768 it exceeded the frame mean.

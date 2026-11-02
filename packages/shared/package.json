@@ -2,10 +2,14 @@
   "name": "@wg-launcher/shared",
   "version": "0.0.0",
   "private": true,
-  "description": "Types and small helpers shared by the launcher processes: ids, results, error codes.",
+  "description": "Types and small helpers shared by the launcher processes: ids, results, error codes, the IPC contract.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./bridge": "./src/bridge.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
   }
 }

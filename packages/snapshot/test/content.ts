@@ -17,7 +17,7 @@ import {
   type KeyPath,
 } from "../src/record/data-files.js";
 import { type IdbKey, keyToItem } from "../src/record/idb-key.js";
-import { toItem } from "../src/record/value.js";
+import { toItem } from "../src/record/value-export.js";
 import {
   bytesToHex,
   itemToNotation,

@@ -28,15 +28,31 @@ export interface SaveFileSpec {
   filters?: FileFilter[];
 }
 
+export interface ErrorSpec {
+  title: string;
+  /** Plain words: what happened and what the app does now. No paths. */
+  message: string;
+}
+
 export interface Dialogs {
   /** Resolves true only when the user chose the confirm button; cancel is the default. */
   confirm(spec: ConfirmSpec): Promise<boolean>;
   openFile(spec: OpenFileSpec): Promise<string | null>;
   saveFile(spec: SaveFileSpec): Promise<string | null>;
+  /** An error the user must see, such as a start-up failure; resolves when it was shown (it is app-modal). */
+  showError(spec: ErrorSpec): Promise<void>;
+  /** A notice with one OK button that does not block the main process (`showErrorBox` would); resolves on OK. */
+  notify(spec: ErrorSpec): Promise<void>;
 }
 
-/** Electron's native dialogs, modal to the window `parent` returns when there is one. */
-export function nativeDialogs(parent: () => BrowserWindow | null): Dialogs {
+/** The window itself, or null when there is none or it was destroyed (a dialog then appears unparented). */
+export function liveParent<W extends { isDestroyed(): boolean }>(window: W | null): W | null {
+  return window && !window.isDestroyed() ? window : null;
+}
+
+/** Electron's native dialogs, modal to the window `parent` returns while it is alive, else unparented. */
+export function nativeDialogs(getParent: () => BrowserWindow | null): Dialogs {
+  const parent = () => liveParent(getParent());
   return {
     async confirm(spec) {
       const options = {
@@ -78,6 +94,23 @@ export function nativeDialogs(parent: () => BrowserWindow | null): Dialogs {
         ? await dialog.showSaveDialog(window, options)
         : await dialog.showSaveDialog(options);
       return result.canceled || !result.filePath ? null : result.filePath;
+    },
+    async notify(spec) {
+      const options = {
+        type: "warning" as const,
+        title: spec.title,
+        message: spec.title,
+        detail: spec.message,
+        buttons: ["OK"],
+        noLink: true,
+      };
+      const window = parent();
+      if (window) await dialog.showMessageBox(window, options);
+      else await dialog.showMessageBox(options);
+    },
+    async showError(spec) {
+      // Synchronous and usable before `ready` (Electron docs); it blocks until the user closes it.
+      dialog.showErrorBox(spec.title, spec.message);
     },
   };
 }

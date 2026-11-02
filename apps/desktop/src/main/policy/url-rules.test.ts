@@ -80,6 +80,9 @@ const HOSTILE_EVERYWHERE: readonly string[] = [
   urlOfLength(MAX_URL_LENGTH + 1),
 ];
 
+/** Hostile inputs whose only raw shape comes after the authority of `https://example.com`. */
+const TAIL_ONLY = ["https://example.com/ ", "https://example.com/\n", "https://example.com/\u007f"];
+
 describe("MAX_URL_LENGTH", () => {
   it("is 2048 characters", () => {
     expect(MAX_URL_LENGTH).toBe(2048);
@@ -254,7 +257,9 @@ describe("decideTopNavigation", () => {
   });
 
   it("blocks every other scheme and every malformed or credential-carrying target", () => {
-    const blocked = HOSTILE_EVERYWHERE.filter((t) => t.length <= MAX_URL_LENGTH);
+    const blocked = HOSTILE_EVERYWHERE.filter(
+      (t) => t.length <= MAX_URL_LENGTH && !TAIL_ONLY.includes(t),
+    );
     for (const flavor of FLAVORS) {
       for (const target of blocked) {
         expect(
@@ -262,6 +267,34 @@ describe("decideTopNavigation", () => {
           `${flavor}: ${JSON.stringify(target)}`,
         ).toBe("block");
       }
+    }
+  });
+
+  it("ignores raw shapes after the authority of a target: Chromium keeps a backslash there (R25)", () => {
+    for (const flavor of FLAVORS) {
+      // What Chromium handed will-navigate for a same-site link (Task 8 e2e, 2026-10-28).
+      expect(
+        decideTopNavigation(
+          entry,
+          "https://example.com/navigation.html?q=a\\b%20c#x\\y%20z",
+          flavor,
+        ),
+      ).toBe("allow");
+      expect(decideTopNavigation(entry, "https://example.com/a\\b/c d?e f#g h", flavor)).toBe(
+        "allow",
+      );
+      for (const target of TAIL_ONLY) {
+        expect(decideTopNavigation(entry, target, flavor), JSON.stringify(target)).toBe("allow");
+      }
+      // Another site with such a tail is still only offered; the external gate stays strict.
+      expect(decideTopNavigation(entry, "https://other.example/q?a\\b", flavor)).toBe(
+        "ask-external",
+      );
+      expect(isExternalUrlAllowed("https://other.example/q?a\\b", flavor)).toBe(false);
+      // In the authority the shapes still block.
+      expect(decideTopNavigation(entry, "https://evil.com\\.example.com/", flavor)).toBe("block");
+      expect(decideTopNavigation(entry, "https://exa mple.com/", flavor)).toBe("block");
+      expect(decideTopNavigation(entry, "https://example.com\\@evil.net/", flavor)).toBe("block");
     }
   });
 
@@ -349,7 +382,7 @@ describe("decideFrameNavigation", () => {
 });
 
 describe("isExternalUrlAllowed", () => {
-  it("allows a plain https or http URL with a host", () => {
+  it("allows a plain https or http URL with a public host", () => {
     for (const url of [
       "https://example.com/",
       "https://example.com",
@@ -357,26 +390,72 @@ describe("isExternalUrlAllowed", () => {
       "HTTPS://WWW.EXAMPLE.COM/",
       "https://medium.com/@someone",
       "https://ex\u0430mple.com/",
-      "https://192.168.0.10:8080/",
+      "https://8.8.8.8/",
+      "http://172.32.0.1/",
+      "http://100.128.0.1/",
+      "https://[2001:db8::1]/",
       urlOfLength(2048),
     ]) {
-      expect(isExternalUrlAllowed(url), url).toBe(true);
+      for (const flavor of ["prod", "dev", "test"] as const) {
+        expect(isExternalUrlAllowed(url, flavor), `${flavor} ${url}`).toBe(true);
+      }
+    }
+  });
+
+  // A game must not send the user's real browser, with its cookies, to a service on this computer or the local
+  // network (a router, a local admin page): no remote game has a reason to, so production refuses it.
+  const INTERNAL = [
+    "http://localhost/",
+    "http://localhost:3000/admin",
+    "http://a.localhost/",
+    "http://127.0.0.1:8080/",
+    "http://127.5.4.3/",
+    "http://0.0.0.0/",
+    "http://10.0.0.1/",
+    "http://172.16.0.1/",
+    "http://172.31.255.255/",
+    "https://192.168.0.10:8080/",
+    "http://169.254.169.254/latest/meta-data",
+    "http://100.64.0.1/",
+    "http://[::1]/",
+    "http://[::]/",
+    "http://[fe80::1]/",
+    "http://[fd12:3456::1]/",
+    "http://[::ffff:192.168.0.1]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://router/",
+    "http://printer.local/",
+    "http://nas.internal/",
+    "http://printer.home.arpa/",
+    "http://[fec0::1]/",
+  ];
+
+  it("refuses loopback, private, link-local and local names in production", () => {
+    for (const url of INTERNAL) {
+      expect(isExternalUrlAllowed(url, "prod"), url).toBe(false);
+    }
+  });
+
+  it("allows them in development and test builds, which serve games on loopback", () => {
+    for (const url of INTERNAL) {
+      expect(isExternalUrlAllowed(url, "test"), url).toBe(true);
+      expect(isExternalUrlAllowed(url, "dev"), url).toBe(true);
     }
   });
 
   it("refuses every hostile input", () => {
     for (const url of HOSTILE_EVERYWHERE) {
-      expect(isExternalUrlAllowed(url), JSON.stringify(url)).toBe(false);
+      expect(isExternalUrlAllowed(url, "test"), JSON.stringify(url)).toBe(false);
     }
   });
 
   it("refuses 2049 characters, measured before parsing", () => {
-    expect(isExternalUrlAllowed(urlOfLength(2049))).toBe(false);
+    expect(isExternalUrlAllowed(urlOfLength(2049), "test")).toBe(false);
   });
 
   it("never throws and refuses non-string input", () => {
     for (const url of [undefined, null, 42, {}, ["https://example.com/"]]) {
-      expect(isExternalUrlAllowed(url as unknown as string)).toBe(false);
+      expect(isExternalUrlAllowed(url as unknown as string, "prod")).toBe(false);
     }
   });
 });
