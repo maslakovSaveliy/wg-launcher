@@ -1,0 +1,1248 @@
+{
+  "schemaVersion": 1,
+  "kind": "run",
+  "createdAt": "2026-11-02T09:40:55.408Z",
+  "runtime": {
+    "name": "timing",
+    "version": "electron-45.0.0_chrome-156.0.8078.79",
+    "chromium": null
+  },
+  "label": "hands-off timing: calibrate, h7",
+  "machine": {
+    "osVersion": "macOS 27.0.1 (26A434)",
+    "arch": "arm64",
+    "cpu": "Apple M3",
+    "gpu": "Apple M3 (10 cores, spdisplays_metal4)",
+    "display": {
+      "name": "Color LCD",
+      "resolution": "1470 x 956 @ 60.00Hz"
+    },
+    "displayLine": "1470 x 956 @ 60.00Hz",
+    "displayRefreshHz": 60.00239944458008,
+    "power": "Now drawing from 'AC Power'",
+    "screenLockedAtStart": false,
+    "runnerNode": "v24.13.0"
+  },
+  "startedAt": "2026-11-02T09:31:34.202Z",
+  "finishedAt": "2026-11-02T09:40:55.408Z",
+  "groups": [
+    "calibrate",
+    "h7"
+  ],
+  "hypotheses": {
+    "H7": {
+      "status": "PASS",
+      "reason": "Electron (the launcher, test-flavor build) p95 17.70 ms <= Chrome p95 18.10 ms x 1.15 = 20.81 ms (ratio 0.978)",
+      "metrics": {
+        "runtime": {
+          "validRuns": 3,
+          "medianP50Ms": 16.69999999999891,
+          "medianP95Ms": 17.69999999999891,
+          "medianLongFrames": 0,
+          "medianLongFrameShare": 0,
+          "p95Ms": [
+            17.69999999999891,
+            17.39999999999791,
+            18.004999999999924
+          ],
+          "p95Spread": 0.03418079096056792
+        },
+        "chrome": {
+          "validRuns": 3,
+          "medianP50Ms": 16.699999999999818,
+          "medianP95Ms": 18.09999999999859,
+          "medianLongFrames": 0,
+          "medianLongFrameShare": 0,
+          "p95Ms": [
+            17.299999999999272,
+            18.09999999999859,
+            18.5
+          ],
+          "p95Spread": 0.06629834254148183
+        },
+        "runsWanted": 3,
+        "rerun": false,
+        "ratio": 0.9779005524862037,
+        "load": 512,
+        "vsyncHz": 60.00239944458008,
+        "chromeVersion": "156.0.8078.79",
+        "versionMismatch": "Chrome major is compared with Electron 45's Chromium 156; see HYPOTHESES section 2",
+        "loadSource": "calibrated in Chrome (uncapped) in this invocation",
+        "calibrationCheck": "GPU-time calibration in Chrome with vsync on (HYPOTHESES Amendments 2026-11-02)"
+      }
+    },
+    "H20-6": {
+      "status": "REPORTED",
+      "reason": "Chrome --app p95 18.10 ms <= Chrome p95 18.10 ms x 1.15 = 20.81 ms (ratio 1.000); reported, not a verdict (H20 has no combined threshold)",
+      "metrics": {
+        "runtime": {
+          "validRuns": 3,
+          "medianP50Ms": 16.699999999999818,
+          "medianP95Ms": 18.100000000000364,
+          "medianLongFrames": 0,
+          "medianLongFrameShare": 0,
+          "p95Ms": [
+            17.30000000000291,
+            18.100000000000364,
+            18.59999999999991
+          ],
+          "p95Spread": 0.07182320441972224
+        },
+        "chrome": {
+          "validRuns": 3,
+          "medianP50Ms": 16.699999999999818,
+          "medianP95Ms": 18.09999999999859,
+          "medianLongFrames": 0,
+          "medianLongFrameShare": 0,
+          "p95Ms": [
+            17.299999999999272,
+            18.09999999999859,
+            18.5
+          ],
+          "p95Spread": 0.06629834254148183
+        },
+        "runsWanted": 3,
+        "rerun": false,
+        "ratio": 1.000000000000098,
+        "wouldPass": true,
+        "load": 512
+      }
+    }
+  },
+  "fatal": null,
+  "environment": {
+    "electron": {
+      "electron": "45.0.0",
+      "chrome": "156.0.8078.48",
+      "node": "24.22.0",
+      "v8": "15.6.75.19-electron.0"
+    },
+    "displayFrequency": 60.00239944458008,
+    "chrome": "156.0.8078.79"
+  },
+  "partial": false,
+  "completedGroups": [
+    "calibrate",
+    "h7"
+  ],
+  "checkpointNote": "final",
+  "checks": {
+    "startConditions": {
+      "hidIdleSeconds": 8,
+      "power": "ac",
+      "topCpuPercentSum": 92,
+      "thermal": {
+        "cpuSpeedLimit": null,
+        "warningRecorded": false,
+        "raw": "Note: No thermal warning level has been recorded | Note: No performance warning level has been recorded | Note: No CPU power status has been recorded"
+      },
+      "minIdleSeconds": 30
+    },
+    "calibration": {
+      "vsyncMs": 16.66600018093657,
+      "band": "GPU-time p50 (EXT_disjoint_timer_query_webgl2) 60% to 120% of the vsync interval, Chrome with vsync on, 2 s warm-up and 20 s measured",
+      "sweep": [
+        {
+          "load": 512,
+          "valid": true,
+          "gpuP50Ms": 13.980791,
+          "gpuP95Ms": 14.2605,
+          "gpuSamples": 1201,
+          "gpuDisjointFrames": 0,
+          "frameP50Ms": 16.69999999999891,
+          "ratioToVsync": 0.8388810061331902,
+          "attempts": [
+            {
+              "runtime": "chrome",
+              "label": "calibration-512-try1",
+              "file": "results/chrome-156.0.8078.79-20261102T093220.606Z.json",
+              "seconds": 23.8,
+              "hid": {
+                "idleSecondsAtStart": 31,
+                "idleSecondsAtEnd": 55,
+                "inputDuringRun": false
+              },
+              "power": "ac",
+              "therm": {
+                "cpuSpeedLimit": null,
+                "warningRecorded": false
+              },
+              "valid": true,
+              "invalidReasons": [],
+              "stats": {
+                "count": 1200,
+                "meanMs": 16.666583333333335,
+                "p50Ms": 16.69999999999891,
+                "p95Ms": 17.600000000002183,
+                "p99Ms": 17.700000000000728,
+                "minMs": 15.599999999998545,
+                "maxMs": 17.799999999999272,
+                "longFrameThresholdMs": 33.33200036187314,
+                "longFrames": 0,
+                "longFrameShare": 0
+              },
+              "gpu": {
+                "available": true,
+                "disjointFrames": 0,
+                "unreadFrames": 0,
+                "stats": {
+                  "count": 1201,
+                  "meanMs": 13.920194210657774,
+                  "p50Ms": 13.980791,
+                  "p95Ms": 14.2605,
+                  "p99Ms": 14.335249,
+                  "minMs": 13.29175,
+                  "maxMs": 14.376625,
+                  "longFrameThresholdMs": 33.33200036187314,
+                  "longFrames": 0,
+                  "longFrameShare": 0
+                }
+              },
+              "viewport": {
+                "innerWidth": 1280,
+                "innerHeight": 720
+              },
+              "scene": {
+                "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                "softwareRenderer": false,
+                "load": 512,
+                "drawingBuffer": [
+                  2560,
+                  1440
+                ],
+                "dpr": 2
+              },
+              "visibility": {
+                "everHidden": false,
+                "everUnfocused": false
+              },
+              "vsyncHz": 60.00239944458008,
+              "load": 512,
+              "uncapped": false,
+              "attempt": 1
+            }
+          ]
+        }
+      ],
+      "chosenLoad": 512,
+      "stopReason": "in band"
+    },
+    "calibrationOutcome": {
+      "status": "REPORTED",
+      "reason": "load 512: Chrome GPU-time p50 inside the 60-120% band"
+    },
+    "h7": {
+      "order": "L, C, A alternating (the launcher: packaged test-flavor WGLauncher; Chrome via Playwright; Chrome --app)",
+      "load": 512,
+      "calibrated": true,
+      "passes": [
+        {
+          "tag": "a",
+          "runsWanted": 3,
+          "slots": {
+            "launcher": [
+              {
+                "final": {
+                  "runtime": "launcher",
+                  "label": "h7-a-launcher-1-try1",
+                  "file": "results/launcher-45.0.0-20261102T093344.670Z.json",
+                  "seconds": 23.2,
+                  "hid": {
+                    "idleSecondsAtStart": 115,
+                    "idleSecondsAtEnd": 139,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666666666666668,
+                    "p50Ms": 16.69999999999891,
+                    "p95Ms": 17.69999999999891,
+                    "p99Ms": 17.700000000000728,
+                    "minMs": 15.5,
+                    "maxMs": 17.800000000000182,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "launcher",
+                    "label": "h7-a-launcher-1-try1",
+                    "file": "results/launcher-45.0.0-20261102T093344.670Z.json",
+                    "seconds": 23.2,
+                    "hid": {
+                      "idleSecondsAtStart": 115,
+                      "idleSecondsAtEnd": 139,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666666666666668,
+                      "p50Ms": 16.69999999999891,
+                      "p95Ms": 17.69999999999891,
+                      "p99Ms": 17.700000000000728,
+                      "minMs": 15.5,
+                      "maxMs": 17.800000000000182,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              },
+              {
+                "final": {
+                  "runtime": "launcher",
+                  "label": "h7-a-launcher-2-try1",
+                  "file": "results/launcher-45.0.0-20261102T093625.833Z.json",
+                  "seconds": 23.1,
+                  "hid": {
+                    "idleSecondsAtStart": 277,
+                    "idleSecondsAtEnd": 300,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666666666666668,
+                    "p50Ms": 16.69999999999891,
+                    "p95Ms": 17.39999999999791,
+                    "p99Ms": 17.699999999999818,
+                    "minMs": 15.599999999998545,
+                    "maxMs": 17.700000000000728,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "launcher",
+                    "label": "h7-a-launcher-2-try1",
+                    "file": "results/launcher-45.0.0-20261102T093625.833Z.json",
+                    "seconds": 23.1,
+                    "hid": {
+                      "idleSecondsAtStart": 277,
+                      "idleSecondsAtEnd": 300,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666666666666668,
+                      "p50Ms": 16.69999999999891,
+                      "p95Ms": 17.39999999999791,
+                      "p99Ms": 17.699999999999818,
+                      "minMs": 15.599999999998545,
+                      "maxMs": 17.700000000000728,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              },
+              {
+                "final": {
+                  "runtime": "launcher",
+                  "label": "h7-a-launcher-3-try1",
+                  "file": "results/launcher-45.0.0-20261102T093906.815Z.json",
+                  "seconds": 23.3,
+                  "hid": {
+                    "idleSecondsAtStart": 438,
+                    "idleSecondsAtEnd": 461,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666666666666664,
+                    "p50Ms": 16.699999999999818,
+                    "p95Ms": 18.004999999999924,
+                    "p99Ms": 18.599999999998555,
+                    "minMs": 14.599999999999909,
+                    "maxMs": 18.700000000000728,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "launcher",
+                    "label": "h7-a-launcher-3-try1",
+                    "file": "results/launcher-45.0.0-20261102T093906.815Z.json",
+                    "seconds": 23.3,
+                    "hid": {
+                      "idleSecondsAtStart": 438,
+                      "idleSecondsAtEnd": 461,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666666666666664,
+                      "p50Ms": 16.699999999999818,
+                      "p95Ms": 18.004999999999924,
+                      "p99Ms": 18.599999999998555,
+                      "minMs": 14.599999999999909,
+                      "maxMs": 18.700000000000728,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              }
+            ],
+            "chrome": [
+              {
+                "final": {
+                  "runtime": "chrome",
+                  "label": "h7-a-chrome-1-try1",
+                  "file": "results/chrome-156.0.8078.79-20261102T093438.213Z.json",
+                  "seconds": 23.6,
+                  "hid": {
+                    "idleSecondsAtStart": 169,
+                    "idleSecondsAtEnd": 192,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1201,
+                    "meanMs": 16.66661115736886,
+                    "p50Ms": 16.699999999999818,
+                    "p95Ms": 17.299999999999272,
+                    "p99Ms": 17.599999999998545,
+                    "minMs": 15.600000000000364,
+                    "maxMs": 17.700000000000728,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "chrome",
+                    "label": "h7-a-chrome-1-try1",
+                    "file": "results/chrome-156.0.8078.79-20261102T093438.213Z.json",
+                    "seconds": 23.6,
+                    "hid": {
+                      "idleSecondsAtStart": 169,
+                      "idleSecondsAtEnd": 192,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1201,
+                      "meanMs": 16.66661115736886,
+                      "p50Ms": 16.699999999999818,
+                      "p95Ms": 17.299999999999272,
+                      "p99Ms": 17.599999999998545,
+                      "minMs": 15.600000000000364,
+                      "maxMs": 17.700000000000728,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              },
+              {
+                "final": {
+                  "runtime": "chrome",
+                  "label": "h7-a-chrome-2-try1",
+                  "file": "results/chrome-156.0.8078.79-20261102T093719.516Z.json",
+                  "seconds": 23.6,
+                  "hid": {
+                    "idleSecondsAtStart": 330,
+                    "idleSecondsAtEnd": 353,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666666666666668,
+                    "p50Ms": 16.69999999999891,
+                    "p95Ms": 18.09999999999859,
+                    "p99Ms": 18.5,
+                    "minMs": 14.699999999998909,
+                    "maxMs": 18.699999999999818,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "chrome",
+                    "label": "h7-a-chrome-2-try1",
+                    "file": "results/chrome-156.0.8078.79-20261102T093719.516Z.json",
+                    "seconds": 23.6,
+                    "hid": {
+                      "idleSecondsAtStart": 330,
+                      "idleSecondsAtEnd": 353,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666666666666668,
+                      "p50Ms": 16.69999999999891,
+                      "p95Ms": 18.09999999999859,
+                      "p99Ms": 18.5,
+                      "minMs": 14.699999999998909,
+                      "maxMs": 18.699999999999818,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              },
+              {
+                "final": {
+                  "runtime": "chrome",
+                  "label": "h7-a-chrome-3-try1",
+                  "file": "results/chrome-156.0.8078.79-20261102T094000.420Z.json",
+                  "seconds": 23.5,
+                  "hid": {
+                    "idleSecondsAtStart": 491,
+                    "idleSecondsAtEnd": 514,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1199,
+                    "meanMs": 16.666638865721435,
+                    "p50Ms": 16.699999999999818,
+                    "p95Ms": 18.5,
+                    "p99Ms": 18.700000000000728,
+                    "minMs": 14.599999999998545,
+                    "maxMs": 18.799999999999272,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "chrome",
+                    "label": "h7-a-chrome-3-try1",
+                    "file": "results/chrome-156.0.8078.79-20261102T094000.420Z.json",
+                    "seconds": 23.5,
+                    "hid": {
+                      "idleSecondsAtStart": 491,
+                      "idleSecondsAtEnd": 514,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1199,
+                      "meanMs": 16.666638865721435,
+                      "p50Ms": 16.699999999999818,
+                      "p95Ms": 18.5,
+                      "p99Ms": 18.700000000000728,
+                      "minMs": 14.599999999998545,
+                      "maxMs": 18.799999999999272,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              }
+            ],
+            "chrome-app": [
+              {
+                "final": {
+                  "runtime": "chrome-app",
+                  "label": "h7-a-chrome-app-1-try1",
+                  "file": "results/chrome-app-156.0.8078.79-20261102T093532.230Z.json",
+                  "seconds": 24.1,
+                  "hid": {
+                    "idleSecondsAtStart": 222,
+                    "idleSecondsAtEnd": 247,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666666666666668,
+                    "p50Ms": 16.69999999999891,
+                    "p95Ms": 17.30000000000291,
+                    "p99Ms": 17.60100000000213,
+                    "minMs": 15.599999999998545,
+                    "maxMs": 17.799999999999272,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "chrome-app",
+                    "label": "h7-a-chrome-app-1-try1",
+                    "file": "results/chrome-app-156.0.8078.79-20261102T093532.230Z.json",
+                    "seconds": 24.1,
+                    "hid": {
+                      "idleSecondsAtStart": 222,
+                      "idleSecondsAtEnd": 247,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666666666666668,
+                      "p50Ms": 16.69999999999891,
+                      "p95Ms": 17.30000000000291,
+                      "p99Ms": 17.60100000000213,
+                      "minMs": 15.599999999998545,
+                      "maxMs": 17.799999999999272,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              },
+              {
+                "final": {
+                  "runtime": "chrome-app",
+                  "label": "h7-a-chrome-app-2-try1",
+                  "file": "results/chrome-app-156.0.8078.79-20261102T093813.303Z.json",
+                  "seconds": 23.9,
+                  "hid": {
+                    "idleSecondsAtStart": 384,
+                    "idleSecondsAtEnd": 407,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666583333333335,
+                    "p50Ms": 16.699999999999818,
+                    "p95Ms": 18.100000000000364,
+                    "p99Ms": 18.599999999999913,
+                    "minMs": 14.600000000000364,
+                    "maxMs": 18.700000000000728,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "chrome-app",
+                    "label": "h7-a-chrome-app-2-try1",
+                    "file": "results/chrome-app-156.0.8078.79-20261102T093813.303Z.json",
+                    "seconds": 23.9,
+                    "hid": {
+                      "idleSecondsAtStart": 384,
+                      "idleSecondsAtEnd": 407,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666583333333335,
+                      "p50Ms": 16.699999999999818,
+                      "p95Ms": 18.100000000000364,
+                      "p99Ms": 18.599999999999913,
+                      "minMs": 14.600000000000364,
+                      "maxMs": 18.700000000000728,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              },
+              {
+                "final": {
+                  "runtime": "chrome-app",
+                  "label": "h7-a-chrome-app-3-try1",
+                  "file": "results/chrome-app-156.0.8078.79-20261102T094054.302Z.json",
+                  "seconds": 23.9,
+                  "hid": {
+                    "idleSecondsAtStart": 545,
+                    "idleSecondsAtEnd": 568,
+                    "inputDuringRun": false
+                  },
+                  "power": "ac",
+                  "therm": {
+                    "cpuSpeedLimit": null,
+                    "warningRecorded": false
+                  },
+                  "valid": true,
+                  "invalidReasons": [],
+                  "stats": {
+                    "count": 1200,
+                    "meanMs": 16.666666666666664,
+                    "p50Ms": 16.699999999999818,
+                    "p95Ms": 18.59999999999991,
+                    "p99Ms": 18.700000000000728,
+                    "minMs": 14.599999999998545,
+                    "maxMs": 18.700000000000728,
+                    "longFrameThresholdMs": 33.33200036187314,
+                    "longFrames": 0,
+                    "longFrameShare": 0
+                  },
+                  "gpu": null,
+                  "viewport": {
+                    "innerWidth": 1280,
+                    "innerHeight": 720
+                  },
+                  "scene": {
+                    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                    "softwareRenderer": false,
+                    "load": 512,
+                    "drawingBuffer": [
+                      2560,
+                      1440
+                    ],
+                    "dpr": 2
+                  },
+                  "visibility": {
+                    "everHidden": false,
+                    "everUnfocused": false
+                  },
+                  "vsyncHz": 60.00239944458008,
+                  "load": 512,
+                  "uncapped": false,
+                  "attempt": 1
+                },
+                "attempts": [
+                  {
+                    "runtime": "chrome-app",
+                    "label": "h7-a-chrome-app-3-try1",
+                    "file": "results/chrome-app-156.0.8078.79-20261102T094054.302Z.json",
+                    "seconds": 23.9,
+                    "hid": {
+                      "idleSecondsAtStart": 545,
+                      "idleSecondsAtEnd": 568,
+                      "inputDuringRun": false
+                    },
+                    "power": "ac",
+                    "therm": {
+                      "cpuSpeedLimit": null,
+                      "warningRecorded": false
+                    },
+                    "valid": true,
+                    "invalidReasons": [],
+                    "stats": {
+                      "count": 1200,
+                      "meanMs": 16.666666666666664,
+                      "p50Ms": 16.699999999999818,
+                      "p95Ms": 18.59999999999991,
+                      "p99Ms": 18.700000000000728,
+                      "minMs": 14.599999999998545,
+                      "maxMs": 18.700000000000728,
+                      "longFrameThresholdMs": 33.33200036187314,
+                      "longFrames": 0,
+                      "longFrameShare": 0
+                    },
+                    "gpu": null,
+                    "viewport": {
+                      "innerWidth": 1280,
+                      "innerHeight": 720
+                    },
+                    "scene": {
+                      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                      "softwareRenderer": false,
+                      "load": 512,
+                      "drawingBuffer": [
+                        2560,
+                        1440
+                      ],
+                      "dpr": 2
+                    },
+                    "visibility": {
+                      "everHidden": false,
+                      "everUnfocused": false
+                    },
+                    "vsyncHz": 60.00239944458008,
+                    "load": 512,
+                    "uncapped": false,
+                    "attempt": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "probeFiles": [],
+  "leftoverProcesses": {
+    "processesWithTempDirInCommand": 0
+  }
+}

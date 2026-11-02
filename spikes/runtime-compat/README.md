@@ -18,7 +18,7 @@ results are kept. Nothing here is reused by the launcher.
 | `run.mjs` | Orchestrator for Electron: fixture server + spike server + one Electron launch per check, verdicts, schema validation |
 | `electron/` | Electron 45.0.0 spike app with its own `package-lock.json` (npm, outside the pnpm workspace) |
 | `common.mjs`, `run-compare.mjs`, `groups/` | Task 6: shared helpers; the non-timing checks of Chrome (Playwright), Chrome `--app`, the Safari WebKit proxy and the public demos |
-| `run-timing.mjs`, `timing-logic.mjs` | Task 6: the hands-off measurements (frame time calibration and H7, cold and warm start, memory, demo frame samples), built but not run: deferred to Phase 1 |
+| `run-timing.mjs`, `timing-logic.mjs` | Task 6: the hands-off measurements (frame time calibration and H7, cold and warm start, memory, demo frame samples), deferred by the owner and run in Phase 1 (2026-11-02; RESULTS.md "Phase 1") |
 | `build-launcher.mjs` | Phase 1 Task 17: packages the test-flavor WGLauncher (no fuses, no `wglauncher` scheme, own app id) into a directory outside the repository; H7 measures it (HYPOTHESES "Amendments") |
 | `demos.json` | The six public demos of H21, fixed before any demo run |
 | `matrix.mjs` | Generates `docs/compat/matrix.md` from `results/*.json` (see `docs/compat/methodology.md`) |
@@ -82,9 +82,9 @@ node run-timing.mjs --launcher-app=<.app> --smoke --runs=1   # wiring check with
   (AppleScript, needs the Automation permission once). The `app` group starts and quits several Chrome instances with
   temporary profiles under the system temp directory and removes them; a screenshot of the app window is taken with
   `screencapture` and not stored (use `--keep-temp` to look at it, then delete the temp directory).
-- `run-timing.mjs` (with `timing-logic.mjs`) is the **hands-off** runner for H7, H8, H9, H20-6 and the demo frame samples. **It
-  was never run for a result: the owner deferred those measurements to Phase 1 (2026-10-25).** It was only wiring-checked with
-  tiny durations and mocked inputs. If it is ever used: nobody may touch keyboard or trackpad, switch apps or let the display
+- `run-timing.mjs` (with `timing-logic.mjs`) is the **hands-off** runner for H7, H8, H9, H20-6 and the demo frame samples. The
+  owner deferred those measurements to Phase 1 (2026-10-25); they were run there on 2026-11-02, H7 on the launcher that
+  `build-launcher.mjs` packages (RESULTS.md "Phase 1"). While it runs nobody may touch keyboard or trackpad, switch apps or let the display
   sleep; the machine must be on AC power (it refuses to start otherwise unless `--allow-battery`, and refuses while the screen
   is locked); it waits for 30 s without input before every group, holds the display awake with `caffeinate`, and marks runs
   that lose focus or visibility, see input, run on battery or report a thermal limit as INVALID (retried at most twice).

@@ -485,7 +485,7 @@ async function groupCalibrate() {
     if (decision.action === "accept") {
       state.load = candidate;
       state.calibrated = true;
-      state.loadSource = "calibrated in Chrome (uncapped) in this invocation";
+      state.loadSource = "calibrated in Chrome (GPU timer query, vsync on) in this invocation";
       state.calibrationNote = `load ${candidate} calibrated in this invocation`;
       stopReason = "in band";
       break;

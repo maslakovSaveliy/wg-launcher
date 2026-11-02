@@ -1,6 +1,8 @@
 # ADR-0002: Desktop runtime
 
-**Status:** Accepted, by owner decision of 2026-10-25, under the Phase 1 H7 condition in "Decision".
+**Status:** Accepted, by owner decision of 2026-10-25, under the Phase 1 H7 condition in "Decision". The condition is met:
+H7 on the launcher against Chrome 156 is PASS (2026-11-02, with the GPU-timer calibration the owner chose; see "Phase 1
+outcome" below).
 
 **Date:** 2026-10-24
 
@@ -27,7 +29,7 @@ Conventions: [ADR-0000](0000-template.md#conventions). `H<n>` is a hypothesis in
 | H3 | `crossOriginIsolated` with COOP and COEP | PASS on 45.0.0, so no 44.9.x retry | Verified (2026-10-24, RESULTS.md H3) |
 | H5 | WebGPU adapter where Chrome has one | PASS: adapter, device and compute without a switch; 24 features, Chrome 23 | Verified (2026-10-24, RESULTS.md H5 and H19) |
 | H6 | Hardware WebGL2 renderer | PASS: ANGLE Metal in Electron and in Chrome | Verified (2026-10-24, RESULTS.md H6 and H19) |
-| H7 | p95 frame time at most Chrome's p95 x 1.15 | **Not measured**: Electron-only numbers exist, the calibrated Chrome runs do not; deferred to Phase 1 | Verified (2026-10-24, RESULTS.md summary, H7 "pending"); the deferral is `Owner` (2026-10-25) |
+| H7 | p95 frame time at most Chrome's p95 x 1.15 | **PASS in Phase 1 on the launcher**: p95 17.70 ms against Chrome 156's 18.10 ms (limit 20.81 ms); in Phase 0 not measured (deferred) | Verified (2026-11-02, RESULTS.md "Phase 1"); the deferral was `Owner` (2026-10-25) |
 
 H4 (injected headers) also passed; it is not fatal. Verified (2026-10-24, RESULTS.md H4). By the frozen rules this ADR
 could be accepted only once every fatal criterion passed (rule 2), and a criterion that was not run never counts as PASS
@@ -69,7 +71,7 @@ could be accepted only once every fatal criterion passed (rule 2), and a criteri
 | --- | --- |
 | Complexity | Medium: one pinned Chromium on every OS, CDP and isolated worlds available (H14 used both). Verified (2026-10-24, RESULTS.md H14) |
 | Cost and size | Ships its own Chromium; app size not measured. Unverified |
-| Compatibility | H1 to H6 PASS on macOS arm64, H7 deferred to Phase 1; builds only for x64 and arm64. Verified (2026-10-24, RESULTS.md; runtime-and-storage.md section 2.2) |
+| Compatibility | H1 to H6 PASS on macOS arm64 (2026-10-24), H7 PASS on the launcher (2026-11-02); builds only for x64 and arm64. Verified (RESULTS.md; runtime-and-storage.md section 2.2) |
 | Security | Sandbox, context isolation, permission handlers and fuses; Electron grants every permission unless denied, so handlers are mandatory. Verified (2026-10-24, runtime-and-storage.md sections 2.3 and 2.4) |
 | Team familiarity | TypeScript and Node; the spike app exists. Verified (2026-10-24, `spikes/runtime-compat/electron/`) |
 | Reversibility | Medium: main-process code is Electron-specific; the snapshot format is engine-independent ([snapshot-format.md](../specs/snapshot-format.md) section 1). Assumed |
@@ -153,16 +155,31 @@ fails. Assumed
   baseline `chrome-155.0.8059.85-20261024T171517.695Z.json`, the H20 aggregates); [matrix.md](../compat/matrix.md);
   [runtime-and-storage.md](../research/runtime-and-storage.md) sections 2 to 4 and 8.
 
+## Phase 1 outcome (2026-11-02)
+
+- **H7: PASS.** The launcher (a packaged test-flavor WGLauncher build) against Chrome 156.0.8078.79, load 512, three
+  alternating runs each, all valid: median p95 17.70 ms against 18.10 ms, limit 18.10 x 1.15 = 20.81 ms (ratio 0.978);
+  Chrome's p95 spread 6.6%, so no rerun. No "version mismatch": Chrome's major is 156. Verified (2026-11-02,
+  `spikes/runtime-compat/results/timing-electron-45.0.0_chrome-156.0.8078.79-20261102T093221.099Z.json`; RESULTS.md
+  "Phase 1")
+- **Method changes** (dated amendments of HYPOTHESES.md): the Electron side is the launcher; the calibration uses the GPU
+  timer query in Chrome with vsync on, because uncapped Chrome 156 does not wait for the GPU and its frame time cannot be
+  read (the first run had no calibrated load, H7 N/A). The owner chose that fallback (2026-11-02).
+- **Limits:** on this Mac the GPU timer shows the GPU busy for most of each frame (84% at load 512), not the headroom at
+  a higher clock; every runtime presents at 60 Hz; the test flavor stands in for the release build (Assumed); one
+  machine. H8, H9 and the demo frame samples are reported in RESULTS.md, no thresholds.
+
 ## Facts versus assumptions
 
 - **Facts** (tagged where they appear above): the results table above, H20, the Safari proxy run, the platform and CI
-  coverage. One machine; nothing is extrapolated. H7 is unmeasured; the acceptance rests on the owner's decision.
-- **Assumptions** (Assumed): Electron will pass H7 on the launcher; WKWebView has no CDP; Tauri would behave like
+  coverage. One machine; nothing is extrapolated. H7 passed on the launcher in Phase 1 (2026-11-02, "Phase 1 outcome").
+- **Assumptions** (Assumed): a release build's frame time equals the test-flavor build's measured for H7; WKWebView has no CDP; Tauri would behave like
   Safari; the upgrade policy is affordable; Chrome `--app` is a workable fallback beyond the checks H20 ran.
 
 ## Action items
 
-- [ ] Phase 1: re-run H7 on the launcher against Chrome under the condition above, with H8, H9 and the demo frame
-  samples; record the runs in `docs/compat/` and the outcome here (agent).
-- [ ] When Chrome 156 is installed on the measuring machine, re-check H7 and drop the "version mismatch" label (agent).
+- [x] Phase 1: re-run H7 on the launcher against Chrome under the condition above, with H8, H9 and the demo frame
+  samples; record the runs in `docs/compat/` and the outcome here (agent). Done 2026-11-02: PASS ("Phase 1 outcome").
+- [x] When Chrome 156 is installed on the measuring machine, re-check H7 and drop the "version mismatch" label (agent).
+  The Phase 1 run measured against Chrome 156.0.8078.79, so no label applies.
 - [ ] If Phase 1 ships an Electron version other than 45.0.0, re-run H1 to H7 with H4 on it first (agent).

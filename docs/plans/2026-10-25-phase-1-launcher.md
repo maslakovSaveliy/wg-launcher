@@ -505,14 +505,18 @@ release-check.mjs` (+ unit test on a fixture plist/bundle listing), `docs/compat
 **Files:** `spikes/runtime-compat/run-timing.mjs` (add runtime `launcher`: drives the packaged test-flavor app with
 `--launch-game=<id>` of an entry pointing at the spike scene), `spikes/runtime-compat/results/*.json`, `RESULTS.md`
 (dated Phase 1 section), `docs/compat/matrix.md` (regenerated), ADR-0002 and ADR-0005 status.
-- [ ] Wiring check with tiny durations (no result).
-- [ ] **STOP: READY_FOR_HANDS_OFF.** Tell the owner: total ≈ 45–60 min (calibration, 3 alternating runs per runtime,
+- [x] Wiring check with tiny durations (no result).
+- [x] **STOP: READY_FOR_HANDS_OFF.** Tell the owner: total ≈ 45–60 min (calibration, 3 alternating runs per runtime,
   a 5-run rerun if Chrome's p95 spread ≥ 15 %, H8 cold/warm, H9 60 s each, six demos); do not touch the Mac, keep the
   screen unlocked, connect power; Chrome is 155 unless the owner updates it to 156 (else the label "version mismatch").
   Wait for "ок".
-- [ ] Run with the frozen method; apply the noise rule; record PASS / FAIL / INCONCLUSIVE / INVALID exactly as ADR-0002.
-- [ ] FAIL or no verdict → stop and report; ADR-0002 and ADR-0005 are reopened by the owner, not by the agent.
-- [ ] Commit `spike(runtime-compat): measure H7 on the launcher against Chrome`.
+- [x] Run with the frozen method; apply the noise rule; record PASS / FAIL / INCONCLUSIVE / INVALID exactly as ADR-0002.
+  Run 1 (2026-11-02) had no calibrated load (uncapped Chrome 156 does not wait for the GPU): H7 N/A, reported to the
+  owner, who chose the GPU-timer calibration (HYPOTHESES "Amendments"); run 2: **H7 PASS** (ratio 0.978), RESULTS.md
+  "Phase 1". H8, H9 and the demo frame samples came from run 1.
+- [x] FAIL or no verdict → stop and report; ADR-0002 and ADR-0005 are reopened by the owner, not by the agent. (Run 1 was
+  stopped and reported; run 2 passed, so nothing is reopened.)
+- [x] Commit `spike(runtime-compat): measure H7 on the launcher against Chrome`.
 
 ### Task 18: Compatibility record, docs close-out, pull request (S)
 - [ ] `docs/compat/matrix.md`: launcher rows only for real runs (progress-lab through the launcher, the manual checks of

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "kind": "frame-time",
+  "createdAt": "2026-11-02T08:39:19.800Z",
+  "runtime": {
+    "name": "chrome",
+    "version": "156.0.8078.79",
+    "chromium": "156.0.0.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+  },
+  "label": "calibration-512-try1",
+  "page": {
+    "url": "http://localhost:4418/?mode=frametime&runtime=chrome&version=156.0.8078.79&load=512&duration=20000&warmup=2000&vsyncHz=60.00239944458008&label=calibration-512-try1",
+    "devicePixelRatio": 2,
+    "hardwareConcurrency": 8,
+    "visibility": {
+      "log": [
+        {
+          "t": 26,
+          "event": "load",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 69,
+          "event": "start",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 27945,
+          "event": "end",
+          "visibilityState": "visible",
+          "hasFocus": true
+        },
+        {
+          "t": 27946,
+          "event": "done",
+          "visibilityState": "visible",
+          "hasFocus": true
+        }
+      ],
+      "everHidden": false,
+      "everUnfocused": false
+    }
+  },
+  "data": {
+    "scene": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+      "softwareRenderer": false,
+      "load": 512,
+      "instances": 1024,
+      "seed": 1592594996,
+      "devicePixelRatio": 2,
+      "cssWidth": 1280,
+      "cssHeight": 720,
+      "drawingBufferWidth": 2560,
+      "drawingBufferHeight": 1440
+    },
+    "settings": {
+      "load": 512,
+      "durationMs": 20000,
+      "warmupMs": 2000
+    },
+    "vsync": {
+      "hostReportedHz": 60.00239944458008,
+      "intervalMs": 16.66600018093657,
+      "p50EstimatedHz": null
+    },
+    "viewport": {
+      "innerWidth": 1280,
+      "innerHeight": 720
+    },
+    "stats": {
+      "count": 0,
+      "meanMs": null,
+      "p50Ms": null,
+      "p95Ms": null,
+      "p99Ms": null,
+      "minMs": null,
+      "maxMs": null,
+      "longFrameThresholdMs": 33.33200036187314,
+      "longFrames": 0,
+      "longFrameShare": null
+    },
+    "framesDrawn": 2054,
+    "deltasMs": []
+  }
+}

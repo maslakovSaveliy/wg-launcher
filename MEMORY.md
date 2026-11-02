@@ -192,6 +192,12 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (2026-10-30): a production build refuses internal hosts for "Open in browser?" (security.md section 5). The
   real-input checks ran on the unpackaged test build with local pages; results in
   `docs/compat/manual-checks/2026-10-30-macos-arm64.md`. Open checks 5 and 10 are settled (plan table).
+- 2026-11-02 Phase 1 Task 17 (H7 on the launcher): **H7 PASS**, the launcher's p95 17.70 ms against Chrome
+  156.0.8078.79's 18.10 ms (limit 20.81 ms) [V, 2026-11-02, RESULTS.md "Phase 1"], so the condition of ADR-0002 and
+  ADR-0005 is met. Two dated amendments of HYPOTHESES.md: the Electron side is the packaged test-flavor launcher
+  (`spikes/runtime-compat/build-launcher.mjs`, no fuses, no scheme, own app id, driven by Playwright `_electron`), and
+  the calibration reads the GPU timer query in Chrome with vsync on (owner's choice after run 1 found no calibrated
+  load). H8, H9 and the demo frame samples are reported from run 1 (spike app against Chrome).
 - 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
   one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
   non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an
@@ -297,7 +303,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - [V] Project rules are `.cursor/rules/*.mdc` with frontmatter `description`, `globs`, `alwaysApply`; Cursor reads
   `AGENTS.md` natively. <https://cursor.com/docs/context/rules>
 - [V] Dev machine: macOS 27.0.1 on arm64 (MacBook Air M3 `Mac15,12`, fanless, Metal 4, 60 Hz display); Node 24.13.0 via
-  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome 155 and Xcode; a global Biome and a Homebrew
+  nvm (the nvm default) and, since 2026-10-28, Node 24.22.1 via nvm, the version `.nvmrc` pins; Rust 1.98.1; Go 1.27.1; git 2.56.0; gh 2.102.0; Google Chrome (155 in Phase 0, 156.0.8078.79 by 2026-11-02) and Xcode; a global Biome and a Homebrew
   lefthook 2.1.15. No Windows or Linux machine: those platforms are **unverified** until CI or a real run says otherwise.
 
 ## Gotchas
@@ -702,14 +708,23 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   further. [V, 2026-10-28, Electron 45.0.0, macOS arm64: a throwaway probe app launched with and without the switch through
   Playwright `_electron.launch`; regression test `apps/desktop/e2e/database.spec.ts`]
 
+- Chrome 156 with `--disable-gpu-vsync --disable-frame-rate-limit` does not wait for the GPU: with the H7 scene at
+  load 512 `requestAnimationFrame` ran about 1 800 times in the first second, then the page waited about 27 s while the
+  GPU drained, so a 20 s uncapped run recorded zero frame deltas. `EXT_disjoint_timer_query_webgl2` is available in
+  Chrome 156 on the M3, but its reading tracks the GPU's busy time at its chosen clock (load 384: 13.06 ms, 512: 14.03
+  ms at a 16.7 ms frame) and includes queueing once saturated (768: 39.45 ms at a 20.70 ms frame mean). [V,
+  2026-11-02, scratch Playwright probes; the clock-scaling cause is [A]]
+- The game window opens hidden and is shown after its first paint, so a page loaded as the entry records "not
+  focused" at load; the H7 runner opens the entry on a blank page and navigates to the scene once the window is
+  visible, focused and 1280 x 720 CSS px. Playwright `_electron.launch({executablePath})` drives a packaged app only
+  without fuses (it needs the Node inspector). [V, 2026-11-02, smoke and hands-off runs]
+
 ## Open questions
 
 - Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (party and governing law are filled in; whether the
   Harmony wording, such as the UN Convention exclusion in section 6.1, and the moral-rights waiver fit Russian law is for
   the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal address or another
   contact beyond the GitHub account? Default: the lawyer decides.
-- Does Electron pass H7 on the launcher (condition of ADR-0002 and ADR-0005)? Chrome 156 is not installed on the dev machine, so a result
-  against Chrome 155 carries "version mismatch". Default until measured: Electron stays the runtime.
 - Spike leftovers (RESULTS.md): the `node:sqlite` stability label in Node 24.22 (H10); why Electron reports one extra
   WebGPU feature, `texture-compression-unaligned` (H19); Electron 44.x cross-origin isolation, untested because 45.0.0
   passed (H3, H4); H12 on the packaged app and the H13 real-click run ("Open items for the owner").

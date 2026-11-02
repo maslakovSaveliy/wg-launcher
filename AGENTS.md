@@ -45,7 +45,7 @@ Exists now:
 | `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
 | `docs/compat/` | Compatibility matrix (generated from the spike results), measurement methodology and `manual-checks/` (dated manual runs of the packaged app); real runs only |
 | `docs/plans/` | Implementation plans |
-| `spikes/runtime-compat/` | THROWAWAY runtime experiment, not product code, kept in place as the evidence the ADRs and specs link to: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy and demo runners (and a timing runner that was never run: deferred to Phase 1), committed `results/` and `RESULTS.md`; see its `README.md` |
+| `spikes/runtime-compat/` | THROWAWAY runtime experiment, not product code, kept in place as the evidence the ADRs and specs link to: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy and demo runners, the hands-off timing runner and `build-launcher.mjs` (the Phase 1 H7 run on the launcher, 2026-11-02), committed `results/` and `RESULTS.md`; see its `README.md` |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |
 | `biome.json`, `tsconfig.base.json`, `tsconfig.json`, `vitest.config.ts` | Lint and format, TypeScript, unit tests |
 | `lefthook.yml`, `commitlint.config.mjs`, `.secretlintrc.json`, `.markdownlint-cli2.jsonc` | Git hooks and their checks |
