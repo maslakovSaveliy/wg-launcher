@@ -89,7 +89,9 @@ secretlint, rejects machine-specific paths (`scripts/check-machine-paths.mjs`) a
 every pull request and also runs the fixture's Playwright suite (`pnpm test:e2e:fixture --project=chromium`), the
 exporter's browser tests (`pnpm test:e2e:exporters`) and the
 desktop suite (`pnpm test:e2e:desktop`, under `xvfb-run` on Linux) on Ubuntu and macOS; they prove the build and tests,
-not game compatibility.
+not game compatibility. A change that touches only Markdown files runs the quality job alone (lint, typecheck,
+licenses, paths, bundle and docs checks); the unit, browser and desktop test jobs are skipped, and anything else, the
+workflow file included, runs everything (the `changes` job).
 
 ## Hard rules
 

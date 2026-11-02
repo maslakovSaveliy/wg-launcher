@@ -13,6 +13,36 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides whether the change touches more than Markdown. The test jobs below run only when it does; `quality` always
+  # runs, so a docs-only change is still linted (docs:lint) and checked for machine paths (owner decision, 2026-11-02).
+  # Anything uncertain (a new branch, a diff that cannot be computed, an empty diff) counts as code: everything runs.
+  changes:
+    name: Changed files (docs only or code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: classify
+        name: Classify the changed files
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          code=true
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
+            if changed=$(git diff --name-only "$BASE...$HEAD"); then
+              printf 'Changed files:\n%s\n' "$changed"
+              if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv '\.md$'; then code=false; fi
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Runs the test jobs: $code"
+
   quality:
     name: Lint, typecheck, licenses, paths, docs (ubuntu)
     runs-on: ubuntu-latest
@@ -39,6 +69,8 @@ jobs:
   # Proves install and unit tests on these operating systems. It does not prove game compatibility.
   test:
     name: Install and unit tests (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -61,6 +93,8 @@ jobs:
   # Chromium. They prove the fixture, the exporter and the storage behavior they check, not game compatibility.
   e2e:
     name: Fixture and exporter browser tests (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -104,6 +138,8 @@ jobs:
   # not game compatibility (AGENTS.md honesty rule 3).
   desktop-e2e:
     name: Desktop e2e (${{ matrix.os }}), proves the build and tests, not game compatibility
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
