@@ -367,19 +367,65 @@ function frameStats(deltas, vsyncMs) {
   };
 }
 
+const vsyncOf = (hz) => (hz ? 1000 / hz : null);
+
+// GPU time of each frame's draw calls with EXT_disjoint_timer_query_webgl2 (the H7 calibration fallback, HYPOTHESES
+// "Amendments" 2026-11-02). One TIME_ELAPSED query per frame; results are read when available, and a frame whose
+// result arrives while the GPU reports a disjoint event is dropped. Only frames begun inside the measured window count.
+function gpuTimer(gl) {
+  const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+  if (!ext) return { begin() {}, end() {}, poll() {}, finish: async () => ({ available: false }) };
+  const pending = [];
+  const samples = [];
+  let disjoint = 0;
+  let active = null;
+  return {
+    begin(measured) {
+      active = { query: gl.createQuery(), measured };
+      gl.beginQuery(ext.TIME_ELAPSED_EXT, active.query);
+    },
+    end() {
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      pending.push(active);
+      active = null;
+    },
+    poll() {
+      while (pending.length && gl.getQueryParameter(pending[0].query, gl.QUERY_RESULT_AVAILABLE)) {
+        const { query, measured } = pending.shift();
+        if (gl.getParameter(ext.GPU_DISJOINT_EXT)) disjoint++;
+        else if (measured) samples.push(gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6);
+        gl.deleteQuery(query);
+      }
+    },
+    async finish(vsyncMs) {
+      const end = performance.now() + 5000;
+      while (pending.length && performance.now() < end) {
+        await new Promise((r) => requestAnimationFrame(r));
+        this.poll();
+      }
+      return { available: true, disjointFrames: disjoint, unreadFrames: pending.length, stats: frameStats(samples, vsyncMs) };
+    },
+  };
+}
+
 async function runFrameTime() {
   const load = Number(params.get("load") ?? 64);
   const duration = Number(params.get("duration") ?? 20000);
   const warmup = Number(params.get("warmup") ?? 2000);
   const hostHz = params.get("vsyncHz") ? Number(params.get("vsyncHz")) : null;
   const scene = createScene(sceneCanvas(), { load });
+  const gpu = params.get("gpuTimer") === "1" ? gpuTimer(scene.gl) : null;
   recordVisibility("start");
   const timestamps = [];
   let frame = 0;
   await new Promise((resolve) => {
     let start = null;
     const tick = (t) => {
+      const measured = start !== null && t - start >= warmup;
+      gpu?.poll();
+      gpu?.begin(measured);
       scene.draw(frame++);
+      gpu?.end();
       if (start === null) start = t;
       if (t - start >= warmup) timestamps.push(t);
       if (t - start >= warmup + duration) resolve();
@@ -388,6 +434,7 @@ async function runFrameTime() {
     requestAnimationFrame(tick);
   });
   recordVisibility("end");
+  const gpuResult = gpu ? await gpu.finish(vsyncOf(hostHz)) : null;
   const deltas = [];
   for (let i = 1; i < timestamps.length; i++) deltas.push(timestamps[i] - timestamps[i - 1]);
   const sortedDeltas = [...deltas].sort((a, b) => a - b);
@@ -399,6 +446,7 @@ async function runFrameTime() {
     vsync: { hostReportedHz: hostHz, intervalMs: vsyncMs, p50EstimatedHz: estimatedHz },
     viewport: { innerWidth, innerHeight },
     stats: frameStats(deltas, vsyncMs),
+    gpu: gpuResult,
     framesDrawn: frame,
     deltasMs: deltas.length <= 4000 ? deltas.map((d) => Math.round(d * 1000) / 1000) : null,
   };

@@ -363,3 +363,27 @@ Any change after the first run is added here with its date, the reason and the o
   its frame time is assumed equal to a release build (same Electron and Chromium). Assumed
 - **Unchanged:** the scene, its calibration in Chrome, the viewport, the alternating runs, the noise rule, the PASS and
   FAIL thresholds and the validity rules. H8, H9 and the demo samples still run the spike app.
+
+### 2026-11-02: H7 calibrates with the GPU timer query
+
+- **Reason:** the first hands-off run (2026-11-02, `results/timing-electron-45.0.0_chrome-156.0.8078.79-20261102T083920.324Z.json`)
+  found no calibrated load. In Chrome 156 with `--disable-gpu-vsync --disable-frame-rate-limit` the page does not wait
+  for the GPU: with the scene at load 512, `requestAnimationFrame` ran about 1 800 times within the first second while
+  its timestamps barely advanced, then the page stalled for about 27 s while the GPU drained the queue, so frame time
+  cannot be read under the H7b conditions. Verified (2026-11-02, a scratch Playwright probe on this Mac; the 20 s
+  calibration run had zero frame deltas). The H7 text already names the GPU timer query as the fallback "if Chrome's
+  cap cannot be removed"; the cap can be removed, but nothing can be measured without it, which this amendment treats
+  as the same case. The owner chose this fallback.
+- **Old text (H7, "Calibration"):** the scene's p50 frame time in Chrome with the frame-rate limit and vsync disabled
+  must be 60% to 120% of the vsync interval.
+- **New text:** in Chrome with vsync on (the H7 conditions), the p50 GPU time of each frame's draw calls, read with
+  `EXT_disjoint_timer_query_webgl2` (`TIME_ELAPSED_EXT`; a frame with a disjoint event is dropped), must be 60% to 120%
+  of the vsync interval, over 2 s warm-up and 20 s measured. The load ladder, its start at 512 and the band are
+  unchanged. The timer runs only in calibration runs; H7's measured runs do not carry it.
+- **Known weakness:** on this Mac the timer reflects the GPU's busy time at whatever clock it chose, not a fixed cost
+  per frame. Chrome with vsync on, 20 s each: load 384 gave a GPU-time p50 of 13.06 ms, load 512 14.03 ms (frame p50
+  16.7 ms for both), load 768 39.45 ms while the frame mean was 20.70 ms and the frame p95 33.5 ms. Verified
+  (2026-11-02, scratch runs). So below saturation the reading changes little with the load, and above it the reading
+  includes queueing. That the GPU lowers its clock to meet the frame budget is Assumed. A load in the band therefore
+  shows that the GPU is busy most of each frame, not how much headroom a faster clock would leave; RESULTS.md carries
+  this caveat with the H7 verdict.

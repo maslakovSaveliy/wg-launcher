@@ -15,12 +15,14 @@
 // partial aggregate is rewritten after every slot, and SIGINT, SIGTERM, SIGHUP and uncaught errors clean up.
 // --smoke shortens every duration and writes into a scratch directory (wiring check only; numbers mean nothing).
 //
-// Groups, in this order. The calibration sweep is itself uncapped (the H7b conditions), so it runs first and
-// is followed by a cooldown; after it all capped measurement runs (h7, h8, h9, demos) come before the uncapped
-// h7b runs, because uncapped runs leave seconds of queued GPU work and heat behind:
-//   calibrate  H7 calibration: Chrome with vsync and frame limit off, 2 s warm-up + 20 s measured (H7b
-//              conditions); load whose p50 is 60-120% of the vsync interval. Only a load found here counts as
-//              calibrated; without one, H7, H20-6 and H7b are N/A (or INVALID with a load given by --load).
+// Groups, in this order. The calibration sweep runs first and is followed by a cooldown; all capped measurement
+// runs (h7, h8, h9, demos) come before the uncapped h7b runs, because uncapped runs leave seconds of queued GPU work
+// and heat behind:
+//   calibrate  H7 calibration: Chrome (vsync on), 2 s warm-up + 20 s measured, the scene's GPU time per frame from
+//              EXT_disjoint_timer_query_webgl2 (HYPOTHESES "Amendments" 2026-11-02: uncapped Chrome 156 does not wait
+//              for the GPU, so frame time cannot be read there); load whose GPU-time p50 is 60-120% of the vsync
+//              interval. Only a load found here counts as calibrated; without one, H7, H20-6 and H7b are N/A (or
+//              INVALID with a load given by --load).
 //   h7         the launcher (L: the packaged test-flavor WGLauncher, the scene as a library entry in a game window;
 //              Phase 1, HYPOTHESES "Amendments"), Chrome via Playwright (C), Chrome --app (A); runs alternate L, C, A, ...
 //   h8         spawn to first frame, 3 cold + 3 warm launches each of Electron and Chrome (default load 512)
@@ -272,6 +274,7 @@ function rowOf(runtime, label, outcome, extra = {}) {
     valid: reasons.length === 0 && !!payload,
     invalidReasons: reasons,
     stats: payload?.data?.stats ?? null,
+    gpu: payload?.data?.gpu ?? null,
     viewport: payload?.data?.viewport ?? null,
     scene: payload ? { renderer: payload.data.scene.renderer, softwareRenderer: payload.data.scene.softwareRenderer, load: payload.data.settings.load, drawingBuffer: [payload.data.scene.drawingBufferWidth, payload.data.scene.drawingBufferHeight], dpr: payload.data.scene.devicePixelRatio } : null,
     visibility: payload ? { everHidden: payload.page.visibility.everHidden, everUnfocused: payload.page.visibility.everUnfocused } : null,
@@ -300,11 +303,11 @@ async function waitPage(page, timeoutMs) {
   return { state: "timeout" };
 }
 
-async function chromeFrame({ load, uncapped = false, duration = DURATION, warmup = WARMUP, label }) {
+async function chromeFrame({ load, uncapped = false, gpuTimer = false, duration = DURATION, warmup = WARMUP, label }) {
   const browser = await launchPlaywrightBrowser({ channel: "chrome", uncapped, width: WIDTH, height: HEIGHT });
   try {
     const mark = run.mark();
-    const url = run.spikeUrl("/", { mode: "frametime", runtime: "chrome", version: browser.version, load, duration, warmup, vsyncHz: hz(), label });
+    const url = run.spikeUrl("/", { mode: "frametime", runtime: "chrome", version: browser.version, load, duration, warmup, vsyncHz: hz(), label, ...(gpuTimer ? { gpuTimer: 1 } : {}) });
     await browser.page.goto(url);
     const waitState = await waitPage(browser.page, (duration + warmup) * 4 + 120000);
     if (waitState.state !== "posted") return { payload: null, file: null, error: `probe state ${waitState.state} ${waitState.error ?? ""}` };
@@ -458,9 +461,9 @@ function slot(runtime, label, params, { cooldownMs = COOLDOWN_MS } = {}) {
 // ---- Groups ------------------------------------------------------------------------------------
 
 async function groupCalibrate() {
-  // R17: Chrome with frame limit and vsync off; p50 must be 60-120% of the vsync interval. Start at the load
-  // Task 5 chose in Electron (512, or --load) and move one step up or down the ladder until inside the band.
-  // The windows are those of H7b (2 s warm-up, 20 s measured); each candidate gets up to 3 valid-run attempts.
+  // R17 with the GPU timer fallback: Chrome with vsync on; the GPU-time p50 must be 60-120% of the vsync interval.
+  // Start at the load Task 5 chose in Electron (512, or --load) and move one step up or down the ladder until inside
+  // the band. 2 s warm-up, 20 s measured; each candidate gets up to 3 valid-run attempts.
   const vsyncMs = 1000 / hz();
   let index = Math.max(0, LOAD_LADDER.indexOf(state.load ?? 512));
   let direction = 0;
@@ -468,14 +471,16 @@ async function groupCalibrate() {
   let stopReason = "step limit";
   for (let step = 0; step < 6; step++) {
     const candidate = LOAD_LADDER[index];
-    const result = await slot("chrome", `calibration-${candidate}`, { load: candidate, uncapped: true }, { cooldownMs: COOLDOWN_MS * 2 });
+    const result = await slot("chrome", `calibration-${candidate}`, { load: candidate, gpuTimer: true });
     const row = result.final;
-    const ratio = row ? ratioToVsync(row.stats.p50Ms, hz()) : null;
-    sweep.push({ load: candidate, valid: !!row, p50Ms: row?.stats.p50Ms ?? null, p95Ms: row?.stats.p95Ms ?? null, ratioToVsync: ratio, attempts: result.attempts });
-    state.checks.calibration = { vsyncMs, band: "60% to 120% of the vsync interval, Chrome uncapped, 2 s warm-up and 20 s measured (H7b conditions)", sweep };
+    const gpu = row?.gpu?.stats ?? null;
+    const gpuP50 = typeof gpu?.p50Ms === "number" ? gpu.p50Ms : null;
+    const ratio = ratioToVsync(gpuP50, hz());
+    sweep.push({ load: candidate, valid: !!row, gpuP50Ms: gpuP50, gpuP95Ms: gpu?.p95Ms ?? null, gpuSamples: gpu?.count ?? null, gpuDisjointFrames: row?.gpu?.disjointFrames ?? null, frameP50Ms: row?.stats?.p50Ms ?? null, ratioToVsync: ratio, attempts: result.attempts });
+    state.checks.calibration = { vsyncMs, band: "GPU-time p50 (EXT_disjoint_timer_query_webgl2) 60% to 120% of the vsync interval, Chrome with vsync on, 2 s warm-up and 20 s measured", sweep };
     checkpoint(`calibration load ${candidate}`);
-    log(`  calibration load ${candidate}: ${row ? `p50 ${row.stats.p50Ms.toFixed(2)} ms = ${(ratio * 100).toFixed(0)}% of vsync` : "no valid run"}`);
-    await sleep(COOLDOWN_MS * 2); // uncapped runs leave GPU backlog and heat behind
+    log(`  calibration load ${candidate}: ${ratio !== null ? `GPU p50 ${gpuP50.toFixed(2)} ms = ${(ratio * 100).toFixed(0)}% of vsync (frame p50 ${row.stats?.p50Ms?.toFixed(2)} ms, ${gpu.count} GPU samples, ${row.gpu.disjointFrames} disjoint)` : `no GPU-time measurement${row?.gpu ? ` (${JSON.stringify(row.gpu.available === false ? "timer query unavailable" : row.gpu.stats)})` : ""}`}`);
+    await sleep(COOLDOWN_MS);
     const decision = calibrationStep({ ratio, index, direction });
     if (decision.action === "accept") {
       state.load = candidate;
@@ -498,7 +503,7 @@ async function groupCalibrate() {
     state.calibrationNote = `no load in the 60-120% band was found (${stopReason}); H7 is N/A and the owner decides (R17)`;
   }
   state.checks.calibrationOutcome = state.calibrated
-    ? { status: "REPORTED", reason: `load ${state.load}: Chrome uncapped p50 inside the 60-120% band` }
+    ? { status: "REPORTED", reason: `load ${state.load}: Chrome GPU-time p50 inside the 60-120% band` }
     : { status: "N/A", reason: state.calibrationNote };
 }
 
@@ -540,7 +545,7 @@ async function groupH7() {
     summaries = await pass(runsWanted, "rerun5");
     v = verdicts(summaries, runsWanted, true);
   }
-  state.hypotheses.H7 = { status: v.H7.status, reason: v.H7.reason, metrics: { ...v.H7.metrics, load: state.load, vsyncHz: hz(), chromeVersion: CHROME_VERSION, versionMismatch: "Chrome major is compared with Electron 45's Chromium 156; see HYPOTHESES section 2", loadSource: state.loadSource, calibrationCheck: groups.includes("h7b") ? "calibration run and the H7b post-check" : "the calibration run itself (Chrome uncapped, 2 s warm-up + 20 s measured, the H7b conditions); H7b was not run" } };
+  state.hypotheses.H7 = { status: v.H7.status, reason: v.H7.reason, metrics: { ...v.H7.metrics, load: state.load, vsyncHz: hz(), chromeVersion: CHROME_VERSION, versionMismatch: "Chrome major is compared with Electron 45's Chromium 156; see HYPOTHESES section 2", loadSource: state.loadSource, calibrationCheck: "GPU-time calibration in Chrome with vsync on (HYPOTHESES Amendments 2026-11-02)" } };
   state.hypotheses["H20-6"] = { status: v["H20-6"].status, reason: v["H20-6"].reason, metrics: { ...v["H20-6"].metrics, load: state.load } };
 }
 
