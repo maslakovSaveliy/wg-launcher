@@ -10,21 +10,21 @@ codename, and `wglauncher://` the deep-link scheme.
 
 ## Status
 
-**Phase 1 is in progress; nothing here can be installed or played yet.** Phase 0 (specifications, decision records,
-rules, tooling and a runtime evaluation) is done. Phase 1 builds the first vertical scenario (add a URL, play, change
-progress, export a snapshot, restore it in a clean session and see the same progress), following
-[its plan](docs/plans/2026-10-25-phase-1-launcher.md). It is code and tests only, with no new spikes.
+**Phase 1, the launcher MVP, is done in code and tests; there is no release.** You can build the app from source and
+package an ad-hoc-signed macOS arm64 build locally; there is no installer, no signed or notarized build and no auto-update.
+Phase 0 (specifications, decision records, rules, tooling and a runtime evaluation) and Phase 1
+([its plan](docs/plans/2026-10-25-phase-1-launcher.md)) are done: add an HTTPS link, play the game in its own window,
+export a snapshot of its saves and restore it in another entry with the same progress.
 
 | Exists | Does not exist yet |
 | --- | --- |
-| Product requirements ([PRD](docs/product/prd.md)) with 25 acceptance criteria | A usable launcher: `apps/desktop` starts and shows its window, but has no library yet |
-| Specifications for [architecture](docs/specs/architecture.md), the [snapshot format](docs/specs/snapshot-format.md), [save transfer](docs/specs/save-transfer.md) and [security](docs/specs/security.md) | Library UI, game windows, export and restore as software |
-| Six [architecture decision records](docs/adr/), including the runtime choice (Electron 45) | Installers, releases, code signing |
-| Quality tooling: Biome, strict TypeScript, Vitest, a dependency license gate, Markdown lint, git hooks and CI | Cloud sync, accounts, a game catalog |
-| `progress-lab`, a controlled test game with verifiable saves, and its Playwright suite | Any game verified to work: the compatibility matrix lists only spike runs |
-| A throwaway runtime spike whose results the decisions cite ([RESULTS.md](spikes/runtime-compat/RESULTS.md)) | Frame-time comparison with Chrome: deferred to Phase 1 |
-| `packages/shared` (ids, error codes) and `packages/snapshot` (the `.wgsnap` codec with golden vectors) | |
-| `apps/desktop`: the Electron app skeleton (strict `app://launcher` protocol and CSP, launcher window, redacted log) and its Playwright e2e suite | |
+| `apps/desktop`, the Electron 45 launcher: library cards (add by link, edit title and cover, remove), one sandboxed window per game on its own persistent session, window size, position and fullscreen remembered, playtime, deep links and desktop shortcuts | Installers, releases, code signing, notarization, auto-update |
+| Snapshots: export of localStorage and IndexedDB to a versioned, hashed `.wgsnap` file while the game is closed, verify, restore into the same or another entry with a backup and rollback, storage-key mapping, delete local saves, clear cache | Cloud sync, accounts, a game catalog |
+| Product requirements ([PRD](docs/product/prd.md)) with 25 acceptance criteria and their Phase 1 state | Any real game verified to work: only the controlled test game `progress-lab` and six public demos have recorded runs |
+| Specifications for [architecture](docs/specs/architecture.md), the [snapshot format](docs/specs/snapshot-format.md), [save transfer](docs/specs/save-transfer.md) and [security](docs/specs/security.md); six [architecture decision records](docs/adr/) | Windows and Linux builds: the code has Windows paths (shortcuts, deep links) but neither platform is packaged or tested |
+| `packages/shared`, `packages/snapshot` (the `.wgsnap` codec with golden vectors) and `packages/exporters` (the browser-side exporter and importer) | OPFS, cookies, service workers and caches in snapshots (version 1 exports localStorage and IndexedDB only) |
+| Quality tooling: Biome, strict TypeScript, Vitest, Playwright suites for the desktop app, the exporters and the fixture, a license gate, a release check of the packaged app, Markdown lint, git hooks and CI | |
+| A throwaway runtime spike whose results the decisions cite ([RESULTS.md](spikes/runtime-compat/RESULTS.md)), including the frame-time comparison of the launcher with Chrome (H7) | |
 
 ## Quick start for contributors
 
@@ -45,12 +45,14 @@ pnpm check       # lint, typecheck, unit tests, license gate, path and bundle ch
 | `pnpm format` | Biome formatter, writing changes |
 | `pnpm typecheck` | `tsc -b` with the strict base config, for every TypeScript project in the workspace |
 | `pnpm test` | Vitest unit tests |
-| `pnpm test:e2e` | The desktop app's Playwright `_electron` suite (opens real windows), then the `progress-lab` fixture's suite (extra arguments such as `--project=chromium` reach the fixture only; it needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once). Not part of `pnpm check` |
+| `pnpm test:e2e` | The desktop app's Playwright `_electron` suite (opens real windows), then the exporters' browser tests, then the `progress-lab` fixture's suite (extra arguments such as `--project=chromium` reach the fixture only; it needs `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` once). Not part of `pnpm check` |
 | `pnpm licenses:check` | Production dependencies must use allowed licenses; dev-only ones only warn |
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
 | `pnpm paths:check` | No machine-specific paths (home directories, temporary roots) in tracked text files |
 | `pnpm bundle:check` | Builds the desktop app's prod and test flavors; the test hooks must not be in prod |
 | `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check, bundle:check and docs:lint |
+| `pnpm --filter @wg-launcher/desktop package:mac` | Packages an ad-hoc-signed macOS arm64 app into `apps/desktop/dist/` (not notarized) |
+| `pnpm --filter @wg-launcher/desktop release:check` | Reads the packaged app back: fuses, `Info.plist`, app.asar |
 
 The workflow, commit rules, Definition of Done and dependency policy are in [CONTRIBUTING.md](CONTRIBUTING.md). The rules
 every contributor and AI agent follows are in [AGENTS.md](AGENTS.md).
@@ -58,8 +60,8 @@ every contributor and AI agent follows are in [AGENTS.md](AGENTS.md).
 ## Architecture in short
 
 The runtime is Electron 45.0.0 ([ADR-0002](docs/adr/0002-desktop-runtime.md)). The owner accepted it on 2026-10-25 on
-one condition: Phase 1 must measure frame time on the launcher against Chrome (hypothesis H7), because that measurement
-was deferred out of Phase 0. A failure there reopens ADR-0002 and ADR-0005. The full design is in
+one condition: Phase 1 must measure frame time on the launcher against Chrome (hypothesis H7). It did: H7 passed on
+2026-11-02 on one Mac, with the limits recorded in [RESULTS.md](spikes/runtime-compat/RESULTS.md) ("Phase 1"). The full design is in
 [docs/specs/architecture.md](docs/specs/architecture.md); the main points:
 
 - **Main process** (trusted) owns windows, sessions, IPC, the SQLite library (`node:sqlite`, single writer) and the locks
@@ -82,17 +84,18 @@ was deferred out of Phase 0. A failure there reopens ADR-0002 and ADR-0005. The 
 
 | Platform | Status |
 | --- | --- |
-| macOS arm64 | Tested in the runtime spike on one machine (MacBook Air, Apple M3, macOS 27.0.1). Electron 45.0.0 passed the isolation, persistence, cross-origin isolation, WebGPU, WebGL2 and save-transfer checks on the controlled test game; frame time is not measured. No real game is verified, because the launcher does not exist. Verified (2026-10-24, [RESULTS.md](spikes/runtime-compat/RESULTS.md)) |
-| Windows | Not tested. CI runs install and unit tests on `windows-latest`; the fixture's browser tests do not run there. Verified (2026-10-25, [ci.yml](.github/workflows/ci.yml)) |
-| Linux | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks and the fixture's Chromium tests. Verified (2026-10-25, [ci.yml](.github/workflows/ci.yml)) |
+| macOS arm64 | Tested on one machine (MacBook Air, Apple M3, macOS 27.0.1): the runtime spike (2026-10-24), the launcher's e2e suite on the controlled test game, the manual checks of the packaged app (2026-10-30) and the frame-time comparison with Chrome 156 (H7 PASS, 2026-11-02). No real game is verified. Verified ([matrix.md](docs/compat/matrix.md), [manual checks](docs/compat/manual-checks/2026-10-30-macos-arm64.md), [RESULTS.md](spikes/runtime-compat/RESULTS.md)) |
+| Windows | Not tested. CI runs install and unit tests on `windows-latest`; no browser or desktop tests run there. Verified (2026-11-02, [ci.yml](.github/workflows/ci.yml)) |
+| Linux | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks, the fixture's and the exporters' Chromium tests and the desktop e2e suite under Xvfb, which proves the build and tests, not compatibility. Verified (2026-11-02, [ci.yml](.github/workflows/ci.yml)) |
 | iOS, Android | Not tested and out of scope for version 1. An iOS client would need WebKit and a separate design. Assumed |
 
 ## Limitations
 
-- There is no usable client yet. `apps/desktop` starts and shows an empty launcher window; the library, game windows,
-  export and restore are specified and planned, not yet software.
+- There is no release: the app is built from source, and the local macOS package is signed ad hoc only. The interface is
+  functional, not designed.
 - All runtime evidence comes from one fanless MacBook Air. It says nothing about other Macs, Windows, Linux or other GPUs.
-- Electron's frame time against Chrome is unmeasured. No speed or memory number is claimed anywhere.
+- The only speed and memory numbers are the spike's measurements on that machine (RESULTS.md, "Phase 1"), each with its
+  method and limits; no speed-up is claimed.
 - Whether heavy fan-made web ports of major commercial games are complete, whether a free market for them exists, and
   whether every web game will work are all unproven. The product does not claim any of them.
 - A game added by link needs its site to be online. A browser cache is not an installation.

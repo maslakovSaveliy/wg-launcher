@@ -17,7 +17,8 @@ outcomes are in `spikes/runtime-compat/RESULTS.md`; the decision is [ADR-0002](.
 ## 1. Where this leaves the runtime choice
 
 - The runtime decision is [ADR-0002](../adr/0002-desktop-runtime.md): Electron 45.0.0, accepted by the owner on
-  2026-10-25 on the condition that Phase 1 re-measures H7 frame time on the launcher against Chrome. `Owner`. The
+  2026-10-25 on the condition that Phase 1 re-measures H7 frame time on the launcher against Chrome; the condition is met
+  (H7 PASS, 2026-11-02, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) "Phase 1"). `Owner`. The
   statements below are the evidence collected before the spike ran, with the dates they carry; they are not updated to
   the spike's results.
 - Tauri 2 was the alternative worth measuring. It was not built (owner-approved scope change; H17 and H18 are N/A).

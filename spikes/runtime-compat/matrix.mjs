@@ -51,7 +51,8 @@ out("# Compatibility matrix");
 out();
 out("<!-- Generated file. Do not edit by hand. Regenerate with: node spikes/runtime-compat/matrix.mjs > docs/compat/matrix.md -->");
 out();
-out("> **Generated** from `spikes/runtime-compat/results/*.json` by `node spikes/runtime-compat/matrix.mjs > docs/compat/matrix.md`.");
+out("> **Generated** from `spikes/runtime-compat/results/*.json` and the launcher records listed in `LAUNCHER_RECORDS` of the");
+out("> generator, by `node spikes/runtime-compat/matrix.mjs > docs/compat/matrix.md`.");
 out("> Do not edit by hand; running the command twice gives identical output. Only real recorded runs appear here. Each row is");
 out("> Verified on the date and for the OS shown, with the evidence file named in its last column (a file under");
 out("> `spikes/runtime-compat/results/`). Nothing is extrapolated to other machines, operating systems or games: see");
@@ -65,10 +66,42 @@ if (timingH7 || timingH8 || timingH9 || timingH21) {
   out("> by the owner's decision of 2026-10-25 and show as deferred, not as results.");
 }
 out();
+// Phase 1 runs of the launcher itself. They are not spike result files: each row names its record under docs/compat/.
+const LAUNCHER_RECORDS = [
+  {
+    build: "progress-lab (controlled test fixture, not a real game) in the launcher",
+    url: "`fixtures/test-games/progress-lab`, served from localhost",
+    date: "2026-11-02",
+    runtime: "WGLauncher test flavor (unpackaged) on Electron 45.0.0",
+    launch: "added by link, game window opens (e2e)",
+    input: "`#play-step` through Playwright; real keyboard and mouse input only in the manual checks",
+    save: "progress persists across closing the game and restarting the app (AC-6)",
+    restore: "export, verify, restore into a second entry and again after a restart, same `#progress-hash`; service-worker and cross-site iframe variants; key mapping (AC-6, AC-7, AC-24)",
+    notes: "the desktop e2e suite, the exporters' browser tests and the fixture suite passed in the final local run of Phase 1",
+    evidence: "docs/compat/runs/2026-11-02-macos-arm64.md",
+  },
+  {
+    build: "WGLauncher packaged app (prod flavor), with `https://example.com/` and local test pages",
+    url: "`apps/desktop/dist/mac-arm64/WGLauncher.app`, ad hoc signed",
+    date: "2026-10-30",
+    runtime: "WGLauncher 0.0.0 on Electron 45.0.0",
+    launch: "deep links and shortcuts start or focus the game (AC-19)",
+    input: "real keyboard and mouse: fullscreen, Esc hold, pointer and keyboard lock (AC-18; test flavor)",
+    save: "n/a (no snapshot in the manual checks)",
+    restore: "n/a",
+    notes: "13 manual checks: deep links, the `.inetloc` shortcut, media denied without an OS prompt, window memory, no process left after close and quit",
+    evidence: "docs/compat/manual-checks/2026-10-30-macos-arm64.md",
+  },
+];
+
 out("## Runs on the dev machine");
 out();
 out("| Game / build | URL or version | Date | OS | Runtime | Launch | Input | Save | Restore | Notes | Evidence |");
 out("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+
+for (const r of LAUNCHER_RECORDS) {
+  out(`| ${cell(r.build)} | ${cell(r.url)} | ${r.date} | ${cell(osText)} | ${cell(r.runtime)} | ${cell(r.launch)} | ${cell(r.input)} | ${cell(r.save)} | ${cell(r.restore)} | ${cell(r.notes)} | ${cell(r.evidence)} |`);
+}
 
 const electronFull = lastOf("electron");
 const electronVersion = electronFull ? `Electron ${electronFull.data.runtime.version} (Chromium ${electronFull.data.runtime.chromium})` : "Electron";

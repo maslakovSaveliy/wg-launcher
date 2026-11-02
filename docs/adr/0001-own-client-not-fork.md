@@ -132,5 +132,5 @@ own core is judged lower than the cost of stripping and re-securing a fork. Assu
 
 ## Action items
 
-- [ ] Phase 1 builds the client from [architecture.md](../specs/architecture.md); no file of any base is copied
-  (agent; checked in code review).
+- [x] Phase 1 builds the client from [architecture.md](../specs/architecture.md); no file of any base is copied
+  (agent; checked in code review). Done in Phase 1 (2026-11-02): one review per task and a whole-branch review.

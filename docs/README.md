@@ -7,8 +7,8 @@ these documents carries a tag: `Verified (date, source)`, `Assumed` or `Unverifi
 ## Where to start
 
 - To understand the product: [PRD](product/prd.md), then [architecture](specs/architecture.md).
-- To implement Phase 1: the four specifications below, the ADRs they cite, and
-  [MEMORY.md](../MEMORY.md) for gotchas.
+- To work on the code: the four specifications below, the ADRs they cite, and [MEMORY.md](../MEMORY.md) for gotchas.
+  [PRD section 16.1](product/prd.md) says how each acceptance criterion stands after Phase 1.
 - To check what is actually verified: [compatibility matrix](compat/matrix.md) and the spike's
   [RESULTS.md](../spikes/runtime-compat/RESULTS.md).
 
@@ -21,7 +21,7 @@ these documents carries a tag: `Verified (date, source)`, `Assumed` or `Unverifi
 
 ## Specifications (`docs/specs/`)
 
-Normative for Phase 1. Status of each: draft, 2026-10-25.
+Normative. Written 2026-10-25 and implemented in Phase 1; each records its Phase 1 implementation details in place.
 
 | Document | Content |
 | --- | --- |
@@ -36,10 +36,10 @@ Normative for Phase 1. Status of each: draft, 2026-10-25.
 | --- | --- | --- |
 | [0000](adr/0000-template.md) | Template and conventions | Accepted |
 | [0001](adr/0001-own-client-not-fork.md) | Own small client, not a fork | Accepted |
-| [0002](adr/0002-desktop-runtime.md) | Desktop runtime: Electron 45.0.0 | Accepted (2026-10-25), on the condition that Phase 1 re-runs the H7 frame-time check against Chrome |
+| [0002](adr/0002-desktop-runtime.md) | Desktop runtime: Electron 45.0.0 | Accepted (2026-10-25), on the condition that Phase 1 re-runs the H7 frame-time check against Chrome; met (H7 PASS, 2026-11-02) |
 | [0003](adr/0003-native-languages.md) | Native languages: Rust deferred, Go not adopted | Accepted |
 | [0004](adr/0004-toolchain-and-repo-layout.md) | Toolchain and repository layout | Accepted; the Electron-specific rows follow ADR-0002 |
-| [0005](adr/0005-save-transfer-mechanism.md) | Save transfer mechanism: the quiescent window | Accepted together with ADR-0002, under the same condition |
+| [0005](adr/0005-save-transfer-mechanism.md) | Save transfer mechanism: the quiescent window | Accepted together with ADR-0002, under the same condition (met) |
 | [0006](adr/0006-licensing-model.md) | Licensing model: AGPL-3.0-or-later with a CLA | Accepted; awaits a lawyer's review |
 
 ## Research (`docs/research/`)
@@ -55,15 +55,17 @@ Real runs only. A platform without a row is not tested.
 
 | Document | Content |
 | --- | --- |
-| [matrix.md](compat/matrix.md) | Generated from the spike's result files; do not edit by hand |
+| [matrix.md](compat/matrix.md) | Generated from the spike's result files and the launcher records; do not edit by hand |
 | [methodology.md](compat/methodology.md) | How the runs are made and what the numbers do not mean |
 | [manual-checks/2026-10-30-macos-arm64.md](compat/manual-checks/2026-10-30-macos-arm64.md) | Manual checks of the packaged app on macOS arm64 (deep links, shortcut, media, real input) |
+| [runs/2026-11-02-macos-arm64.md](compat/runs/2026-11-02-macos-arm64.md) | The final local run of Phase 1 on macOS arm64: checks, all test suites, packaging and the release check |
 
 ## Plans (`docs/plans/`)
 
 | Document | Content |
 | --- | --- |
-| [2026-10-24-phase-0-foundation.md](plans/2026-10-24-phase-0-foundation.md) | The Phase 0 plan. Phase 1 gets its own plan |
+| [2026-10-24-phase-0-foundation.md](plans/2026-10-24-phase-0-foundation.md) | The Phase 0 plan (done) |
+| [2026-10-25-phase-1-launcher.md](plans/2026-10-25-phase-1-launcher.md) | The Phase 1 plan, the launcher MVP (done 2026-11-02) |
 
 ## Runtime spike and test game
 

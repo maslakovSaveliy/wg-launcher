@@ -155,5 +155,5 @@ Assumed
 
 ## Action items
 
-- [ ] Phase 1 implements save-transfer.md sections 4 to 6 test-first, including the AC-7, AC-8 and AC-24 tests and the
-  MUST tests listed there (agent).
+- [x] Phase 1 implements save-transfer.md sections 4 to 6 test-first, including the AC-7, AC-8 and AC-24 tests and the
+  MUST tests listed there (agent). Done in Phase 1 Tasks 12 to 15 (PRD section 16.1).

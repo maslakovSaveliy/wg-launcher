@@ -192,14 +192,15 @@ Flush state:
 
 | Platform | Role | Status |
 | --- | --- | --- |
-| macOS arm64 | First tested platform; the dev machine | Tested in the runtime spike on one machine, a MacBook Air with an Apple M3 on macOS 27.0.1: Electron 45.0.0 passed isolation, persistence, cross-origin isolation, WebGPU, hardware WebGL2 and the save-transfer checks; frame time against Chrome (H7) is deferred to Phase 1. No game is verified, because the launcher does not exist yet. Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md), [matrix.md](../compat/matrix.md)) |
-| Windows | Target platform | Not tested. CI runs only install and unit tests on `windows-latest` (the fixture's browser tests do not run there), which says nothing about game compatibility; no Windows machine is available. Verified (2026-10-25, [ci.yml](../../.github/workflows/ci.yml), [matrix.md](../compat/matrix.md) "Not tested") |
-| Linux | Next stage, after GPU, input and packaging checks on chosen distributions | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks and the fixture's Chromium tests, which prove nothing about the launcher or games. `Concept` for the plan; Verified (2026-10-25, [ci.yml](../../.github/workflows/ci.yml)) for the CI coverage |
+| macOS arm64 | First tested platform; the dev machine | Tested on one machine, a MacBook Air with an Apple M3 on macOS 27.0.1: in the runtime spike Electron 45.0.0 passed isolation, persistence, cross-origin isolation, WebGPU, hardware WebGL2 and the save-transfer checks (2026-10-24); the launcher passed its e2e suite on the controlled test game, the manual checks of the packaged app (2026-10-30) and the frame-time comparison with Chrome 156 (H7 PASS, 2026-11-02). No real game is verified. Verified ([RESULTS.md](../../spikes/runtime-compat/RESULTS.md), [matrix.md](../compat/matrix.md), [manual checks](../compat/manual-checks/2026-10-30-macos-arm64.md)) |
+| Windows | Target platform | Not tested. CI runs only install and unit tests on `windows-latest` (no browser or desktop tests run there), which says nothing about game compatibility; no Windows machine is available. Verified (2026-11-02, [ci.yml](../../.github/workflows/ci.yml), [matrix.md](../compat/matrix.md) "Not tested") |
+| Linux | Next stage, after GPU, input and packaging checks on chosen distributions | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks, the fixture's and the exporters' Chromium tests and the desktop e2e suite under Xvfb, which prove the build and tests, not the launcher's or games' compatibility. `Concept` for the plan; Verified (2026-11-02, [ci.yml](../../.github/workflows/ci.yml)) for the CI coverage |
 | iOS and Android | Future, a separate client | Not tested. Out of scope for version 1 (`Owner`). App Store guideline 2.5.6 requires apps that browse the web to use WebKit; alternative engines need an entitlement available only in the EU and Japan. Verified (2026-10-24, <https://developer.apple.com/app-store/review/guidelines/>, guideline 2.5.6). A future iOS client is therefore assumed to be a separate WebKit-based client, and desktop Chromium code cannot be assumed reusable there. Android's system WebView is Chromium-based. Assumed |
 
 - Electron 45 builds only for x64 and arm64. Verified (2026-10-24, <https://releases.electronjs.org/release/v45.0.0>).
 - The runtime is Electron 45.0.0, decided by [ADR-0002](../adr/0002-desktop-runtime.md): accepted by the owner on
-  2026-10-25 on the condition that Phase 1 re-measures H7 (frame time) on the launcher against Chrome. Tauri was not
+  2026-10-25 on the condition that Phase 1 re-measures H7 (frame time) on the launcher against Chrome; the condition is
+  met (H7 PASS, 2026-11-02). Tauri was not
   built (owner-approved scope change); Safari served only as a labeled WebKit proxy. `Owner`
 - An unsupported or untested OS is never called verified. A game, runtime or OS is verified only after a real recorded
   run in `docs/compat/` (date, version, machine). `Owner`
@@ -263,9 +264,9 @@ Not part of the MVP. It starts only after local export and import are proven (AC
 
 ## 16. Acceptance criteria
 
-Test types: unit, integration, e2e (the launcher driven end to end), manual. Planned tests live where the code will
-live (`apps/desktop`, `packages/snapshot`, `packages/exporters`, `fixtures/test-games/progress-lab`); none of these
-acceptance tests exists yet (the fixture has its own suite).
+Test types: unit, integration, e2e (the launcher driven end to end), manual. The tests live in `apps/desktop`,
+`packages/snapshot`, `packages/exporters` and `fixtures/test-games/progress-lab`; section 16.1 says how each criterion
+stands after Phase 1.
 Stage "Later" means it depends on work after the MVP.
 
 | Id | Criterion (testable) | Test type | Stage |
@@ -296,12 +297,49 @@ Stage "Later" means it depends on work after the MVP.
 | AC-24 | A snapshot records the full storage key (origin, plus top-level site for partitioned iframe storage). Restoring it where the scheme, host, port or top-level site differs fails with an explicit error naming both keys and writes nothing, unless the user confirmed a mapping, in which case every record lands under the mapped key; no case ends in a silent no-op or a partial restore | integration (`progress-lab` on `localhost` and `127.0.0.1`, with a nested iframe) | MVP |
 | AC-25 | With a small real Emscripten program that writes through IDBFS, an export taken after `syncfs` completes contains the latest in-game save, and an export taken before it is labeled `unconfirmed` | integration | Later (needs an Emscripten fixture) |
 
+### 16.1 State after Phase 1 (2026-11-02)
+
+"Passes" means the named tests pass: unit and integration tests in Vitest, browser tests in bundled Chromium, desktop e2e
+on Electron 45.0.0 through Playwright `_electron`. CI runs them on every push to the Phase 1 pull request (desktop e2e on
+macOS and Ubuntu, unit tests also on Windows), and they passed on the dev Mac in the final local run of Phase 1
+([runs/2026-11-02-macos-arm64.md](../compat/runs/2026-11-02-macos-arm64.md)). Manual
+results are in [manual-checks/2026-10-30-macos-arm64.md](../compat/manual-checks/2026-10-30-macos-arm64.md) ("check N"
+below). Nothing here is a statement about real games or other platforms.
+
+| Id | State | Evidence |
+| --- | --- | --- |
+| AC-1 | Passes | e2e `library.spec.ts`, `shortcut.spec.ts`, `vertical.spec.ts`; manual checks 2, 3 and 6 (packaged app) |
+| AC-2 | Passes | e2e `game-isolation.spec.ts`, `library.spec.ts` |
+| AC-3 | Passes | unit `games/window-factory.test.ts`; e2e `game-isolation.spec.ts` |
+| AC-4 | Passes | unit `policy/permissions.test.ts`, `games/game-session.test.ts`; e2e `game-isolation.spec.ts` (pointer lock needs an unlocked screen); manual checks 8 and 10 |
+| AC-5 | Passes | unit `policy/url-rules.test.ts`; e2e `game-isolation.spec.ts` |
+| AC-6 | Passes | e2e `vertical.spec.ts` (through the UI, with an app restart) |
+| AC-7 | Passes | e2e `export.spec.ts`, `vertical.spec.ts` (service-worker and cross-site iframe variants); browser `packages/exporters/browser/round-trip.spec.ts` |
+| AC-8 | Passes | unit `snapshots/faults.test.ts`; e2e `restore.spec.ts` (a fault and an app kill after each step) |
+| AC-9 | Passes | unit `packages/snapshot/src/vectors.test.ts` (golden vectors) and the container tests |
+| AC-10 | Passes | browser `export-errors.spec.ts`; unit `renderer/tasks.test.ts`; e2e `vertical.spec.ts` (code and details in the UI) |
+| AC-11 | Passes | unit `games/locks.test.ts`, `snapshots/quiescent/job.test.ts`, `ipc/handlers/handlers.test.ts`; e2e `export.spec.ts`, `restore.spec.ts`, `delete.spec.ts` |
+| AC-12 | Passes | unit `packages/exporters/src/flush.test.ts` (fake hook), `policy/badges.test.ts`, `renderer/ui-text.test.tsx` ("flush unconfirmed" on every such row) |
+| AC-13 | Passes | e2e `game-lifecycle.spec.ts`; manual check 12 |
+| AC-14 | Passes | unit `policy/badges.test.ts`, `renderer/ui-text.test.tsx` (no install, sync, FPS or download wording); manual review of the packaged app's UI during the manual checks (2026-10-30) |
+| AC-15 | Passes | unit `policy/playtime.test.ts`; e2e `window.spec.ts` |
+| AC-16 | Passes | e2e `delete.spec.ts` |
+| AC-17 | Passes | unit `policy/url-rules.test.ts`, `ipc/handlers/handlers.test.ts`; e2e `library.spec.ts` |
+| AC-18 | Passes | unit `games/fullscreen.test.ts`; e2e `window.spec.ts`; manual checks 9 to 11 (real input on macOS) |
+| AC-19 | Passes on macOS | unit `launch-input.test.ts`, `policy/deep-link.test.ts`; e2e `shortcut.spec.ts`; manual checks 1 to 7 (packaged app; check 7's shortcut half with only a game window open was not re-run after the `.inetloc` change). Windows: code and unit tests only, not tested |
+| AC-20 | Passes | unit `log/redact.test.ts`; e2e `export.spec.ts`; browser `export-errors.spec.ts` |
+| AC-21 | Passes (manual review, 2026-11-02) | Every "verified" statement in README.md, the PRD, the specs, the ADRs and `docs/compat/` names a dated record; Windows and Linux are "not tested". In the UI, "Verified" only labels a snapshot that passed verify, and the badge "Compatibility not verified" is the only compatibility wording |
+| AC-22 | Passes (manual review, 2026-11-02) | The start-up, frame-time and memory numbers published (RESULTS.md, matrix.md, ADR-0002) each come with their result file, cold and warm apart, Chrome on the same machine and the scene's load; the database timings in MEMORY.md are marked as not a product number |
+| AC-23 | Later | Not in Phase 1 (cloud sync) |
+| AC-24 | Passes | unit `snapshots/key-check.test.ts`; e2e `keys.spec.ts`, `vertical.spec.ts` (mapping through the UI) |
+| AC-25 | Later | Not in Phase 1 (needs an Emscripten fixture) |
+
 ## 17. Risks and unverified assumptions
 
 | Risk | State | Resolved by |
 | --- | --- | --- |
-| Electron fails frame-time criteria (H7); it passed isolation, persistence, cross-origin isolation, WebGPU and hardware WebGL2 | Verified (2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md) H1 to H6) for what passed, on one machine; H7 is not measured, deferred to Phase 1 by the owner (2026-10-25) | The Phase 1 H7 re-run on the launcher against Chrome, the condition of [ADR-0002](../adr/0002-desktop-runtime.md) |
-| The quiescent-window export and restore mechanism does not work for service-worker or cross-site iframe games | Verified (2026-10-24, RESULTS.md H14) that it worked in four variants on the controlled game; that the page-level service-worker bypass covers subframes is Assumed (no control run) | The MUST tests in [save-transfer.md](../specs/save-transfer.md), [ADR-0005](../adr/0005-save-transfer-mechanism.md) |
+| Electron fails frame-time criteria (H7); it passed isolation, persistence, cross-origin isolation, WebGPU and hardware WebGL2 | Resolved on one machine: H1 to H6 passed (Verified, 2026-10-24, [RESULTS.md](../../spikes/runtime-compat/RESULTS.md)); H7 on the launcher against Chrome 156 passed, with a GPU-timer calibration that rejects only the lightest scenes on that Mac (Verified, 2026-11-02, RESULTS.md "Phase 1") | Re-run H7 on every Electron major change ([ADR-0002](../adr/0002-desktop-runtime.md), upgrade policy) |
+| The quiescent-window export and restore mechanism does not work for service-worker or cross-site iframe games | Resolved for the controlled game: the page-level service-worker bypass covers a cross-site iframe, and export and restore pass for the service-worker and iframe variants (Verified, 2026-10-30, `apps/desktop/e2e/quiescent.spec.ts` and `vertical.spec.ts`); real games are not tested | Real games later; the MUST tests in [save-transfer.md](../specs/save-transfer.md), [ADR-0005](../adr/0005-save-transfer-mechanism.md) |
 | Real game saves (Emscripten flush timing, Unity paths, OPFS) behave differently from the controlled game | Unverified (2026-10-24, not tested) | Later fixtures and real runs |
 | Windows and Linux behave differently from macOS | Unverified (2026-10-25, no machine; [matrix.md](../compat/matrix.md) lists both as not tested) | CI for install and unit tests; real runs later |
 | The value hypothesis is wrong | Unverified (2026-10-24, not tested with any user) | Repeat-use observation after the MVP |

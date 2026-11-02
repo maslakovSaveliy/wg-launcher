@@ -16,7 +16,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - Own small Electron client, not a fork of itch, Flashpoint, Pixens or web-runner; their code is not reused (patterns
   only). The runtime is Electron 45.0.0 (ADR-0002); the spike supplied the evidence, on one machine (macOS arm64).
 - 2026-10-25 Owner: ADR-0002 and ADR-0005 are Accepted on one condition: Phase 1 re-runs H7 (p95 frame time at most
-  Chrome's p95 x 1.15) on the launcher with the frozen method. The hands-off timing runs (H7, Chrome side of H8, H9
+  Chrome's p95 x 1.15) on the launcher with the frozen method (met: H7 PASS on 2026-11-02, see the Task 17 entry). The hands-off timing runs (H7, Chrome side of H8, H9
   rerun, H20-6, demo frame samples) are "deferred" to Phase 1, not N/A or INVALID. A Phase 1 H7 FAIL reopens both ADRs
   ([A] the fallback, Chrome `--app` with CDP, has no preload, `ses.protocol.handle` or `webContents.debugger`, so
   ADR-0005's mechanism would not carry over). Source: ADR-0002 "Decision", ADR-0005 "Status", RESULTS.md header.
@@ -31,7 +31,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   stays orphaned until deleted) and OQ-3 (plain `http://localhost` and `http://127.0.0.1` only in development and test
   builds) are decided as proposed (architecture.md section 12).
 - 2026-10-25 `spikes/runtime-compat/` stays in place, labeled THROWAWAY: ADRs and specs link to its results and the
-  Phase 1 H7 re-run uses its method; it is deleted or archived only after the H7 outcome is recorded. Routine, Assumed.
+  Phase 1 H7 re-run used its method. Owner decision (2026-11-02, after the H7 outcome was recorded): it stays as it is;
+  deleting it later is a separate change.
 - Rust is deferred to the local-packages stage. The MVP snapshot codec is TypeScript; a language-neutral spec with
   golden vectors lets a later Rust version pass the same vectors. Go is not adopted in the MVP.
 - English everywhere in the repo, no exception. Product name **WGLauncher** (owner, 2026-10-25); codename and repo
@@ -198,6 +199,10 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (`spikes/runtime-compat/build-launcher.mjs`, no fuses, no scheme, own app id, driven by Playwright `_electron`), and
   the calibration reads the GPU timer query in Chrome with vsync on (owner's choice after run 1 found no calibrated
   load). H8, H9 and the demo frame samples are reported from run 1 (spike app against Chrome).
+- 2026-11-02 Phase 1 Task 18 (close-out, Assumed unless noted): PRD section 16.1 records each acceptance criterion's
+  state and evidence; the compatibility matrix gains launcher rows (`LAUNCHER_RECORDS` in `matrix.mjs`) that cite
+  `docs/compat/runs/` and `manual-checks/`; the final local run passed (`docs/compat/runs/2026-11-02-macos-arm64.md`,
+  [V, 2026-11-02]). Owner decision (2026-11-02): `spikes/runtime-compat/` stays as it is.
 - 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
   one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
   non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an
@@ -719,6 +724,11 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   visible, focused and 1280 x 720 CSS px [V, 2026-11-02, smoke and hands-off runs]. Playwright
   `_electron.launch({executablePath})` drove the unfused packaged test build; a fused one is assumed to refuse it,
   because Playwright connects through the Node inspector that the `nodeCliInspect` fuse turns off [A]
+
+- Playwright's browser cache can lose the build a suite needs: on 2026-11-02 `chromium-1248` (Playwright 1.64.1) was
+  gone and only `chromium-1217` was left, so every exporter browser test failed at launch with "Executable doesn't
+  exist". `pnpm --filter @wg-launcher/fixture-progress-lab exec playwright install chromium` restored it and removed
+  1217. What removed 1248 is unknown [U]. [V, 2026-11-02, run locally]
 
 ## Open questions
 

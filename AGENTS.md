@@ -14,18 +14,17 @@ It is not cloud streaming, not a reverse-engineering tool and not an automatic c
 
 ## Status
 
-**Phase 1 (launcher MVP) is in progress**, following
-[docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md): the first vertical scenario (add
-a URL, play, save progress, export, restore in a clean session) plus the library and every MUST of the specs. It is code
-and tests only, with no spikes and one review per task (owner decision, 2026-10-25); each task starts only on the
-owner's word. Phase 0 (foundation: specifications, documentation, rules, tooling and a runtime evaluation) is done; its
+**Phase 1 (launcher MVP) is done in code and tests** (all tasks of
+[docs/plans/2026-10-25-phase-1-launcher.md](docs/plans/2026-10-25-phase-1-launcher.md), 2026-11-02): the first vertical
+scenario (add a URL, play, save progress, export, restore in a clean session) plus the library and every MUST of the
+specs, on macOS arm64; there is no release. Merging it to `main` and the next phase start only on the owner's word. Phase 0 (foundation: specifications, documentation, rules, tooling and a runtime evaluation) is done; its
 plan is [docs/plans/2026-10-24-phase-0-foundation.md](docs/plans/2026-10-24-phase-0-foundation.md).
 
 Stack: Electron 45 ([ADR-0002](docs/adr/0002-desktop-runtime.md), accepted by the owner on the condition that Phase 1
-re-measures H7 frame time on the launcher against Chrome), React with TypeScript, electron-vite and `node:sqlite`
-([ADR-0004](docs/adr/0004-toolchain-and-repo-layout.md)). Rust is deferred
-([ADR-0003](docs/adr/0003-native-languages.md)). Electron, electron-vite, Vite and React are installed in `apps/desktop`;
-`node:sqlite` (the library database, `apps/desktop/src/main/db/`) comes with Phase 1 Task 6.
+re-measures H7 frame time on the launcher against Chrome; met, H7 PASS on 2026-11-02), React with TypeScript,
+electron-vite, `node:sqlite` for the library database (`apps/desktop/src/main/db/`) and electron-builder for the macOS
+package ([ADR-0004](docs/adr/0004-toolchain-and-repo-layout.md)). Rust is deferred
+([ADR-0003](docs/adr/0003-native-languages.md)).
 
 ## Repository map
 
@@ -43,7 +42,7 @@ Exists now:
 | `docs/specs/` | Technical specifications: architecture, snapshot format, save transfer, security |
 | `docs/adr/` | Architecture decision records `0001` to `0006`, and the template `0000` |
 | `docs/research/` | Evidence behind decisions: open-source bases, test games, runtime and save extraction |
-| `docs/compat/` | Compatibility matrix (generated from the spike results), measurement methodology and `manual-checks/` (dated manual runs of the packaged app); real runs only |
+| `docs/compat/` | Compatibility matrix (generated from the spike results and the launcher records), measurement methodology, `manual-checks/` (dated manual runs of the packaged app) and `runs/` (dated full local runs of the suites); real runs only |
 | `docs/plans/` | Implementation plans |
 | `spikes/runtime-compat/` | THROWAWAY runtime experiment, not product code, kept in place as the evidence the ADRs and specs link to: frozen `HYPOTHESES.md`, shared probe pages, spike server and runners, the Electron spike (`electron/`, own npm lockfile), the Chrome, Chrome `--app`, Safari-proxy and demo runners, the hands-off timing runner and `build-launcher.mjs` (the Phase 1 H7 run on the launcher, 2026-11-02), committed `results/` and `RESULTS.md`; see its `README.md` |
 | `package.json`, `pnpm-workspace.yaml`, `.nvmrc`, `.npmrc`, `.editorconfig` | Repo and toolchain basics |

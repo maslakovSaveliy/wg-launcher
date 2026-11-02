@@ -785,9 +785,9 @@ No crate exists before that. `Owner` for the deferral; the contract itself is AD
 
 - Esc in launcher fullscreen (section 9): hold for 1.5 s to exit, short presses to the game. If the owner prefers
   "every Esc exits", it is a one-line policy change. `Assumed`
-- If `ServiceWorker.stopAllWorkers` does not work through `webContents.debugger` (section 4), the remaining options are
-  unregistering the game's service workers on close (a cache-class loss: offline-capable games re-download) or
-  accepting a longer AC-13 window; the owner decides. `Assumed`
+- Closed: `ServiceWorker.stopAllWorkers` through `webContents.debugger` stops the game's worker on close (section 4), so
+  the fallbacks (unregistering the workers, a longer AC-13 window) are not needed. Verified (2026-10-28,
+  `apps/desktop/e2e/game-lifecycle.spec.ts`)
 - The launcher UI uses an in-memory partition (`launcher`), not the default session; nothing in the UI needs browser
   persistence because settings live in SQLite. `Assumed`; implemented this way in Phase 1 Task 5
   (`apps/desktop/src/main/launcher-window.ts`).

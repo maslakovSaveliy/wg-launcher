@@ -61,8 +61,8 @@
 | H7, H8 (Chrome side), H9 rerun, demo frame samples | measured in Phase 1 (2026-11-02) | two `timing-…` aggregates | See the rows above and the section "Phase 1" |
 
 Decision-rule view (HYPOTHESES section 4), Electron side only: none of the Electron fatal criteria that can be judged
-without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). H7 has no verdict: it is deferred to
-Phase 1 (owner decision 2026-10-25), so this file alone does not decide it. H3 passed on 45.0.0, so no 44.9.x retry was run.
+without Chrome failed (H1, H2, H3 PASS; H5 has an adapter without the switch; H6 hardware). In Phase 0 H7 had no verdict: it was
+deferred to Phase 1 (owner decision 2026-10-25). H3 passed on 45.0.0, so no 44.9.x retry was run.
 Phase 1 (2026-11-02): H7 on the launcher is PASS, so no fatal criterion of Electron has failed on this machine; H16's FAIL
 was handled by the launcher's close procedure (AC-13, `docs/specs/architecture.md` section 4).
 
@@ -299,15 +299,15 @@ Date 2026-10-24, same machine as above (macOS 27.0.1, Apple M3, 60 Hz, scale fac
 timing runner refuses to run that way; these checks do not depend on it). Commands: `node run-compare.mjs
 --only=chrome,chromium,safari,demos` and five times `node run-compare.mjs --only=app`. Runner code: `common.mjs`,
 `run-compare.mjs`, `groups/*.mjs`; probe, scene and server are the Task 5 files, unchanged. The timing part (H7, H8 on
-Chrome, H9, H20-6 and the demo frame samples) is deferred to Phase 1 by the owner's decision of 2026-10-25;
-`run-timing.mjs` and `timing-logic.mjs` were built for it and wiring-checked with tiny durations and mocked inputs, but never
-run for a result.
+Chrome, H9, H20-6 and the demo frame samples) was deferred to Phase 1 by the owner's decision of 2026-10-25;
+`run-timing.mjs` and `timing-logic.mjs` were built for it and wiring-checked with tiny durations and mocked inputs, and were
+run for a result in Phase 1 (section "Phase 1").
 
 ### H17 and H18: Tauri (N/A)
 
 Not run, decision-irrelevant (owner-approved scope change): per decision rule 6 Tauri wins only by passing a criterion
-Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace (and H7 is deferred to
-Phase 1); and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack. Assumed (reasoning, not
+Electron fails; Electron passed all fatal criteria measured so far except H7, which Tauri cannot replace (and H7 was deferred to
+Phase 1, where it passed on the launcher); and the save-transfer mechanism (ADR-0005) needs CDP, which WKWebView is assumed to lack. Assumed (reasoning, not
 tested): `docs/research/runtime-and-storage.md` section 3 ("WKWebView does not speak the Chrome DevTools Protocol", tagged
 Assumed) and section 9 ("How a Tauri (WKWebView) app would extract saves without CDP", Unverified). No Tauri crate or app was
 written. Nothing here is a Tauri result, and no Tauri row appears in the matrix.
@@ -363,7 +363,8 @@ Installed Chrome 155.0.8059.85 started directly: `--app=<url> --user-data-dir=<d
    remained 5 s later in any run. **Chrome keeps running after its last window closes** (the browser process was still there
    5 s after the close in all runs): a launcher built on `--app` must quit the browser itself. In Electron the equivalent
    renderer lived 27.8 s (H16), so Chrome is quicker, probably because its service worker stops earlier (Unverified).
-6. **Frame time:** deferred to Phase 1 (owner decision 2026-10-25), listed as H20-6.
+6. **Frame time:** deferred to Phase 1 (owner decision 2026-10-25), listed as H20-6; reported there (ratio 1.000 to Chrome,
+   section "Phase 1").
 
 ### Safari as a WebKit proxy (not WKWebView)
 
@@ -393,8 +394,8 @@ three.js `webgl_animation_keyframes`, `webgl_shadowmap`, `webgpu_compute_birds`.
 three webgpu-samples pages and by `webgpu_compute_birds` in both runtimes (adapter and device acquired through the injected
 hook); the two WebGL three.js examples used no WebGPU. Console errors: Electron 0 everywhere; Chrome 1 on each webgpu-samples
 page, in every case the `/favicon.ico` 404 that Chrome requests and an Electron window does not. So no demo fails in Electron
-while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples are deferred to Phase 1 (owner
-decision 2026-10-25). Visibility is judged from the moment the page reported itself visible and focused (`focus-ready`):
+while working in Chrome and none reproduces an H5, H6 or H7 failure. The 20 s frame samples were deferred to Phase 1 (owner
+decision 2026-10-25) and taken there (section "Phase 1"). Visibility is judged from the moment the page reported itself visible and focused (`focus-ready`):
 the log entry written when a new Electron window opens is made before it has focus, so judging from it would call every
 Electron row unfocused.
 

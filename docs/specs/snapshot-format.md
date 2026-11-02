@@ -550,4 +550,5 @@ hash codes (`SNAP_MANIFEST_TOO_LARGE`, `SNAP_MANIFEST_INVALID`, `SNAP_UNKNOWN_FO
 - The size limits in section 8 are guesses for save data. A game that keeps large assets in IndexedDB will hit them;
   an adapter that excludes the assets is the intended answer. `Assumed`
 - `notExported` relies on `navigator.storage.estimate().usageDetails`, a Chromium extension of the standard. Default:
-  record it when present, omit it otherwise. Unverified (not checked in an isolated world).
+  record it when present, omit it otherwise. It is available in the quiescent window's isolated world on Electron 45:
+  Verified (2026-10-28, `apps/desktop/e2e/export.spec.ts`; save-transfer.md section 5). Kept open for other runtimes.
