@@ -76,8 +76,11 @@ async function recoverEntry(
     const rolled = await rollBack(held.data, journal, backup, deps, hooks.onStep);
     if (!rolled.ok) return markNeedsRecovery(gameId, backup, rolled, deps);
     try {
-      journal.finish("failed");
-      if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: false });
+      // One transaction: a failed write leaves both the entry unfinished and the mark set, so the next start recovers.
+      deps.transaction(() => {
+        journal.finish("failed");
+        if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: false });
+      });
     } catch (error) {
       deps.log.error("snapshot.recovery.record-failed", { gameId, error });
       return markNeedsRecovery(

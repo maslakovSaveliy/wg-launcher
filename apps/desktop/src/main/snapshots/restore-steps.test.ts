@@ -1,7 +1,13 @@
 import { uuidv7 } from "@wg-launcher/shared";
 import { describe, expect, it } from "vitest";
 import { beginJournal } from "./journal.js";
-import { changeOrRollBack, rollBack, validateBoundMs } from "./restore-steps.js";
+import {
+  changeOrRollBack,
+  markNeedsRecovery,
+  rollBack,
+  trustedFlushState,
+  validateBoundMs,
+} from "./restore-steps.js";
 import { fakeHold, fakeWorker, taskDb, taskDeps, validatedFile } from "./testing.js";
 
 const MiB = 2 ** 20;
@@ -84,5 +90,48 @@ describe("the rollback's validation of the backup (save-transfer.md section 6)",
       data: undefined,
     });
     expect(windowBytes).toEqual([5 * MiB, 5 * MiB, 5 * MiB]);
+  });
+});
+
+describe("the flush state an imported snapshot is recorded with (AC-12, save-transfer.md section 7)", () => {
+  it("is unconfirmed whatever the file says when no bundled adapter declares a flush hook", () => {
+    expect(trustedFlushState({ flushState: "confirmed", adapter: null })).toBe("unconfirmed");
+    expect(
+      trustedFlushState({
+        flushState: "confirmed",
+        adapter: { id: "progress-lab", version: "1.0.0" },
+      }),
+    ).toBe("unconfirmed");
+    expect(
+      trustedFlushState({
+        flushState: "confirmed",
+        adapter: { id: "elsewhere", version: "9.9.9" },
+      }),
+    ).toBe("unconfirmed");
+  });
+
+  it("keeps an unconfirmed file unconfirmed", () => {
+    expect(trustedFlushState({ flushState: "unconfirmed", adapter: null })).toBe("unconfirmed");
+  });
+});
+
+describe("the message of a failed rollback", () => {
+  const backup = { revisionId: uuidv7(), createdAt: "2026-10-29T00:00:00.000Z" };
+  const deps = (hasGame: boolean) => ({
+    repos: { games: { get: () => (hasGame ? {} : null), update: () => {} } },
+    recovery: { mark: () => {}, clear: () => {} },
+    log: { info: () => {}, warn: () => {}, error: () => {}, flush: () => {} },
+  });
+  const cause = { code: "IMP_WIPE_FAILED" as const, message: "x" };
+
+  it("offers Retry recovery for a game in the library", () => {
+    const out = markNeedsRecovery(uuidv7(), backup, cause, deps(true) as never);
+    expect(out.message).toContain('use "Retry recovery"');
+  });
+
+  it("names the next start for a removed game's data, which has no Retry recovery control", () => {
+    const out = markNeedsRecovery(uuidv7(), backup, cause, deps(false) as never);
+    expect(out.message).not.toContain("Retry recovery");
+    expect(out.message).toContain("next start");
   });
 });

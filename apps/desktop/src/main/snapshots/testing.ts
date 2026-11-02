@@ -150,6 +150,8 @@ export function taskDeps(
     fileOf: (relative: string) => `/userData/${relative}`,
     verifySession: () => ({ session: {} as never, dispose: async () => {} }),
     now: () => 1_800_000_000_000,
+    // Runs `fn` as is; a test that needs the rollback of a real transaction sets the database's own.
+    transaction: <T>(fn: () => T): T => fn(),
   } as unknown as TaskDeps;
   return { deps, log, recovery };
 }

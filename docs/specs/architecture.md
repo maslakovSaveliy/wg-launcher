@@ -341,7 +341,8 @@ only; a percentage appears only when `bytesTotal` is known (AGENTS.md honesty ru
     is never undone by a late event; the text names the real step and the measured bytes, a percentage only with
     `bytesTotal`, and a failure's code and message (AC-10).
   - The card's actions (`src/renderer/library/GameMenu.tsx`), the export panel with the frame list, the snapshot
-    panel (this game's rows with restore, verify and save as; rows of other entries with the same origin; a file),
+    panel (this game's rows with restore, verify and save as; rows of other entries with the same origin; a file;
+    the "same origin" limit is the panel's, main accepts any stored revision and still checks its storage keys),
     the storage-key mapping form shown after `IMP_STORAGE_KEY_MISMATCH` (main checks it and confirms it in its own
     dialog; for a file the file dialog opens again) and the `needs_recovery` banner with "Retry recovery" are in
     `src/renderer/{library,snapshots,recovery}/`. Settings offers "Delete local saves" for a removed game's data.

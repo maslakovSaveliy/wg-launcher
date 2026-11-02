@@ -1,6 +1,7 @@
 # Phase 1 — Launcher MVP Implementation Plan (vertical scenario, library, snapshots, security)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development (owner-chosen). Steps use `- [ ]`.
+> **For agentic workers:** Tasks 1 to 14 ran with superpowers:subagent-driven-development (owner-chosen); from Task 15 on
+> one main agent implemented each task with one independent review (owner decision, 2026-10-30). Steps use `- [ ]`.
 > Approved by the owner on 2026-10-25; committed on branch `phase-1-launcher` together with the Prerequisite below.
 > Task 1 and every later task start only on the owner's explicit word.
 
@@ -520,11 +521,12 @@ hooks `addGame` and `launchGame` over Playwright `_electron`, see HYPOTHESES "Am
 - [x] Commit `spike(runtime-compat): measure H7 on the launcher against Chrome`.
 
 ### Task 18: Compatibility record, docs close-out, pull request (S)
-- [ ] `docs/compat/matrix.md`: launcher rows only for real runs (progress-lab through the launcher, the manual checks of
+- [x] `docs/compat/matrix.md`: launcher rows only for real runs (progress-lab through the launcher, the manual checks of
   Task 16, the H7 outcome); "not tested" rows unchanged for Windows, Linux and real games.
-- [ ] README status and limitations, PRD acceptance table states which AC passed and how (AC-21, AC-22 manual review),
+- [x] README status and limitations, PRD acceptance table states which AC passed and how (AC-21, AC-22 manual review),
   specs' open questions closed or kept, ADR action items checked, MEMORY.md current, AGENTS.md repository map.
-- [ ] Ask the owner whether to archive or delete `spikes/runtime-compat/` now that H7 is recorded (MEMORY decision).
+- [x] Ask the owner whether to archive or delete `spikes/runtime-compat/` now that H7 is recorded (MEMORY decision).
+  The owner keeps it as it is (2026-11-02).
 - [ ] `pnpm check`, `pnpm test:e2e`, release check; whole-branch review; PR with the real outputs pasted (push only on
   the owner's word).
 
@@ -551,4 +553,5 @@ manual check (≈ 30–45 min at the machine), the Task 17 hands-off run (≈ 45
 
 ## Verification (end-to-end for Phase 1)
 `pnpm check` · `pnpm test:e2e` (fixture + desktop, AC-6 among them) · golden vectors runner · `release-check.mjs` on the
-packaged app · manual checklist file of Task 16 · H7 record of Task 17 · CI green on the PR (macOS, Ubuntu, Windows unit).
+packaged app · manual checklist file of Task 16 · H7 record of Task 17 · CI green on the PR (unit tests on macOS and
+Windows, browser and desktop e2e on macOS and Ubuntu).

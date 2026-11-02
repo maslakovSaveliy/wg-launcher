@@ -81,6 +81,18 @@ const LAUNCHER_RECORDS = [
     evidence: "docs/compat/runs/2026-11-02-macos-arm64.md",
   },
   {
+    build: "progress-lab (controlled test fixture, not a real game) in a packaged test-flavor build with the release fuses",
+    url: "`fixtures/test-games/progress-lab`, served from localhost",
+    date: "2026-11-02",
+    runtime: "WGLauncher test flavor packaged from `app.asar` on Electron 45.0.0; release fuses except `nodeCliInspect` (on, for Playwright)",
+    launch: "game window opens",
+    input: "`#play-step` through Playwright",
+    save: "progress persists across closing the game",
+    restore: "export, verify, restore into a second entry, same `#progress-hash`",
+    notes: "the snapshot worker and the quiescent preload ran from `app.asar` with the asar fuses on",
+    evidence: "docs/compat/runs/2026-11-02-macos-arm64.md",
+  },
+  {
     build: "WGLauncher packaged app (prod flavor), with `https://example.com/` and local test pages",
     url: "`apps/desktop/dist/mac-arm64/WGLauncher.app`, ad hoc signed",
     date: "2026-10-30",

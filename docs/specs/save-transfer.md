@@ -610,6 +610,12 @@ user-supplied adapters are not loaded. `Assumed`
   (an integer from 1 to 30 000). The `emscripten-idbfs` hook calls `FS.syncfs(false, callback)` on that module object. `Assumed`
 - Filtering is a declared choice: the manifest names the adapter and its version, so a snapshot's scope can always be
   explained. A selective restore never wipes data outside the selection (section 6, R5).
+- The only bundled adapter in v1 is the test fixture's `progress-lab.json` (origin `http://localhost:4317`, hook `none`).
+  It ships in every flavor; in a production build no entry can match it, because production accepts https entries only,
+  but a snapshot file that names it is restored selectively by its rules. `Assumed`
+- A restored file's own `flushState` is believed only when a bundled adapter with a hook other than `none` made it
+  (`trustedFlushState` in `apps/desktop/src/main/snapshots/restore-steps.ts`), because `contentHash` does not cover the
+  manifest; in v1 every restored row is therefore `unconfirmed` (section 7, AC-12).
 
 ## 9. Emscripten and Unity notes
 

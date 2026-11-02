@@ -300,8 +300,8 @@ Stage "Later" means it depends on work after the MVP.
 ### 16.1 State after Phase 1 (2026-11-02)
 
 "Passes" means the named tests pass: unit and integration tests in Vitest, browser tests in bundled Chromium, desktop e2e
-on Electron 45.0.0 through Playwright `_electron`. CI runs them on every push to the Phase 1 pull request (desktop e2e on
-macOS and Ubuntu, unit tests also on Windows), and they passed on the dev Mac in the final local run of Phase 1
+on Electron 45.0.0 through Playwright `_electron`. CI runs them on every push to the Phase 1 pull request (unit tests on
+macOS and Windows, the browser and desktop e2e suites on macOS and Ubuntu), and they passed on the dev Mac in the final local run of Phase 1
 ([runs/2026-11-02-macos-arm64.md](../compat/runs/2026-11-02-macos-arm64.md)). Manual
 results are in [manual-checks/2026-10-30-macos-arm64.md](../compat/manual-checks/2026-10-30-macos-arm64.md) ("check N"
 below). Nothing here is a statement about real games or other platforms.
@@ -321,7 +321,7 @@ below). Nothing here is a statement about real games or other platforms.
 | AC-11 | Passes | unit `games/locks.test.ts`, `snapshots/quiescent/job.test.ts`, `ipc/handlers/handlers.test.ts`; e2e `export.spec.ts`, `restore.spec.ts`, `delete.spec.ts` |
 | AC-12 | Passes | unit `packages/exporters/src/flush.test.ts` (fake hook), `policy/badges.test.ts`, `renderer/ui-text.test.tsx` ("flush unconfirmed" on every such row) |
 | AC-13 | Passes | e2e `game-lifecycle.spec.ts`; manual check 12 |
-| AC-14 | Passes | unit `policy/badges.test.ts`, `renderer/ui-text.test.tsx` (no install, sync, FPS or download wording); manual review of the packaged app's UI during the manual checks (2026-10-30) |
+| AC-14 | Passes | unit `policy/badges.test.ts`, `renderer/ui-text.test.tsx` (no install, sync, FPS or download wording); e2e `vertical.spec.ts` scans the launcher's text after the scenario |
 | AC-15 | Passes | unit `policy/playtime.test.ts`; e2e `window.spec.ts` |
 | AC-16 | Passes | e2e `delete.spec.ts` |
 | AC-17 | Passes | unit `policy/url-rules.test.ts`, `ipc/handlers/handlers.test.ts`; e2e `library.spec.ts` |

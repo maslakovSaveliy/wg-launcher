@@ -93,6 +93,8 @@ one condition: Phase 1 must measure frame time on the launcher against Chrome (h
 
 - There is no release: the app is built from source, and the local macOS package is signed ad hoc only. The interface is
   functional, not designed.
+- Export and restore have run in a packaged build only in the test flavor (with the release fuses but the Node inspector
+  on, on the controlled test game); the production build has not yet taken a snapshot of a real https game.
 - All runtime evidence comes from one fanless MacBook Air. It says nothing about other Macs, Windows, Linux or other GPUs.
 - The only speed and memory numbers are the spike's measurements on that machine (RESULTS.md, "Phase 1"), each with its
   method and limits; no speed-up is claimed.

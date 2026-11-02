@@ -53,6 +53,27 @@ describe("Retry recovery (save-transfer.md section 6, Failed rollback)", () => {
     expect(recovery.clear).toHaveBeenCalledWith(gameId);
     expect(journal.entry().state).toBe("failed");
   });
+
+  it("closes the journal and clears the game's mark together, so a failed write leaves the recovery pending", async () => {
+    const { db, repos, gameId, journal } = pendingRecovery();
+    repos.games.update(gameId, { needsRecovery: true });
+    const { deps } = taskDeps(repos, fakeWorker(validatedFile(gameId, 1024)));
+    (deps as { transaction: (fn: () => unknown) => unknown }).transaction = (fn) =>
+      db.transaction(fn);
+    const { hold } = fakeHold(gameId);
+    vi.mocked(holdQuiescentJob).mockResolvedValue({ ok: true, data: hold });
+    const update = repos.games.update.bind(repos.games);
+    repos.games.update = (id, patch) => {
+      if (patch.needsRecovery === false) throw new Error("disk full");
+      return update(id, patch);
+    };
+
+    const result = await retryRecovery(gameId, deps);
+    expect(result.ok).toBe(false);
+    // The next start finds the entry unfinished and runs the recovery again; the game stays marked.
+    expect(journal.entry().state).not.toBe("failed");
+    expect(repos.games.get(gameId)?.needsRecovery).toBe(true);
+  });
 });
 
 describe("the notice of a refused launch (save-transfer.md section 6)", () => {

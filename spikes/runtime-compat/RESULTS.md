@@ -563,8 +563,11 @@ verified from this branch. An unrun workflow was not committed. Windows stays "n
 ## Open items for the owner
 
 - H7 passed on the launcher in Phase 1 (2026-11-02), the condition under which ADR-0002 and ADR-0005 were accepted; the
-  ADRs record the outcome. Whether `spikes/runtime-compat/` is now archived or deleted is the owner's call (Phase 1 Task 18).
-- The H13 manual real-click run needs the owner at the machine.
-- H12: rerun with the packaged app (its own bundle id) and with an undecided and a denied macOS microphone state.
+  ADRs record the outcome. The owner keeps `spikes/runtime-compat/` as it is (2026-11-02).
+- H12 and the H13 real-click run were done on the launcher in Phase 1, not in the spike: the packaged app denied media
+  without an OS prompt in the reachable (undecided) state, and real clicks granted pointer and keyboard lock
+  (`docs/compat/manual-checks/2026-10-30-macos-arm64.md`, checks 8 and 10). The spike's own H12 rerun with a denied
+  microphone state and its H13 control were not rerun; macOS never lists an app that does not ask, so the denied state
+  cannot be reached.
 - H13: the frozen control cannot pass for keyboard lock; an Amendment would be the owner's call.
 - Optional: remove the LaunchServices `wgspike` handler preference (recipe under H15; harmless if left).

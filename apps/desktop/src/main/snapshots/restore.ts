@@ -41,6 +41,7 @@ import {
   type PlannedKey,
   runStep,
   type TaskDeps,
+  trustedFlushState,
   verifyKeys,
   wipeKeys,
   writeBackup,
@@ -187,7 +188,7 @@ function confirmation(
     "A backup of the current saves is made first and kept. If anything fails, the launcher puts them back from it; if " +
       'even that fails, the game stays closed and the backup is kept for "Retry recovery".',
   ];
-  if (validated.manifest.flushState === "unconfirmed") {
+  if (trustedFlushState(validated.manifest) === "unconfirmed") {
     lines.push(
       "The snapshot's flush is unconfirmed: the game may not have written everything before it was taken.",
     );
@@ -443,7 +444,7 @@ async function commitRestore(
           contentHash: manifest.contentHash,
           sizeBytes: validated.sizeBytes,
           path: `snapshots/${gameId}/${revisionId}.wgsnap`,
-          flushState: manifest.flushState,
+          flushState: trustedFlushState(manifest),
         });
       }
       // The partition's data now descends from the restored revision (save-transfer.md, "Revision parents").

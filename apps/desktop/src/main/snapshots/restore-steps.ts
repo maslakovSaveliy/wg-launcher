@@ -544,8 +544,11 @@ export function markNeedsRecovery(
   deps: Pick<TaskDeps, "repos" | "recovery" | "log">,
 ): { ok: false; code: ErrorCode; message: string } {
   deps.recovery.mark(gameId);
+  // A removed game's data (delete local saves of an orphan) has no card, so no "Retry recovery"; the next start retries.
+  let inLibrary = true;
   try {
-    if (deps.repos.games.get(gameId)) deps.repos.games.update(gameId, { needsRecovery: true });
+    inLibrary = deps.repos.games.get(gameId) !== null;
+    if (inLibrary) deps.repos.games.update(gameId, { needsRecovery: true });
   } catch (error) {
     // The mark in the lock manager stands, and the journal entry makes the next start roll back again.
     deps.log.error("snapshot.recovery.flag-failed", { gameId, error });
@@ -558,7 +561,9 @@ export function markNeedsRecovery(
   return {
     ok: false,
     code: "IMP_RECOVERY_FAILED",
-    message: `The saves could not be put back. They are kept in ${backupName(backup)}; use "Retry recovery".`,
+    message: inLibrary
+      ? `The saves could not be put back. They are kept in ${backupName(backup)}; use "Retry recovery".`
+      : `The saves could not be put back. They are kept in ${backupName(backup)}; the launcher tries again at its next start.`,
   };
 }
 
@@ -621,6 +626,21 @@ export function adapterScopeOf(
     );
   }
   return { ok: true, data: adapterScope(known) };
+}
+
+/**
+ * The flush state a restored file is recorded and described with (AC-12, save-transfer.md section 7). The manifest's
+ * `flushState` is not covered by `contentHash`, so a file's own "confirmed" is believed only when a bundled adapter with
+ * a declared flush hook made it; with no such adapter (none declares one in v1) the snapshot is `unconfirmed`.
+ */
+export function trustedFlushState(manifest: {
+  flushState: "confirmed" | "unconfirmed";
+  adapter: { id: string; version: string } | null;
+}): "confirmed" | "unconfirmed" {
+  if (manifest.flushState !== "confirmed" || manifest.adapter === null) return "unconfirmed";
+  const { id, version } = manifest.adapter;
+  const known = ADAPTERS.find((a) => a.id === id && a.version === version);
+  return known && known.flush.hook !== "none" ? "confirmed" : "unconfirmed";
 }
 
 /** Text naming a backup for messages (the UI shows it; no path). */

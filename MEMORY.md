@@ -738,7 +738,8 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   contact beyond the GitHub account? Default: the lawyer decides.
 - Spike leftovers (RESULTS.md): the `node:sqlite` stability label in Node 24.22 (H10); why Electron reports one extra
   WebGPU feature, `texture-compression-unaligned` (H19); Electron 44.x cross-origin isolation, untested because 45.0.0
-  passed (H3, H4); H12 on the packaged app and the H13 real-click run ("Open items for the owner").
+  passed (H3, H4); the spike's own H13 control (RESULTS.md "Open items for the owner"; H12 and real clicks were done on
+  the launcher in the Task 16 manual checks).
 - Esc in launcher-set fullscreen (PRD OQ-8, architecture.md section 9): default is Esc held for 1.5 s exits and short
   presses reach the game, so the launcher never takes Esc from a game; "every Esc exits" is a one-line policy change.
 - Branch protection on `main` (suggested only, owner decision).
