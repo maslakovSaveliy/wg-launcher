@@ -157,9 +157,12 @@ test("a launch request after the launcher was closed while a game runs opens the
   const launcherWindows = () =>
     app.app.evaluate(
       ({ BrowserWindow }) =>
+        // A closing window's webContents is destroyed before the window itself, so both are checked before getURL.
         BrowserWindow.getAllWindows().filter(
           (window) =>
-            !window.isDestroyed() && window.webContents.getURL().startsWith("app://launcher"),
+            !window.isDestroyed() &&
+            !window.webContents.isDestroyed() &&
+            window.webContents.getURL().startsWith("app://launcher"),
         ).length,
     );
   await app.app.evaluate(({ BrowserWindow }) => {
