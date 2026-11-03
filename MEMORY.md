@@ -14,7 +14,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   [docs/adr/](docs/adr/), index [docs/README.md](docs/README.md): 0001 own small client (Accepted); 0002 Electron 45.0.0
   (Accepted 2026-10-25 under the H7 condition below); 0003 Rust deferred, Go not adopted (Accepted); 0004 toolchain and
   layout (Accepted; Electron rows reopen with 0002); 0005 quiescent-window save transfer (Accepted, same condition);
-  0006 licensing model (Accepted; awaits a lawyer).
+  0006 licensing model (Accepted; documents reviewed by the owner, a lawyer, 2026-11-03).
 - Own small Electron client, not a fork of itch, Flashpoint, Pixens or web-runner; their code is not reused (patterns
   only). The runtime is Electron 45.0.0 (ADR-0002); the spike supplied the evidence, on one machine (macOS arm64).
 - 2026-10-25 Owner: ADR-0002 and ADR-0005 are Accepted on one condition: Phase 1 re-runs H7 (p95 frame time at most
@@ -26,8 +26,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   and tests only (no spikes, one review per task); exports without a confirmed in-game flush are allowed and labeled
   "flush unconfirmed" (ADR-0005 decision 7). The owner keeps their own git identity in commits.
 - 2026-10-25 Owner: CLA counterparty is Savelii Maslakov as an individual (passport spelling), governing law the Russian
-  Federation, both in `CLA.md`. The CLA stays inactive, and no outside contribution is accepted, until a lawyer has
-  reviewed it and the CLA Assistant app is set up.
+  Federation, both in `CLA.md`. The CLA stays inactive, and no outside contribution is accepted, until the CLA Assistant
+  app is set up. 2026-11-03 Owner: the owner, a lawyer, reviewed `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` and
+  confirms them.
 - 2026-10-25 Decided in the specs (Assumed; the owner can override): record encoding is deterministic CBOR
   (snapshot-format.md section 6.1); packaging is electron-builder (ADR-0004, option P1); PRD OQ-2 (a removed game's data
   stays orphaned until deleted) and OQ-3 (plain `http://localhost` and `http://127.0.0.1` only in development and test
@@ -744,10 +745,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 
 ## Open questions
 
-- Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (party and governing law are filled in; whether the
-  Harmony wording, such as the UN Convention exclusion in section 6.1, and the moral-rights waiver fit Russian law is for
-  the lawyer), and setting up the CLA Assistant app (owner action). Does the CLA need a postal address or another
-  contact beyond the GitHub account? Default: the lawyer decides.
+- Setting up the CLA Assistant app (owner action); until then no outside code contribution is accepted.
 - Spike leftovers (RESULTS.md): the `node:sqlite` stability label in Node 24.22 (H10); why Electron reports one extra
   WebGPU feature, `texture-compression-unaligned` (H19); Electron 44.x cross-origin isolation, untested because 45.0.0
   passed (H3, H4); the spike's own H13 control (RESULTS.md "Open items for the owner"; H12 and real clicks were done on

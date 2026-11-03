@@ -1,7 +1,7 @@
 # Licensing
 
 > This is a plain-language summary, not legal advice. The wording of this document, [CLA.md](CLA.md) and
-> [TRADEMARKS.md](TRADEMARKS.md) is to be reviewed by a lawyer before the project accepts outside contributions.
+> [TRADEMARKS.md](TRADEMARKS.md) was reviewed by the project owner, who is a lawyer, on 2026-11-03.
 > If anything here conflicts with the license texts themselves, the license texts win.
 
 ## Default license: AGPL-3.0-or-later
@@ -31,8 +31,7 @@ To keep the commercial option above possible, outside contributors sign the Cont
 [CLA.md](CLA.md). Contributors keep the copyright in their work; the CLA gives the project the right to license
 contributions under the AGPL and under other licenses, including commercial ones. The agreement is made with the project
 owner as an individual (Savelii Maslakov) and is governed by the law of the Russian Federation. It is not in effect
-yet: outside code contributions are not accepted until a lawyer has reviewed it and the signing mechanism (the CLA
-Assistant GitHub app) is set up.
+yet: outside code contributions are not accepted until the signing mechanism (the CLA Assistant GitHub app) is set up.
 
 ## Future paid features
 

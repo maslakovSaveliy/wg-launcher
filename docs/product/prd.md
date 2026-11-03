@@ -343,7 +343,7 @@ below). Nothing here is a statement about real games or other platforms.
 | Real game saves (Emscripten flush timing, Unity paths, OPFS) behave differently from the controlled game | Unverified (2026-10-24, not tested) | Later fixtures and real runs |
 | Windows and Linux behave differently from macOS | Unverified (2026-10-25, no machine; [matrix.md](../compat/matrix.md) lists both as not tested) | CI for install and unit tests; real runs later |
 | The value hypothesis is wrong | Unverified (2026-10-24, not tested with any user) | Repeat-use observation after the MVP |
-| [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and [TRADEMARKS.md](../../TRADEMARKS.md) have legal gaps | Unverified (2026-10-25, no lawyer review yet) | Lawyer review before outside contributions |
+| [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and [TRADEMARKS.md](../../TRADEMARKS.md) have legal gaps | Resolved: reviewed by the owner, who is a lawyer (2026-11-03, `Owner`) | Lawyer review before outside contributions |
 
 ## 18. Open questions
 

@@ -1,6 +1,6 @@
 # Trademark policy
 
-> Not legal advice; to be reviewed by a lawyer together with [LICENSING.md](LICENSING.md).
+> Not legal advice. Reviewed by the project owner, who is a lawyer, on 2026-11-03, together with [LICENSING.md](LICENSING.md).
 
 The source code of wg-launcher is licensed under the AGPL-3.0-or-later (see [LICENSE](LICENSE)). That license covers
 the code. It does not grant any right to use the project's names, logos or branding. Section 7(e) of the AGPL allows

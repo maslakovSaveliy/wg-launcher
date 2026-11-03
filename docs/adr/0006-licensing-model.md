@@ -1,7 +1,7 @@
 # ADR-0006: Licensing model
 
 **Status:** Accepted. Not legal advice; [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and
-[TRADEMARKS.md](../../TRADEMARKS.md) await a lawyer's review.
+[TRADEMARKS.md](../../TRADEMARKS.md) were reviewed by the project owner, who is a lawyer, on 2026-11-03. `Owner`
 
 **Date:** 2026-10-24
 
@@ -29,7 +29,8 @@ license: "Security" becomes the protection the license gives against closed or h
   template (CC BY 3.0, Verified (2026-10-24, <https://www.harmonyagreements.org/>)). Counterparty: Savelii Maslakov
   (passport spelling), the project owner, as an individual; governing law: the Russian Federation. `Owner` (confirmed
   2026-10-25). The CLA stays inactive, and no outside code is accepted, until a lawyer has reviewed it and the signing
-  app is set up. `Owner`. Both values are written into [CLA.md](../../CLA.md): the party in its preamble (line 21) and
+  app is set up. `Owner`. The review was done by the owner, who is a lawyer, on 2026-11-03; the signing app is still to
+  be set up. Both values are written into [CLA.md](../../CLA.md): the party in its preamble (line 21) and
   the governing law in section 6.1 (lines 135 and 136); the file is marked a draft that is not in effect. Verified
   (2026-10-25, CLA.md lines 3 to 6, 21 and 135 to 136)
 
@@ -127,4 +128,5 @@ commercial options; its costs are the CLA process and companies' AGPL reluctance
 
 - [x] Write the owner-confirmed party (Savelii Maslakov, individual) and governing law (Russian Federation) into the
   `CLA.md` placeholders (agent; done 2026-10-25).
-- [ ] Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md`, then set up the CLA signing app (owner).
+- [x] Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (owner, a lawyer; done 2026-11-03).
+- [ ] Set up the CLA signing app, the CLA Assistant GitHub app (owner).

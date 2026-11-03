@@ -1,9 +1,8 @@
 # Individual Contributor License Agreement
 
-> **DRAFT. Not legal advice.** This agreement must be reviewed by a lawyer before the project accepts any external
-> contribution. The party and the governing law below were filled in on 2026-10-25 from the project owner's decision;
-> the review has not happened yet. The agreement is not in effect, and outside code contributions are not accepted,
-> until the review is done and the signing mechanism below exists.
+> **Not in effect yet. Not legal advice.** The party and the governing law below were filled in on 2026-10-25 from the
+> project owner's decision, and the agreement was reviewed by the project owner, who is a lawyer, on 2026-11-03. It takes effect, and outside code contributions
+> are accepted, once the signing mechanism below exists.
 >
 > **Signing mechanism:** the project will use the CLA Assistant GitHub app. Setting it up is an action for the project
 > owner and has not been done yet.
