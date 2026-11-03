@@ -30,3 +30,12 @@ comes later, by hand.
 - [x] Docs: AGENTS.md "Commands" and the CI paragraph, README platform rows, MEMORY.md.
 - [ ] Verify: unit tests, lint, typecheck, `actionlint`, a local Linux `dir` package and its release check on the Mac,
   then CI on the pull request (the only place Windows packaging and Windows e2e run).
+
+## First CI run (2026-11-03)
+
+- Windows packaging built, but the release check found no `/out/main/index.js`: `@electron/asar` lists archive paths
+  with backslashes on Windows. The check now normalizes them (unit test with Windows paths, written first).
+- Desktop e2e on Windows (non-blocking): 58 of 60 passed. Failed: `delete.spec.ts` "delete local saves backs up and
+  verifies first..." (the app closed during the test) and `shortcut.spec.ts` "Create shortcut writes an .inetloc..."
+  (the test expects the macOS file). Both are follow-ups before the Windows job becomes blocking. Verified (2026-11-03,
+  CI run 41655557130)

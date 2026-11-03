@@ -158,6 +158,21 @@ describe("files inside app.asar", () => {
     ]);
   });
 
+  it("reads Windows archive paths, which @electron/asar lists with backslashes", () => {
+    const windows = Object.entries(files).map(([path]) => ({
+      path: path.replaceAll("/", "\\"),
+      kind: "file" as Kind,
+    }));
+    const read: string[] = [];
+    expect(
+      checkPackagedFiles(windows, (path) => {
+        read.push(path);
+        return files[path.replaceAll("\\", "/")] ?? "";
+      }),
+    ).toEqual([]);
+    expect(read).toContain("\\out\\main\\index.js");
+  });
+
   it("refuses an archive without the main entry, so the check cannot pass on an empty build", () => {
     const empty = checkPackagedFiles([{ path: "/package.json", kind: "file" }], () => "{}");
     expect(empty).toEqual(["app.asar has no /out/main/index.js"]);

@@ -91,22 +91,28 @@ export function checkInfoPlist(plist) {
 
 /**
  * @param {readonly { path: string, kind: "file" | "directory" | "link" }[]} entries every entry of the archive, each
- *   path starting with "/", its kind from the archive's header
+ *   path starting with the separator ("/", or "\\" on Windows), its kind from the archive's header
  * @param {(path: string) => string} contentOf
  * @returns {string[]} problems
  */
 export function checkPackagedFiles(entries, contentOf) {
-  const paths = entries.map((entry) => entry.path);
+  // @electron/asar lists paths with the platform's separator; the rules below are written with "/".
+  const normalized = entries.map((entry) => ({
+    ...entry,
+    listed: entry.path,
+    path: entry.path.replaceAll("\\", "/"),
+  }));
+  const paths = normalized.map((entry) => entry.path);
   if (!paths.includes(MAIN_ENTRY)) return [`app.asar has no ${MAIN_ENTRY}`];
   const problems = [];
-  for (const { path, kind } of entries) {
+  for (const { path, listed, kind } of normalized) {
     // Fail closed: a link could point outside the archive, past every check here.
     if (kind === "link") problems.push(`${path} is a link`);
     else if (BUNDLED.test(path)) problems.push(`${path} is packaged, but the build bundles it`);
     else if (
       kind === "file" &&
       /^\/out\/.*\.(?:js|cjs|mjs|html)$/.test(path) &&
-      contentOf(path).includes(MARKER)
+      contentOf(listed).includes(MARKER)
     ) {
       problems.push(`${path} contains ${MARKER}`);
     }
