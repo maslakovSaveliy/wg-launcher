@@ -1,5 +1,6 @@
-# Packaging of the desktop app (ADR-0004 option P1, plan Task 16). macOS arm64 only for now: an unpacked `.app`,
-# signed ad hoc after packaging (`package:mac`), not notarized. Windows and Linux are not packaged or tested yet.
+# Packaging of the desktop app (ADR-0004 option P1, plan Task 16). macOS arm64: an unpacked `.app`, signed ad hoc after
+# packaging (`package:mac`), not notarized. Windows x64 and Linux x64: unpacked `dir` builds without an installer or a
+# signature, made in CI to prove the build (docs/plans/2026-11-03-ci-windows-linux.md); not tested on real machines.
 appId: io.github.maslakovsaveliy.wglauncher
 productName: WGLauncher
 directories:
@@ -39,3 +40,14 @@ mac:
   identity: null
   hardenedRuntime: false
   notarize: false
+win:
+  target:
+    - target: dir
+      arch:
+        - x64
+linux:
+  executableName: wglauncher
+  target:
+    - target: dir
+      arch:
+        - x64

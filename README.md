@@ -85,8 +85,8 @@ one condition: Phase 1 must measure frame time on the launcher against Chrome (h
 | Platform | Status |
 | --- | --- |
 | macOS arm64 | Tested on one machine (MacBook Air, Apple M3, macOS 27.0.1): the runtime spike (2026-10-24), the launcher's e2e suite on the controlled test game, the manual checks of the packaged app (2026-10-30) and the frame-time comparison with Chrome 156 (H7 PASS, 2026-11-02). No real game is verified. Verified ([matrix.md](docs/compat/matrix.md), [manual checks](docs/compat/manual-checks/2026-10-30-macos-arm64.md), [RESULTS.md](spikes/runtime-compat/RESULTS.md)) |
-| Windows | Not tested. CI runs install and unit tests on `windows-latest`; no browser or desktop tests run there. Verified (2026-11-02, [ci.yml](.github/workflows/ci.yml)) |
-| Linux | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks, the fixture's and the exporters' Chromium tests and the desktop e2e suite under Xvfb, which proves the build and tests, not compatibility. Verified (2026-11-02, [ci.yml](.github/workflows/ci.yml)) |
+| Windows | Not tested. CI on `windows-latest` runs install and unit tests, packages an unpacked x64 build with its release check, and runs the desktop e2e suite as a non-blocking job; no real Windows machine has run the app. Verified (2026-11-03, [ci.yml](.github/workflows/ci.yml)) |
+| Linux | Not tested. CI on Ubuntu runs lint, typecheck, license and docs checks, the fixture's and the exporters' Chromium tests, the desktop e2e suite under Xvfb and an unpacked x64 build with its release check, which proves the build and tests, not compatibility. Verified (2026-11-03, [ci.yml](.github/workflows/ci.yml)) |
 | iOS, Android | Not tested and out of scope for version 1. An iOS client would need WebKit and a separate design. Assumed |
 
 ## Limitations
