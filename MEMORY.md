@@ -26,8 +26,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   and tests only (no spikes, one review per task); exports without a confirmed in-game flush are allowed and labeled
   "flush unconfirmed" (ADR-0005 decision 7). The owner keeps their own git identity in commits.
 - 2026-10-25 Owner: CLA counterparty is Savelii Maslakov as an individual (passport spelling), governing law the Russian
-  Federation, both in `CLA.md`. The CLA stays inactive, and no outside contribution is accepted, until the CLA Assistant
-  app is set up. 2026-11-03 Owner: `CLA.md`, `LICENSING.md` and
+  Federation, both in `CLA.md`. 2026-11-03 Owner: the CLA Assistant app is set up (an active cla-assistant.io webhook
+  on pull requests; its text is a public gist copy of `CLA.md`, which must be updated by hand when `CLA.md` changes), so
+  outside pull requests are accepted once their authors sign. 2026-11-03 Owner: `CLA.md`, `LICENSING.md` and
   `TRADEMARKS.md` are confirmed by the owner, who is a lawyer; no "not legal advice" or "lawyer review" notes in
   the docs (owner decision).
 - 2026-10-25 Decided in the specs (Assumed; the owner can override): record encoding is deterministic CBOR
@@ -746,7 +747,6 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 
 ## Open questions
 
-- Setting up the CLA Assistant app (owner action); until then no outside code contribution is accepted.
 - Spike leftovers (RESULTS.md): the `node:sqlite` stability label in Node 24.22 (H10); why Electron reports one extra
   WebGPU feature, `texture-compression-unaligned` (H19); Electron 44.x cross-origin isolation, untested because 45.0.0
   passed (H3, H4); the spike's own H13 control (RESULTS.md "Open items for the owner"; H12 and real clicks were done on

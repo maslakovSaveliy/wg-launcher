@@ -119,7 +119,7 @@ one condition: Phase 1 must measure frame time on the launcher against Chrome (h
 - Commercial use on other terms is possible only by a separate written agreement with the copyright holder. There is no
   standard offer yet.
 - Outside contributors will sign a Contributor License Agreement ([CLA.md](CLA.md)) so the project can keep that option.
-  The signing app is not set up yet, so outside code contributions are not accepted yet.
+  The CLA Assistant bot asks for the signature on a contributor's first pull request.
 - There are no paid features. If any appear, they will live only in one separate source-available directory, and the
   details will be decided in a future ADR.
 - The core stays free and AGPL-licensed: the game library, launching games, local saves and snapshots (export and

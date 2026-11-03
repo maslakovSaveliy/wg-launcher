@@ -1,11 +1,8 @@
 # Individual Contributor License Agreement
 
-> **Not in effect yet.** The party and the governing law below were filled in on 2026-10-25 from the project owner's
-> decision. The agreement takes effect, and outside code contributions are accepted, once the signing mechanism below
-> exists.
->
-> **Signing mechanism:** the project will use the CLA Assistant GitHub app. Setting it up is an action for the project
-> owner and has not been done yet.
+> **Signing:** contributors sign this agreement through the CLA Assistant GitHub app, which asks for it on a
+> contributor's first pull request (in use since 2026-11-03). The app shows the text of this file from a public gist
+> (<https://gist.github.com/maslakovSaveliy/8905c1f5d93dcaf59c8e38e9ed6e4e0a>); a change here is copied there.
 >
 > **Attribution.** This agreement is adapted from the Harmony Individual Contributor License Agreement
 > (HA-CLA-I) version 1.0, 4 July 2011, published at <https://www.harmonyagreements.org/> under the Creative Commons

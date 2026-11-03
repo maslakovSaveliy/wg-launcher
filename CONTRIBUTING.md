@@ -5,9 +5,8 @@ rules apply to humans and AI agents.
 
 ## Before you start
 
-- **Pull requests from outside contributors are not accepted yet.** The contributor agreement ([CLA.md](CLA.md)) is
-  ready, but the CLA Assistant app that collects signatures is not set up; that is an owner action. Until it is done,
-  please open an issue instead of a pull request.
+- **Pull requests from outside contributors are welcome.** On your first pull request the CLA Assistant bot asks you to
+  sign the contributor agreement ([CLA.md](CLA.md)); a pull request is merged only after that.
 - Issues are welcome: use the bug form or the compatibility report form. A compatibility report records one real run, and
   anything you did not try is "Not tested".
 - Security problems are never reported in public issues or pull requests. Use the private channel described in
@@ -112,4 +111,4 @@ The [pull request template](.github/pull_request_template.md) repeats this list.
 
 The repository is `AGPL-3.0-or-later` ([LICENSING.md](LICENSING.md)). Contributors keep the copyright in their work, and
 the CLA grants the project the right to license contributions under the AGPL and under other licenses, including
-commercial ones. Once outside contributions open, the CLA Assistant bot will ask you to sign on your first pull request.
+commercial ones. The CLA Assistant bot asks you to sign on your first pull request.

@@ -40,7 +40,7 @@ Normative. Written 2026-10-25 and implemented in Phase 1; each records its Phase
 | [0003](adr/0003-native-languages.md) | Native languages: Rust deferred, Go not adopted | Accepted |
 | [0004](adr/0004-toolchain-and-repo-layout.md) | Toolchain and repository layout | Accepted; the Electron-specific rows follow ADR-0002 |
 | [0005](adr/0005-save-transfer-mechanism.md) | Save transfer mechanism: the quiescent window | Accepted together with ADR-0002, under the same condition (met) |
-| [0006](adr/0006-licensing-model.md) | Licensing model: AGPL-3.0-or-later with a CLA | Accepted; the CLA signing app is not set up |
+| [0006](adr/0006-licensing-model.md) | Licensing model: AGPL-3.0-or-later with a CLA | Accepted; contributors sign the CLA through CLA Assistant (since 2026-11-03) |
 
 ## Research (`docs/research/`)
 

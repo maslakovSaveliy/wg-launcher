@@ -28,9 +28,10 @@ license: "Security" becomes the protection the license gives against closed or h
 - **CLA** for outside contributors, so the owner can relicense: an individual CLA adapted from the Harmony HA-CLA-I
   template (CC BY 3.0, Verified (2026-10-24, <https://www.harmonyagreements.org/>)). Counterparty: Savelii Maslakov
   (passport spelling), the project owner, as an individual; governing law: the Russian Federation. `Owner` (confirmed
-  2026-10-25). The CLA stays inactive, and no outside code is accepted, until the signing app is set up. `Owner` Both values are written into [CLA.md](../../CLA.md): the party in its preamble (line 21) and
-  the governing law in section 6.1 (lines 135 and 136); the file is marked a draft that is not in effect. Verified
-  (2026-10-25, CLA.md lines 3 to 6, 21 and 135 to 136)
+  2026-10-25). Contributors sign it through the CLA Assistant GitHub app, set up by the owner on 2026-11-03 (webhook
+  on the repository's pull requests; the text comes from a public gist copy of `CLA.md`). `Owner` Both values are
+  written into [CLA.md](../../CLA.md): the party in its preamble and the governing law in section 6.1. Verified
+  (2026-11-03, CLA.md; `gh api repos/maslakovSaveliy/wg-launcher/hooks` lists the active cla-assistant.io hook)
 
   *Correction (2026-10-25):* the first draft of this ADR said the party and the law were still placeholders in CLA.md;
   they were filled in by the commit `docs: fill in the CLA party and governing law`.
@@ -58,7 +59,7 @@ license: "Security" becomes the protection the license gives against closed or h
 | Dimension | Assessment |
 | --- | --- |
 | Complexity | Medium: a CLA process and a dependency gate. Verified for the gate (2026-10-25, `pnpm licenses:check` reported all production dependencies allowed) |
-| Cost | Setting up the CLA signing app before outside contributions. Assumed |
+| Cost | Every outside contributor signs the CLA once (CLA Assistant). Assumed |
 | Compatibility | OSI-approved copyleft; permissive dependencies only. Assumed (OSI status general knowledge) |
 | Security (fork protection) | Section 13 extends the source obligation to modified versions used over a network. Verified (2026-10-25, LICENSE line 540) |
 | Team familiarity | Same model as bitwarden/server. Verified (2026-10-24, foundations.md section 6) |
@@ -127,4 +128,4 @@ commercial options; its costs are the CLA process and companies' AGPL reluctance
 - [x] Write the owner-confirmed party (Savelii Maslakov, individual) and governing law (Russian Federation) into the
   `CLA.md` placeholders (agent; done 2026-10-25).
 - [x] Confirm `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (owner; done 2026-11-03).
-- [ ] Set up the CLA signing app, the CLA Assistant GitHub app (owner).
+- [x] Set up the CLA signing app, the CLA Assistant GitHub app (owner; done 2026-11-03).
