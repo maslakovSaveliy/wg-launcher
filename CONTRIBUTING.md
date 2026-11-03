@@ -5,9 +5,9 @@ rules apply to humans and AI agents.
 
 ## Before you start
 
-- **Pull requests from outside contributors are not accepted yet.** The contributor agreement ([CLA.md](CLA.md)) was
-  reviewed by the project owner, who is a lawyer, on 2026-11-03, but the CLA Assistant app that collects signatures is not set up; that is an owner action.
-  Until it is done, please open an issue instead of a pull request.
+- **Pull requests from outside contributors are not accepted yet.** The contributor agreement ([CLA.md](CLA.md)) is
+  ready, but the CLA Assistant app that collects signatures is not set up; that is an owner action. Until it is done,
+  please open an issue instead of a pull request.
 - Issues are welcome: use the bug form or the compatibility report form. A compatibility report records one real run, and
   anything you did not try is "Not tested".
 - Security problems are never reported in public issues or pull requests. Use the private channel described in

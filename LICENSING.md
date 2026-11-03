@@ -1,8 +1,6 @@
 # Licensing
 
-> This is a plain-language summary, not legal advice. The wording of this document, [CLA.md](CLA.md) and
-> [TRADEMARKS.md](TRADEMARKS.md) was reviewed by the project owner, who is a lawyer, on 2026-11-03.
-> If anything here conflicts with the license texts themselves, the license texts win.
+> This is a plain-language summary. If anything here conflicts with the license texts themselves, the license texts win.
 
 ## Default license: AGPL-3.0-or-later
 

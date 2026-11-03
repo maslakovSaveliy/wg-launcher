@@ -155,12 +155,10 @@ the automated tests; public games are cross-checks. Assumed.
   [LICENSING.md](../../LICENSING.md). Verified (2026-10-24, [LICENSING.md](../../LICENSING.md)); that this structure fits
   the project is Assumed.
 - The dependency policy (shipped dependencies permissive only) exists so that dual licensing stays possible: third-party
-  copyleft code inside the product would limit what the owner may relicense. Assumed (reasoning, not legal advice).
+  copyleft code inside the product would limit what the owner may relicense. Assumed (reasoning).
 - The CLA is adapted from the Harmony HA-CLA-I template, published under CC BY 3.0. Verified (2026-10-24,
   <https://www.harmonyagreements.org/>). The code of conduct is Contributor Covenant 3.0, licensed CC BY-SA 4.0.
   Verified (2026-10-24, <https://www.contributor-covenant.org/version/3/0/>).
-- None of this is legal advice; a lawyer should review `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` before outside
-  contributions are accepted. Assumed.
 
 ## 7. Open questions
 

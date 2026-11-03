@@ -1,7 +1,7 @@
 # ADR-0006: Licensing model
 
-**Status:** Accepted. Not legal advice; [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and
-[TRADEMARKS.md](../../TRADEMARKS.md) were reviewed by the project owner, who is a lawyer, on 2026-11-03. `Owner`
+**Status:** Accepted. [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and [TRADEMARKS.md](../../TRADEMARKS.md)
+are confirmed by the owner (2026-11-03). `Owner`
 
 **Date:** 2026-10-24
 
@@ -28,9 +28,7 @@ license: "Security" becomes the protection the license gives against closed or h
 - **CLA** for outside contributors, so the owner can relicense: an individual CLA adapted from the Harmony HA-CLA-I
   template (CC BY 3.0, Verified (2026-10-24, <https://www.harmonyagreements.org/>)). Counterparty: Savelii Maslakov
   (passport spelling), the project owner, as an individual; governing law: the Russian Federation. `Owner` (confirmed
-  2026-10-25). The CLA stays inactive, and no outside code is accepted, until a lawyer has reviewed it and the signing
-  app is set up. `Owner`. The review was done by the owner, who is a lawyer, on 2026-11-03; the signing app is still to
-  be set up. Both values are written into [CLA.md](../../CLA.md): the party in its preamble (line 21) and
+  2026-10-25). The CLA stays inactive, and no outside code is accepted, until the signing app is set up. `Owner` Both values are written into [CLA.md](../../CLA.md): the party in its preamble (line 21) and
   the governing law in section 6.1 (lines 135 and 136); the file is marked a draft that is not in effect. Verified
   (2026-10-25, CLA.md lines 3 to 6, 21 and 135 to 136)
 
@@ -51,7 +49,7 @@ license: "Security" becomes the protection the license gives against closed or h
 - **Dependency policy:** shipped dependencies permissive only (MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD,
   BlueOak-1.0.0, MPL-2.0 file-level and unmodified), because third-party copyleft code in the product would limit what
   the owner may relicense; dev-only dependencies are reported, not blocking; enforced by `pnpm licenses:check`. `Owner`
-  for the policy ([AGENTS.md](../../AGENTS.md#dependency-and-license-policy)); the reason is Assumed (not legal advice).
+  for the policy ([AGENTS.md](../../AGENTS.md#dependency-and-license-policy)); the reason is Assumed.
 
 ## Options considered
 
@@ -60,7 +58,7 @@ license: "Security" becomes the protection the license gives against closed or h
 | Dimension | Assessment |
 | --- | --- |
 | Complexity | Medium: a CLA process and a dependency gate. Verified for the gate (2026-10-25, `pnpm licenses:check` reported all production dependencies allowed) |
-| Cost | Lawyer review before outside contributions. Assumed |
+| Cost | Setting up the CLA signing app before outside contributions. Assumed |
 | Compatibility | OSI-approved copyleft; permissive dependencies only. Assumed (OSI status general knowledge) |
 | Security (fork protection) | Section 13 extends the source obligation to modified versions used over a network. Verified (2026-10-25, LICENSE line 540) |
 | Team familiarity | Same model as bitwarden/server. Verified (2026-10-24, foundations.md section 6) |
@@ -108,7 +106,7 @@ commercial options; its costs are the CLA process and companies' AGPL reluctance
 
 ### Revisit triggers
 
-- The lawyer's review requires changes; a paid feature is planned (announce, then create the directory); a needed
+- A paid feature is planned (announce, then create the directory); a needed
   dependency is copyleft; the owner's jurisdiction or legal entity changes. Assumed
 
 ## Evidence
@@ -122,11 +120,11 @@ commercial options; its costs are the CLA process and companies' AGPL reluctance
 - **Facts** (tagged where they appear above): the license text and its sections 7(e) and 13; the Bitwarden structure;
   the Harmony template license; the CLA party and governing law as written in CLA.md; the FSL authors' description.
 - **Assumptions** (Assumed): that copyleft dependencies would block relicensing; how companies and contributors react;
-  the GPL and MPL properties stated from general knowledge. None of this is legal advice.
+  the GPL and MPL properties stated from general knowledge.
 
 ## Action items
 
 - [x] Write the owner-confirmed party (Savelii Maslakov, individual) and governing law (Russian Federation) into the
   `CLA.md` placeholders (agent; done 2026-10-25).
-- [x] Lawyer review of `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (owner, a lawyer; done 2026-11-03).
+- [x] Confirm `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` (owner; done 2026-11-03).
 - [ ] Set up the CLA signing app, the CLA Assistant GitHub app (owner).

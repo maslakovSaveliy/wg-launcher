@@ -119,15 +119,14 @@ one condition: Phase 1 must measure frame time on the launcher against Chrome (h
 - Commercial use on other terms is possible only by a separate written agreement with the copyright holder. There is no
   standard offer yet.
 - Outside contributors will sign a Contributor License Agreement ([CLA.md](CLA.md)) so the project can keep that option.
-  The documents were reviewed by the project owner, who is a lawyer, on 2026-11-03, but the signing app is not set up yet, so outside code contributions are
-  not accepted yet.
+  The signing app is not set up yet, so outside code contributions are not accepted yet.
 - There are no paid features. If any appear, they will live only in one separate source-available directory, and the
   details will be decided in a future ADR.
 - The core stays free and AGPL-licensed: the game library, launching games, local saves and snapshots (export and
   restore), and progress tracking.
 - The AGPL grants no right to the project name or logo: [TRADEMARKS.md](TRADEMARKS.md).
 
-[LICENSING.md](LICENSING.md) has the plain-language summary. It is not legal advice.
+[LICENSING.md](LICENSING.md) has the plain-language summary.
 
 ## Where to read more
 

@@ -14,7 +14,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   [docs/adr/](docs/adr/), index [docs/README.md](docs/README.md): 0001 own small client (Accepted); 0002 Electron 45.0.0
   (Accepted 2026-10-25 under the H7 condition below); 0003 Rust deferred, Go not adopted (Accepted); 0004 toolchain and
   layout (Accepted; Electron rows reopen with 0002); 0005 quiescent-window save transfer (Accepted, same condition);
-  0006 licensing model (Accepted; documents reviewed by the owner, a lawyer, 2026-11-03).
+  0006 licensing model (Accepted).
 - Own small Electron client, not a fork of itch, Flashpoint, Pixens or web-runner; their code is not reused (patterns
   only). The runtime is Electron 45.0.0 (ADR-0002); the spike supplied the evidence, on one machine (macOS arm64).
 - 2026-10-25 Owner: ADR-0002 and ADR-0005 are Accepted on one condition: Phase 1 re-runs H7 (p95 frame time at most
@@ -27,8 +27,9 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   "flush unconfirmed" (ADR-0005 decision 7). The owner keeps their own git identity in commits.
 - 2026-10-25 Owner: CLA counterparty is Savelii Maslakov as an individual (passport spelling), governing law the Russian
   Federation, both in `CLA.md`. The CLA stays inactive, and no outside contribution is accepted, until the CLA Assistant
-  app is set up. 2026-11-03 Owner: the owner, a lawyer, reviewed `CLA.md`, `LICENSING.md` and `TRADEMARKS.md` and
-  confirms them.
+  app is set up. 2026-11-03 Owner: `CLA.md`, `LICENSING.md` and
+  `TRADEMARKS.md` are confirmed by the owner, who is a lawyer; no "not legal advice" or "lawyer review" notes in
+  the docs (owner decision).
 - 2026-10-25 Decided in the specs (Assumed; the owner can override): record encoding is deterministic CBOR
   (snapshot-format.md section 6.1); packaging is electron-builder (ADR-0004, option P1); PRD OQ-2 (a removed game's data
   stays orphaned until deleted) and OQ-3 (plain `http://localhost` and `http://127.0.0.1` only in development and test
@@ -47,7 +48,7 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
   (manifest top level not strict, IPC strict), M8, M11 and M13 are recorded there.
 - License model: `AGPL-3.0-or-later` by default, commercial use by separate agreement, CLA for outside contributors,
   future paid features only in one named source-available directory (none exists), trademark policy, core features
-  always free: `LICENSING.md`, ADR-0006. Not legal advice. Dependency policy: shipped dependencies permissive only
+  always free: `LICENSING.md`, ADR-0006. Dependency policy: shipped dependencies permissive only
   (`AGENTS.md`).
 - `pnpm@12.15.0` pinned in `packageManager`: in the repo `pnpm -v` switches to it, `pnpm install` and
   `--frozen-lockfile` succeed, the default `minimumReleaseAge` does not block Electron 45.0.0. Fallback: `pnpm@11.7.0`.

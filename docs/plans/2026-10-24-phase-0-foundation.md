@@ -40,7 +40,7 @@ delete, fullscreen, window memory, shortcut, playtime, honest badges) gets its o
   repo; closed/proprietary use by separate agreement (dual licensing) → external contributors sign a **CLA** (owner keeps
   relicensing rights); future paid features only in a dedicated directory under a source-available license (not created
   now — no empty dirs); **trademark policy** protects name/logo; core (library, launch, saves, progress) stays free forever
-  (stated in LICENSING.md). Not legal advice — owner should have a lawyer review CLA/LICENSING before accepting outside PRs.
+  (stated in LICENSING.md).
 
 ## My calls (owner can override)
 - Own client, not fork. `package.json`: `"private": true` (no npm publish), `"license": "AGPL-3.0-or-later"`.
@@ -136,7 +136,7 @@ system-design (7, 8) · context7 for every library config · systematic-debuggin
 (`packages: [fixtures/*]` for now + build allowlist), `LICENSE` (canonical AGPL-3.0 text from gnu.org/licenses/agpl-3.0.txt,
 unmodified), `LICENSING.md` (default AGPL; commercial license by agreement; future paid-feature directory rule; core-free
 commitment; trademark note), `TRADEMARKS.md`, `CLA.md` (individual CLA adapted from the Harmony HA-CLA-I template,
-outbound "any license"; flagged for lawyer review; CLA Assistant app setup = owner action later), `SECURITY.md`,
+outbound "any license"; CLA Assistant app setup = owner action later), `SECURITY.md`,
 `CODE_OF_CONDUCT.md` (Contributor Covenant), `.github/pull_request_template.md` (DoD checklist),
 `.github/ISSUE_TEMPLATE/{bug.yml,compat-report.yml}` (compat report: game URL, OS, runtime, launch/input/save/restore),
 `AGENTS.md`, `CLAUDE.md`, `MEMORY.md`, `.cursor/rules/core.mdc`, `.cursor/rules/docs.mdc`,
