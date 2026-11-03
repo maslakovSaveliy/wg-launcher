@@ -260,7 +260,7 @@ Not part of the MVP. It starts only after local export and import are proven (AC
 - The core stays free and AGPL-licensed: the game library, launching games, local saves and snapshots (export and
   restore), and progress tracking. `Owner`
 - Whether cloud storage will be paid is undecided (OQ-6). Details and the trademark policy are in
-  [LICENSING.md](../../LICENSING.md). Not legal advice. `Assumed`
+  [LICENSING.md](../../LICENSING.md). `Assumed`
 
 ## 16. Acceptance criteria
 
@@ -343,7 +343,7 @@ below). Nothing here is a statement about real games or other platforms.
 | Real game saves (Emscripten flush timing, Unity paths, OPFS) behave differently from the controlled game | Unverified (2026-10-24, not tested) | Later fixtures and real runs |
 | Windows and Linux behave differently from macOS | Unverified (2026-10-25, no machine; [matrix.md](../compat/matrix.md) lists both as not tested) | CI for install and unit tests; real runs later |
 | The value hypothesis is wrong | Unverified (2026-10-24, not tested with any user) | Repeat-use observation after the MVP |
-| [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and [TRADEMARKS.md](../../TRADEMARKS.md) have legal gaps | Unverified (2026-10-25, no lawyer review yet) | Lawyer review before outside contributions |
+| [CLA.md](../../CLA.md), [LICENSING.md](../../LICENSING.md) and [TRADEMARKS.md](../../TRADEMARKS.md) have legal gaps | Resolved: confirmed by the owner (2026-11-03, `Owner`) | CLA Assistant collects signatures (since 2026-11-03) |
 
 ## 18. Open questions
 

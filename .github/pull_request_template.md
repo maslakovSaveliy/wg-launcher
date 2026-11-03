@@ -17,7 +17,7 @@
       profile copies, backup before import, failures never destroy existing saves, archives checked.
 - [ ] New dependencies follow the dependency and license policy (name the license and why it is needed).
 - [ ] Commit messages follow Conventional Commits.
-- [ ] I have signed the [CLA](https://github.com/maslakovSaveliy/wg-launcher/blob/main/CLA.md) via the CLA Assistant bot (outside contributors, once enabled).
+- [ ] I have signed the [CLA](https://github.com/maslakovSaveliy/wg-launcher/blob/main/CLA.md) via the CLA Assistant bot (outside contributors).
 
 ## Verification output
 
