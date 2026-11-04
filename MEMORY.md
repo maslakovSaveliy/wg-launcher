@@ -214,6 +214,10 @@ recorded nowhere else; anything a committed document holds is a pointer to its s
 - 2026-11-02 Owner: CI skips the unit, browser and desktop test jobs when every changed file is Markdown; the quality
   job (with docs:lint and paths:check) always runs, and an uncertain diff runs everything (the `changes` job in
   `.github/workflows/ci.yml`). Assumed: no branch protection requires the skipped checks (none is set up).
+- 2026-11-03 Owner: CI packages unpacked Windows x64 and Linux x64 builds and runs the release check on them (fuses and
+  app.asar; `Info.plist` only on macOS), and runs the desktop e2e suite on Windows as a non-blocking job until it has
+  passed (docs/plans/2026-11-03-ci-windows-linux.md). A Linux `dir` build packages on the Mac and passes the release
+  check [V, 2026-11-03, `package:linux`, `release:check:linux`]. Neither platform is tested on a real machine.
 - 2026-10-30 Owner: from Phase 1 Task 15 on, one main agent implements each task itself (TDD) and keeps the context;
   one independent review per task runs in a fresh context and only reads and reports; a scoped re-review only for
   non-trivial fixes; a final whole-branch review before the pull request leaves draft. Tasks 1 to 14 ran with an

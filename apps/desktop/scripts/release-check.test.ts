@@ -1,5 +1,11 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkFuses, checkInfoPlist, checkPackagedFiles } from "./release-check.mjs";
+import {
+  checkFuses,
+  checkInfoPlist,
+  checkPackagedFiles,
+  packagedLayout,
+} from "./release-check.mjs";
 
 const ON = 49;
 const OFF = 48;
@@ -152,8 +158,62 @@ describe("files inside app.asar", () => {
     ]);
   });
 
+  it("reads Windows archive paths, which @electron/asar lists with backslashes", () => {
+    const windows = Object.entries(files).map(([path]) => ({
+      path: path.replaceAll("/", "\\"),
+      kind: "file" as Kind,
+    }));
+    const read: string[] = [];
+    expect(
+      checkPackagedFiles(windows, (path) => {
+        read.push(path);
+        return files[path.replaceAll("\\", "/")] ?? "";
+      }),
+    ).toEqual([]);
+    expect(read).toContain("\\out\\main\\index.js");
+  });
+
   it("refuses an archive without the main entry, so the check cannot pass on an empty build", () => {
     const empty = checkPackagedFiles([{ path: "/package.json", kind: "file" }], () => "{}");
     expect(empty).toEqual(["app.asar has no /out/main/index.js"]);
+  });
+});
+
+describe("the packaged app's layout on each platform", () => {
+  const dist = join("/x", "dist");
+
+  it("reads a macOS .app: fuses of the bundle, Info.plist, Contents/Resources/app.asar", () => {
+    const app = join(dist, "mac-arm64", "WGLauncher.app");
+    expect(packagedLayout(app)).toEqual({
+      platform: "darwin",
+      fuseTarget: app,
+      archive: join(app, "Contents", "Resources", "app.asar"),
+      infoPlist: join(app, "Contents", "Info.plist"),
+    });
+  });
+
+  it("reads a Windows unpacked directory: fuses of WGLauncher.exe, resources/app.asar, no Info.plist", () => {
+    const dir = join(dist, "win-unpacked");
+    expect(packagedLayout(dir)).toEqual({
+      platform: "win32",
+      fuseTarget: join(dir, "WGLauncher.exe"),
+      archive: join(dir, "resources", "app.asar"),
+      infoPlist: null,
+    });
+  });
+
+  it("reads a Linux unpacked directory: fuses of the wglauncher binary, resources/app.asar, no Info.plist", () => {
+    const dir = join(dist, "linux-unpacked");
+    expect(packagedLayout(dir)).toEqual({
+      platform: "linux",
+      fuseTarget: join(dir, "wglauncher"),
+      archive: join(dir, "resources", "app.asar"),
+      infoPlist: null,
+    });
+  });
+
+  it("refuses any other path, so the check never passes on the wrong directory", () => {
+    expect(() => packagedLayout(dist)).toThrow("not a packaged app");
+    expect(() => packagedLayout(join(dist, "mac-arm64"))).toThrow("not a packaged app");
   });
 });

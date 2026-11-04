@@ -79,6 +79,7 @@ version by itself inside the repo. `pnpm install` also installs the git hooks (t
 | `pnpm docs:lint` | markdownlint-cli2 on all Markdown except verbatim upstream or source texts |
 | `pnpm --filter @wg-launcher/desktop package:mac` | Builds the prod flavor, packages it with electron-builder into `apps/desktop/dist/mac-arm64/WGLauncher.app` and signs it ad hoc (macOS only, not notarized) |
 | `pnpm --filter @wg-launcher/desktop release:check` | The release check of that packaged app: fuses, `Info.plist` (no media or Bluetooth usage descriptions, the `wglauncher` scheme), app.asar (no test hooks, no bundled package twice) |
+| `pnpm --filter @wg-launcher/desktop package:win`, `package:linux` | Unpacked Windows x64 and Linux x64 `dir` builds in `apps/desktop/dist/win-unpacked` and `linux-unpacked` (no installer, no signature); `release:check:win` and `release:check:linux` check their fuses and app.asar. CI builds them; neither is tested on a real machine |
 | `pnpm check` | Runs lint, typecheck, test, licenses:check, paths:check, bundle:check and docs:lint (not `test:e2e`) |
 
 Always invoke tools through `pnpm` or `pnpm exec`, never a globally installed copy.
@@ -88,8 +89,9 @@ secretlint, rejects machine-specific paths (`scripts/check-machine-paths.mjs`) a
 `pnpm test`. CI (`.github/workflows/ci.yml`) repeats the checks (including `pnpm paths:check` and `pnpm bundle:check`) on
 every pull request and also runs the fixture's Playwright suite (`pnpm test:e2e:fixture --project=chromium`), the
 exporter's browser tests (`pnpm test:e2e:exporters`) and the
-desktop suite (`pnpm test:e2e:desktop`, under `xvfb-run` on Linux) on Ubuntu and macOS; they prove the build and tests,
-not game compatibility. A change that touches only Markdown files runs the quality job alone (lint, typecheck,
+desktop suite (`pnpm test:e2e:desktop`, under `xvfb-run` on Linux) on Ubuntu and macOS, and on Windows as a non-blocking
+job until it has passed there; a `package` job packages the app on macOS, Windows and Ubuntu and runs the release check.
+They prove the build and tests, not game compatibility. A change that touches only Markdown files runs the quality job alone (lint, typecheck,
 licenses, paths, bundle and docs checks); the unit, browser and desktop test jobs are skipped, and anything else, the
 workflow file included, runs everything (the `changes` job).
 
